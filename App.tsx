@@ -3,9 +3,12 @@ import {
   Wind, Clock, CalendarDays,
   Sun, Moon, Zap, Plus, CheckCircle2, AlertTriangle,
   LayoutGrid, Delete, X, Wrench, RotateCcw, Loader2, Star,
-  BedDouble, Timer,
+  BedDouble, Timer, Trash2, Film, Music,
 } from "lucide-react";
 import * as api from "./api";
+import RoomView from "./Rooms";
+
+type Facility = "laundry" | "cinema" | "music";
 
 // ─── Icona lavatrice ───────────────────────────────────────────────────────────
 function WashingMachine({ size = 16, style, className }: { size?: number; style?: React.CSSProperties; className?: string }) {
@@ -74,7 +77,7 @@ const _NOW          = nowInfo();
 const TODAY_DOW     = _NOW.dayIdx;
 const CUR_SLOT      = _NOW.slotIdx;
 const PREV_SLOT     = CUR_SLOT - 1;
-
+const EARLY_IN_SLOT = _NOW.early;
 
 const MONDAY     = new Date(_NOW.base.getFullYear(), _NOW.base.getMonth(), _NOW.base.getDate() - TODAY_DOW);
 const WEEK_DATES = Array.from({ length: 7 }, (_, i) => new Date(MONDAY.getFullYear(), MONDAY.getMonth(), MONDAY.getDate() + i));
@@ -156,6 +159,11 @@ const T = {
     legendPrev:     "Camera — Turno precedente — Indica chi aveva lo slot prima di te.",
     legendOos:      "Rosso — Fuori uso — Segnalata dalla sezione Admin.",
     legendAuto:     "Asciugatrice automatica — prenotando una lavatrice, quella corrispondente viene riservata per il turno successivo.",
+    lgFree: "Libera", lgInUse: "In uso", lgOos: "Fuori uso", lgPrev: "Turno precedente",
+    lgFreeD: "Puoi prenotarla subito.",
+    lgInUseD: (t: string) => `Turno in corso, fine alle ${t}.`,
+    lgOosD: "Segnalata dalla sezione Admin.",
+    lgPrevD: "La camera che aveva lo slot prima di te.",
     insertRoom:     "Numero di stanza",
     back:           "← Indietro",
     backModify:     "← Modifica",
@@ -224,6 +232,11 @@ const T = {
     legendPrev:     "Room — Previous slot — Shows who had the slot before you.",
     legendOos:      "Red — Out of order — Reported via Admin.",
     legendAuto:     "Auto-dryer — booking a washer automatically reserves the matching dryer for the next slot.",
+    lgFree: "Free", lgInUse: "In use", lgOos: "Out of order", lgPrev: "Previous slot",
+    lgFreeD: "Book it now.",
+    lgInUseD: (t: string) => `In progress, ends at ${t}.`,
+    lgOosD: "Reported from the Admin section.",
+    lgPrevD: "The room that had the slot before you.",
     insertRoom:     "Room number",
     back:           "← Back",
     backModify:     "← Edit",
@@ -293,6 +306,9 @@ function deriveMachines(week: WeekData, status: StatusData, day: number, slot: n
 // ─── Prenotazioni della propria camera nella settimana ────────────────────────
 
 interface MyBooking { day: number; slot: number; mid: string; }
+
+// Turno preferito: giorno della settimana + slot orario (es. Domenica 14:30–15:45)
+interface Fav { day: number; slot: number; }
 
 function myWeekBookings(week: WeekData, room: string): MyBooking[] {
   const out: MyBooking[] = [];
@@ -453,14 +469,6 @@ function BookModal({ target, bookings, myRoom, lang, onConfirm, onClose }: {
                   <p className="text-base font-mono font-bold" style={{ color:fg }}>{slot.start} – {slot.end}</p>
                 </div>
               </div>
-              {nextSlot && (
-                <div className="flex items-center gap-2 px-4 py-3 border-t" style={{ borderColor: "var(--border)" }}>
-                  <Wind size={12} style={{ color:RED }}/>
-                  <p className="text-xs" style={{ color:sub }}>
-                    {t.autoReserved(machLabel, nextSlot.start + " – " + nextSlot.end)}
-                  </p>
-                </div>
-              )}
             </div>
             <div className="flex gap-3">
               <button onClick={()=>setStep("input")} className="flex-1 py-3.5 rounded-2xl text-sm font-semibold" style={{ background:chip, color:fg }}>{t.backModify}</button>
@@ -521,10 +529,11 @@ function ModifyModal({ target, lang, onEdit, onDelete, onClose }: {
 
 // ─── Dashboard ─────────────────────────────────────────────────────────────────
 
-function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, onStatus }: {
+function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, onClear, onStatus }: {
   theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
-  favs: number[]; onToggleFav: (slot:number)=>void;
+  favs: Fav[]; onToggleFav: (day:number, slot:number)=>void;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
+  onClear: (day:number, slot:number, machine:string)=>Promise<void>;
   onStatus: (machine:string, oos:boolean)=>Promise<void>;
 }) {
   const t = T[lang];
@@ -554,23 +563,24 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
   const remaining      = WEEKLY_QUOTA - myBookings.length;
   const activeBookings = myBookings.filter((b) => !isPastBooking(b));
 
-  const firstFreeWasher = (s: number): string | null =>
-    ["W-A","W-B","W-C"].find((wid) => status[wid] !== "oos" && !week[TODAY_DOW]?.[s]?.[wid]) ?? null;
-  let freeTodaySlots = 0;
-  for (let s = CUR_SLOT; s < N_SLOTS; s++) if (firstFreeWasher(s)) freeTodaySlots++;
+  // Prima lavatrice libera in un dato (giorno, slot)
+  const firstFreeWasherAt = (day: number, s: number): string | null =>
+    ["W-A","W-B","W-C"].find((wid) => status[wid] !== "oos" && !week[day]?.[s]?.[wid]) ?? null;
 
-  async function quickBook(s: number, mid: string) {
+  async function quickBook(day: number, s: number, mid: string) {
     if (!roomNumber) return;
-    try { await onBook(TODAY_DOW, s, mid, roomNumber); setToast(t.booked(mid[2])); }
+    try { await onBook(day, s, mid, roomNumber); setToast(t.booked(mid[2])); }
     catch (e) { setToast(errMsg(e, lang)); }
   }
 
-  // Creazione dei gruppi (Card) per la Dashboard
-  const machineGroups = ["A", "B", "C"].map((letter) => ({
-    letter,
-    washer: machines.find((m) => m.id === `W-${letter}`)!,
-    dryer: machines.find((m) => m.id === `D-${letter}`)!
-  }));
+  async function cancelBooking(b: MyBooking) {
+    try { await onClear(b.day, b.slot, b.mid); setToast(t.slotDeleted); }
+    catch (e) { setToast(errMsg(e, lang)); }
+  }
+
+  // Lavatrice + asciugatrice trattate come un'unica unità (A/B/C): mostriamo la lavatrice
+  // prenotabile; l'asciugatrice abbinata è implicita (auto-riservata dal backend).
+  const washers = machines.filter((m) => m.type === "washer");
 
   return (
     <div className="flex flex-col pb-6">
@@ -659,6 +669,11 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
                       </p>
                     </div>
                     {cur && <span className="size-2 rounded-full animate-pulse shrink-0" style={{ background:RED }}/>}
+                    <button onClick={()=>cancelBooking(b)} aria-label={t.delete}
+                      className="p-2 rounded-lg shrink-0 transition-all active:scale-90"
+                      style={{ background:`color-mix(in srgb, var(--destructive) 10%, transparent)`, color:OOS_C }}>
+                      <Trash2 size={14}/>
+                    </button>
                   </div>
                 );
               })
@@ -695,28 +710,30 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
               <p className="text-xs" style={{ color:sub }}>{t.noFavs}</p>
             </div>
           ) : (
-            favs.map((s, i) => {
-              const sl      = TIME_SLOTS[s];
-              const past    = s < CUR_SLOT;
-              const freeMid = past ? null : firstFreeWasher(s);
+            favs.map((f, i) => {
+              const sl      = TIME_SLOTS[f.slot];
+              const past    = isPastBooking({ day: f.day, slot: f.slot, mid: "W-A" });
+              const freeMid = past ? null : firstFreeWasherAt(f.day, f.slot);
               return (
-                <div key={s} className="flex items-center gap-3 px-4 py-3"
+                <div key={`${f.day}-${f.slot}`} className="flex items-center gap-3 px-4 py-3"
                   style={{ borderBottom: i < favs.length - 1 ? `1px solid ${div}` : "none" }}>
                   <Star size={14} style={{ color:ORANGE, fill:ORANGE, flexShrink:0 }}/>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-mono font-semibold" style={{ color:fg }}>{sl.start} – {sl.end}</p>
+                    <p className="text-sm font-mono font-semibold" style={{ color:fg }}>
+                      {t.days[f.day]} · {sl.start}–{sl.end}
+                    </p>
                     <p className="text-[11px]" style={{ color: past ? sub : freeMid ? GREEN : sub }}>
                       {past ? t.favPast : freeMid ? t.favFree : t.favFull}
                     </p>
                   </div>
                   {freeMid && roomNumber && (
-                    <button onClick={()=>quickBook(s, freeMid)}
+                    <button onClick={()=>quickBook(f.day, f.slot, freeMid)}
                       className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all active:scale-95 shrink-0"
                       style={{ background:`color-mix(in srgb, ${GREEN} 18%, transparent)`, color:GREEN }}>
                       <Plus size={12}/>{t.book}
                     </button>
                   )}
-                  <button onClick={()=>onToggleFav(s)} className="p-1.5 rounded-lg shrink-0 transition-colors" style={{ color:sub }} aria-label="rimuovi">
+                  <button onClick={()=>onToggleFav(f.day, f.slot)} className="p-1.5 rounded-lg shrink-0 transition-colors" style={{ color:sub }} aria-label="rimuovi">
                     <X size={13}/>
                   </button>
                 </div>
@@ -730,36 +747,14 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
 
       <div className="lg:flex lg:flex-col">
 
-      {/* Macchine Raggruppate per Colonna (Card) */}
+      {/* Macchine — lavatrice+asciugatrice come unica unità A/B/C */}
       <section className="px-5 mb-4">
         <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.machines}</p>
-        <div className="flex flex-col gap-4">
-          {machineGroups.map((g) => (
-            <div key={g.letter} className="rounded-2xl overflow-hidden border shadow-sm" style={{ background:surf, borderColor:div }}>
-              {/* Intestazione della Card */}
-              <div className="px-4 py-2 border-b flex items-center justify-between"
-                style={{ background: "color-mix(in srgb, var(--primary) 4%, transparent)", borderColor: div }}>
-                <span className="text-sm font-bold font-mono" style={{ color: fg }}>
-                  Lavatrice {g.letter}
-                </span>
-              </div>
-              
-              {/* Le due macchine in colonna */}
-              <MachineRow
-                machine={g.washer}
-                lang={lang}
-                isLast={false}
-                divColor={div}
-                onBook={() => setBooking(g.washer)}
-              />
-              <MachineRow
-                machine={g.dryer}
-                lang={lang}
-                isLast={true}
-                divColor={div}
-                onBook={() => {}}
-              />
-            </div>
+        <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
+          {washers.map((m, i) => (
+            <MachineRow key={m.id} machine={m} lang={lang} combo
+              isLast={i === washers.length - 1} divColor={div}
+              onBook={() => setBooking(m)}/>
           ))}
         </div>
       </section>
@@ -769,28 +764,24 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
         <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.howItWorks}</p>
         <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
           {[
-            { dot:GREEN,  title:t.legendFree, desc:t.legendFreeDesc },
-            { dot:YELLOW, title:t.legendInUse(TIME_SLOTS[CUR_SLOT].end), desc:"" },
-            { dot:OOS_C,  title:t.legendOos,  desc:"" },
-            { icon:true,  title:t.legendPrev, desc:"" },
-          ].map(({ dot, icon, title, desc }, i, arr) => (
-            <div key={title} className="flex items-start gap-3 px-4 py-3"
+            { dot:GREEN,  name:t.lgFree,  desc:t.lgFreeD },
+            { dot:YELLOW, name:t.lgInUse, desc:t.lgInUseD(TIME_SLOTS[CUR_SLOT].end) },
+            { dot:OOS_C,  name:t.lgOos,   desc:t.lgOosD },
+            { icon:true,  name:t.lgPrev,  desc:t.lgPrevD },
+          ].map(({ dot, icon, name, desc }, i, arr) => (
+            <div key={name} className="px-4 py-3"
               style={{ borderBottom: i < arr.length - 1 ? `1px solid ${div}` : "none" }}>
-              {icon
-                ? <BedDouble size={13} className="mt-0.5 shrink-0" style={{ color:ORANGE }}/>
-                : <span className="size-2 rounded-full mt-1.5 shrink-0" style={{ background:dot }}/>}
-              <div>
-                <p className="text-xs font-semibold mb-0.5" style={{ color: fg }}>{title}</p>
-                {desc && <p className="text-xs" style={{ color:sub }}>{desc}</p>}
+              {/* Colore/icona + nome stato sopra */}
+              <div className="flex items-center gap-2 mb-1">
+                {icon
+                  ? <BedDouble size={13} className="shrink-0" style={{ color:ORANGE }}/>
+                  : <span className="size-2.5 rounded-full shrink-0" style={{ background:dot }}/>}
+                <p className="text-xs font-semibold" style={{ color: fg }}>{name}</p>
               </div>
+              {/* Spiegazione in grigio chiaro, sotto al colore */}
+              <p className="text-xs" style={{ color: "color-mix(in srgb, var(--foreground) 50%, transparent)" }}>{desc}</p>
             </div>
           ))}
-          <div className="flex items-start gap-3 px-4 py-3 border-t" style={{ borderColor:div, background: "color-mix(in srgb, var(--primary) 4%, transparent)" }}>
-            <Zap size={13} style={{ color:RED, marginTop:1, flexShrink:0 }}/>
-            <p className="text-xs" style={{ color:sub }}>
-              {t.legendAuto}
-            </p>
-          </div>
         </div>
       </section>
 
@@ -811,8 +802,8 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
   );
 }
 
-function MachineRow({ machine, lang, isLast, divColor, onBook }: {
-  machine: Machine; lang: Lang; isLast: boolean; divColor: string; onBook:()=>void;
+function MachineRow({ machine, lang, isLast, divColor, onBook, combo = false }: {
+  machine: Machine; lang: Lang; isLast: boolean; divColor: string; onBook:()=>void; combo?: boolean;
 }) {
   const t = T[lang];
   const fg  = "var(--foreground)";
@@ -827,11 +818,13 @@ function MachineRow({ machine, lang, isLast, divColor, onBook }: {
   return (
     <div style={{ borderBottom:isLast?"none":`1px solid ${divColor}`, background:rowBg }}>
       <div className="flex items-center gap-3 px-4 py-3">
-        {/* Dot + icon + label */}
-        <div className="flex items-center gap-2.5 w-16 shrink-0">
+        {/* Dot + icona/e + label (combo = lavatrice+asciugatrice come unica unità) */}
+        <div className={`flex items-center gap-2.5 shrink-0 ${combo ? "w-20" : "w-16"}`}>
           <span className="size-2 rounded-full shrink-0" style={{ background:dotColor }}/>
           <div className="flex items-center gap-1" style={{ color:fg }}>
-            {machine.type==="washer" ? <WashingMachine size={16}/> : <Wind size={15}/>}
+            {combo
+              ? <span className="flex items-center gap-0.5"><WashingMachine size={16}/><Wind size={13} style={{ opacity:0.5 }}/></span>
+              : machine.type==="washer" ? <WashingMachine size={16}/> : <Wind size={15}/>}
             <span className="text-base font-mono font-bold">{machine.label}</span>
           </div>
         </div>
@@ -870,7 +863,7 @@ function MachineRow({ machine, lang, isLast, divColor, onBook }: {
 
 function DaySchedule({ lang, week, roomNumber: sessionRoom, favs, onToggleFav, onBook, onClear }: {
   theme: Theme; lang: Lang; week: WeekData; roomNumber: string;
-  favs: number[]; onToggleFav: (slot:number)=>void;
+  favs: Fav[]; onToggleFav: (day:number, slot:number)=>void;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
   onClear: (day:number, slot:number, machine:string)=>Promise<void>;
 }) {
@@ -918,9 +911,8 @@ function DaySchedule({ lang, week, roomNumber: sessionRoom, favs, onToggleFav, o
         />
       )}
 
-      <div className="px-5 pt-5 pb-3 shrink-0">
-        <p className="text-[11px] font-mono tracking-widest uppercase mb-1" style={{ color:sub }}>{t.thisWeek}</p>
-        <h2 className="text-2xl font-bold mb-4" style={{ color:fg }}>{t.daily}</h2>
+      <div className="px-5 pt-3 pb-2 shrink-0">
+        <h2 className="text-base font-bold mb-2" style={{ color:fg }}>{t.daily}</h2>
         <div className="grid grid-cols-7 gap-1">
           {t.days.map((d, i) => {
             const isToday  = i===TODAY_DOW;
@@ -928,11 +920,10 @@ function DaySchedule({ lang, week, roomNumber: sessionRoom, favs, onToggleFav, o
             const isPast   = i<TODAY_DOW;
             return (
               <button key={d} onClick={()=>setSelDay(i)}
-                className="flex flex-col items-center py-2 rounded-xl transition-colors"
+                className="flex flex-col items-center py-1.5 rounded-xl transition-colors"
                 style={{ background:isActive?RED:"transparent", color:isActive?RED_FG:isPast?"color-mix(in srgb, var(--muted-foreground) 40%, transparent)":sub }}>
-                <span className="text-[9px] font-mono uppercase leading-none mb-1">{d}</span>
-                <span className="text-sm font-bold leading-none mb-1">{DAYS_DATE[i]}</span>
-                <span className="size-1 rounded-full" style={{ background: isToday&&!isActive ? RED : "transparent" }}/>
+                <span className="text-[9px] font-mono uppercase leading-none mb-0.5">{d}</span>
+                <span className="text-sm font-bold leading-none">{DAYS_DATE[i]}</span>
               </button>
             );
           })}
@@ -954,7 +945,7 @@ function DaySchedule({ lang, week, roomNumber: sessionRoom, favs, onToggleFav, o
           const isCur  = si===CUR_SLOT  && selDay===TODAY_DOW;
           const isPrev = si===PREV_SLOT && selDay===TODAY_DOW;
           const isPast = selDay<TODAY_DOW || (selDay===TODAY_DOW && si<CUR_SLOT);
-          const isFav  = favs.includes(si);
+          const isFav  = favs.some((f) => f.day === selDay && f.slot === si);
           return (
             <div key={slot.start} className="flex items-center px-5 relative"
               style={{ minHeight:48, background:isCur?`color-mix(in srgb, var(--primary) 8%, transparent)`:isPrev?`color-mix(in srgb, var(--chart-4) 5%, transparent)`:"transparent", borderBottom:`1px solid ${div}` }}>
@@ -966,7 +957,7 @@ function DaySchedule({ lang, week, roomNumber: sessionRoom, favs, onToggleFav, o
                   {isCur  && <span className="text-[8px] font-mono" style={{ color:RED }}>{t.now}</span>}
                   {isPrev && <span className="text-[8px] font-mono" style={{ color:ORANGE }}>{t.prev}</span>}
                 </div>
-                <button onClick={()=>onToggleFav(si)} className="p-0.5 -mr-1 shrink-0 transition-transform active:scale-90" aria-label="preferito">
+                <button onClick={()=>onToggleFav(selDay, si)} className="p-0.5 -mr-1 shrink-0 transition-transform active:scale-90" aria-label="preferito">
                   <Star size={11} style={{ color:isFav?ORANGE:sub, fill:isFav?ORANGE:"none", opacity:isFav?1:0.45 }}/>
                 </button>
               </div>
@@ -1001,17 +992,6 @@ function DaySchedule({ lang, week, roomNumber: sessionRoom, favs, onToggleFav, o
             </div>
           );
         })}
-        <div className="px-5 py-4">
-          <div className="rounded-2xl p-4 border flex items-start gap-3"
-            style={{ background:"var(--card)", borderColor:"var(--border)" }}>
-            <div className="p-1.5 rounded-lg shrink-0 mt-0.5" style={{ background:`color-mix(in srgb, var(--primary) 15%, transparent)` }}>
-              <Zap size={12} style={{ color:RED }}/>
-            </div>
-            <p className="text-[11px] leading-relaxed" style={{ color:sub }}>
-              {t.legendAuto}
-            </p>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -1178,9 +1158,8 @@ function WeekOverview({ lang, week, roomNumber: sessionRoom, onBook, onClear }: 
         />
       )}
 
-      <div className="px-5 pt-5 pb-3 shrink-0">
-        <p className="text-[11px] font-mono tracking-widest uppercase mb-1" style={{ color:sub }}>{t.thisWeek}</p>
-        <h2 className="text-2xl font-bold" style={{ color:fg }}>{t.overview}</h2>
+      <div className="px-5 pt-3 pb-2 shrink-0">
+        <h2 className="text-base font-bold" style={{ color:fg }}>{t.overview}</h2>
       </div>
 
       <div className="flex-1 overflow-auto">
@@ -1443,9 +1422,10 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
-function DesktopSidebar({ active, onChange, lang, theme, roomNumber, showNav, onChangeRoom, onToggleLang, onToggleTheme }: {
+function DesktopSidebar({ active, onChange, lang, theme, roomNumber, showNav, facility, onFacility, onChangeRoom, onToggleLang, onToggleTheme }: {
   active: number; onChange: (i: number) => void; lang: Lang; theme: Theme;
   roomNumber: string | null; showNav: boolean;
+  facility: Facility; onFacility: (f: Facility) => void;
   onChangeRoom: () => void; onToggleLang: () => void; onToggleTheme: () => void;
 }) {
   const t   = T[lang];
@@ -1464,22 +1444,40 @@ function DesktopSidebar({ active, onChange, lang, theme, roomNumber, showNav, on
         <div className="p-2 rounded-xl" style={{ background:"color-mix(in srgb, var(--primary) 15%, transparent)" }}>
           <WashingMachine size={20} style={{ color:RED }}/>
         </div>
-        <span className="text-lg font-bold" style={{ color:fg }}>Lavanderia</span>
+        <span className="text-lg font-bold" style={{ color:fg }}>Collegio</span>
       </div>
 
       {/* Navigazione */}
-      <nav className="flex-1 px-3 py-4 flex flex-col gap-1">
-        {showNav && tabs.map((tab, i) => {
-          const Icon = tab.icon;
-          const isActive = active === i;
+      <nav className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto">
+        {/* Strutture: Lavanderia / Cinema / Musica */}
+        {showNav && FACILITIES.map(({ id, icon: Icon, label }) => {
+          const isActive = facility === id;
           return (
-            <button key={i} onClick={()=>onChange(i)}
+            <button key={id} onClick={()=>onFacility(id)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors text-left ${isActive ? "" : "desk-nav"}`}
               style={isActive ? { background:RED, color:RED_FG } : { color:sub }}>
-              <Icon size={18}/>{tab.label}
+              <Icon size={18}/>{label[lang]}
             </button>
           );
         })}
+
+        {/* Sotto-sezioni della Lavanderia */}
+        {showNav && facility === "laundry" && (
+          <>
+            <div className="h-px my-2 mx-2" style={{ background:div }}/>
+            {tabs.map((tab, i) => {
+              const Icon = tab.icon;
+              const isActive = active === i;
+              return (
+                <button key={i} onClick={()=>onChange(i)}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-colors text-left ${isActive ? "" : "desk-nav"}`}
+                  style={isActive ? { background:`color-mix(in srgb, var(--primary) 15%, transparent)`, color:RED } : { color:sub }}>
+                  <Icon size={15}/>{tab.label}
+                </button>
+              );
+            })}
+          </>
+        )}
       </nav>
 
       {/* Controlli */}
@@ -1520,10 +1518,38 @@ function CenterState({ children }: { isDark?: boolean; children: React.ReactNode
   );
 }
 
+// ─── Selettore struttura (Lavanderia / Cinema / Musica) ───────────────────────
+
+const FACILITIES: { id: Facility; icon: any; label: { it: string; en: string } }[] = [
+  { id: "laundry", icon: WashingMachine, label: { it: "Lavanderia", en: "Laundry" } },
+  { id: "cinema",  icon: Film,           label: { it: "Cinema",     en: "Cinema" } },
+  { id: "music",   icon: Music,          label: { it: "Musica",     en: "Music" } },
+];
+
+function FacilitySwitcher({ facility, onChange, lang }: { facility: Facility; onChange: (f: Facility)=>void; lang: Lang }) {
+  return (
+    <div className="flex gap-1.5 px-5 pt-3 pb-1 shrink-0">
+      {FACILITIES.map(({ id, icon: Icon, label }) => {
+        const active = facility === id;
+        return (
+          <button key={id} onClick={()=>onChange(id)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 border"
+            style={active
+              ? { background:RED, color:RED_FG, borderColor:RED }
+              : { background:"var(--secondary)", color:"var(--muted-foreground)", borderColor:"var(--border)" }}>
+            <Icon size={14}/>{label[lang]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // ─── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const [screen, setScreen]   = useState(0);
+  const [facility, setFacility] = useState<Facility>("laundry");
   const [theme, setTheme] = useState<Theme>(() => {
     try {
       const saved = localStorage.getItem("laundryhub.theme");
@@ -1541,14 +1567,21 @@ export default function App() {
   const [status, setStatus]   = useState<StatusData>({});
   const [loading, setLoading] = useState(true);
   const [error,  setError]    = useState<string | null>(null);
-  const [favs,   setFavs]     = useState<number[]>(() => {
-    try { return JSON.parse(localStorage.getItem("laundryhub.favs") || "[]"); } catch { return []; }
+  const [favs,   setFavs]     = useState<Fav[]>(() => {
+    // Nuovo formato preferiti: {day, slot}. Il vecchio formato (solo numeri) viene scartato.
+    try {
+      const raw = JSON.parse(localStorage.getItem("laundryhub.favs") || "[]");
+      return Array.isArray(raw) ? raw.filter((x: any) => x && typeof x.day === "number" && typeof x.slot === "number") : [];
+    } catch { return []; }
   });
   const t = T[lang];
 
-  const toggleFav = useCallback((slot: number) => {
+  const toggleFav = useCallback((day: number, slot: number) => {
     setFavs((prev) => {
-      const next = prev.includes(slot) ? prev.filter((s) => s !== slot) : [...prev, slot].sort((a, b) => a - b);
+      const exists = prev.some((f) => f.day === day && f.slot === slot);
+      const next = exists
+        ? prev.filter((f) => !(f.day === day && f.slot === slot))
+        : [...prev, { day, slot }].sort((a, b) => a.day - b.day || a.slot - b.slot);
       try { localStorage.setItem("laundryhub.favs", JSON.stringify(next)); } catch {}
       return next;
     });
@@ -1626,11 +1659,15 @@ export default function App() {
     <LoginScreen lang={lang} onLogin={chooseRoom}/>
   ) : (
     <>
-      {screen===0 && <Dashboard   theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onStatus={handleStatus}/>}
+      {screen===0 && <Dashboard   theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} onStatus={handleStatus}/>}
       {screen===1 && <DaySchedule theme={theme} lang={lang} week={week} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear}/>}
       {screen===2 && <WeekOverview theme={theme} lang={lang} week={week} roomNumber={roomNumber} onBook={handleBook} onClear={handleClear}/>}
     </>
   );
+
+  // Lavanderia → schermate laundry; Cinema/Musica → sala a fasce libere
+  const isRoom = facility !== "laundry";
+  const bodyContent = isRoom ? <RoomView room={facility as "cinema" | "music"} lang={lang}/> : mainContent;
 
   if (isDesktop) {
     return (
@@ -1640,13 +1677,14 @@ export default function App() {
         <DesktopSidebar
           active={screen} onChange={setScreen} lang={lang} theme={theme}
           roomNumber={roomNumber} showNav={showChrome}
+          facility={facility} onFacility={setFacility}
           onChangeRoom={changeRoom}
           onToggleLang={()=>setLang(l=>l==="it"?"en":"it")}
           onToggleTheme={()=>setTheme(theme === "dark" ? "light" : "dark")}
         />
         <main className="flex-1 h-dvh min-h-0 flex flex-col overflow-y-auto overscroll-contain">
           <div className="mx-auto w-full max-w-5xl flex-1 min-h-0 flex flex-col">
-            {mainContent}
+            {bodyContent}
           </div>
         </main>
       </div>
@@ -1685,11 +1723,13 @@ export default function App() {
           </div>
         </div>
 
+        {showChrome && <FacilitySwitcher facility={facility} onChange={setFacility} lang={lang}/>}
+
         <div className="flex-1 overflow-y-auto overscroll-contain min-h-0 flex flex-col mt-2">
-          {mainContent}
+          {bodyContent}
         </div>
 
-        {showChrome && <BottomNav active={screen} onChange={setScreen} theme={theme} lang={lang}/>}
+        {showChrome && !isRoom && <BottomNav active={screen} onChange={setScreen} theme={theme} lang={lang}/>}
         <div className="pb-2 hidden md:flex justify-center shrink-0">
           <div className="w-28 h-1 rounded-full" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
         </div>
