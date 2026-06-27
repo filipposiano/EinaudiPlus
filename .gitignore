@@ -1,1 +1,15 @@
-node_modules/
+# Cartelle di build e dipendenze
+node_modules
+dist
+dist-ssr
+.output
+.vercel
+
+# File di configurazione/ambiente (NON caricare mai .env se contiene chiavi segrete)
+.env
+.env.*
+!.env.example
+
+# Varie
+.DS_Store
+.claude
