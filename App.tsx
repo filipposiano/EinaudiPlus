@@ -74,7 +74,7 @@ const _NOW          = nowInfo();
 const TODAY_DOW     = _NOW.dayIdx;
 const CUR_SLOT      = _NOW.slotIdx;
 const PREV_SLOT     = CUR_SLOT - 1;
-const EARLY_IN_SLOT = _NOW.early;
+
 
 const MONDAY     = new Date(_NOW.base.getFullYear(), _NOW.base.getMonth(), _NOW.base.getDate() - TODAY_DOW);
 const WEEK_DATES = Array.from({ length: 7 }, (_, i) => new Date(MONDAY.getFullYear(), MONDAY.getMonth(), MONDAY.getDate() + i));
