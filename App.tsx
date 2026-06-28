@@ -3,8 +3,8 @@ import {
   Wind, Clock, CalendarDays,
   Sun, Moon, Plus, CheckCircle2, AlertTriangle,
   LayoutGrid, Delete, X, Wrench, RotateCcw, Loader2, Star,
-  BedDouble, Timer, Trash2, Film, Music,
-  Bell, BellRing,
+  Shirt, Timer, Trash2, Film, Music,
+  Bell, BellRing, Download, Share,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -109,6 +109,11 @@ const T = {
     days:     ["Lun","Mar","Mer","Gio","Ven","Sab","Dom"],
     room:     "Camera", camera: "camera",
     welcome:  "Einaudi Plus", enterRoom: "Inserisci il numero della tua stanza per accedere",
+    installTitle: "Installa Einaudi Plus",
+    installBody: "Aggiungila alla schermata Home: si apre come un'app a tutto schermo e può inviarti i promemoria dei turni.",
+    installIosBody: "Per installarla su iPhone: tocca il tasto Condividi del browser, poi scegli «Aggiungi a Home».",
+    installIosStep: "Condividi  →  Aggiungi a Home",
+    installCta: "Installa", installLater: "Più tardi", installIosDone: "Ho capito",
     skip:     "Continua senza accedere",
     machines: "Lavatrici", // <--- AGGIUNTO
     washers:  "Lavatrici", dryers: "Asciugatrici",
@@ -182,6 +187,11 @@ const T = {
     days:     ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
     room:     "Room", camera: "room",
     welcome:  "Einaudi Plus", enterRoom: "Enter your room number to continue",
+    installTitle: "Install Einaudi Plus",
+    installBody: "Add it to your Home Screen: it opens like a full-screen app and can send you shift reminders.",
+    installIosBody: "To install on iPhone: tap the browser Share button, then choose “Add to Home Screen”.",
+    installIosStep: "Share  →  Add to Home Screen",
+    installCta: "Install", installLater: "Later", installIosDone: "Got it",
     skip:     "Continue without logging in",
     machines: "Machines", // <--- AGGIUNTO
     washers:  "Washers", dryers: "Dryers",
@@ -799,7 +809,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
               {/* Colore/icona + nome stato sopra */}
               <div className="flex items-center gap-2 mb-1">
                 {icon
-                  ? <BedDouble size={13} className="shrink-0" style={{ color:ORANGE }}/>
+                  ? <Shirt size={13} className="shrink-0" style={{ color:ORANGE }}/>
                   : <span className="size-2.5 rounded-full shrink-0" style={{ background:dot }}/>}
                 <p className="text-xs font-semibold" style={{ color: fg }}>{name}</p>
               </div>
@@ -866,7 +876,7 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, combo = false }: 
           {machine.prevRoom && (
             <span className="flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-semibold"
               style={{ background:`color-mix(in srgb, ${ORANGE} 12%, transparent)`, color:ORANGE }}>
-              <BedDouble size={13}/>
+              <Shirt size={13}/>
               <span className="text-[11px] font-mono">{machine.prevRoom}</span>
             </span>
           )}
@@ -1607,6 +1617,80 @@ function ReminderBell({ room, lang }: { room: string | null; lang: Lang }) {
   );
 }
 
+// ─── Prompt installazione PWA ───────────────────────────────────────────────────
+// Se l'app è già installata (standalone) o è già stata chiesta una volta → non
+// mostra nulla. Altrimenti propone l'installazione: su Android usa il prompt
+// nativo, su iPhone mostra le istruzioni (Condividi → Aggiungi a Home).
+function InstallPrompt({ lang }: { lang: Lang }) {
+  const t = T[lang];
+  const [deferred, setDeferred] = useState<any>(null);
+  const [show, setShow] = useState(false);
+  const isIOS = /iphone|ipad|ipod/i.test(typeof navigator !== "undefined" ? navigator.userAgent : "");
+
+  useEffect(() => {
+    const standalone = window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true;
+    if (standalone) return;
+    let asked = false;
+    try { asked = localStorage.getItem("einaudiplus.installAsked") === "1"; } catch {}
+    if (asked) return;
+
+    if (isIOS) {
+      const id = setTimeout(() => setShow(true), 1500);
+      return () => clearTimeout(id);
+    }
+    const onReady = () => { setDeferred((window as any).deferredPWAPrompt); setShow(true); };
+    if ((window as any).deferredPWAPrompt) onReady();
+    window.addEventListener("pwa-installable", onReady);
+    return () => window.removeEventListener("pwa-installable", onReady);
+  }, [isIOS]);
+
+  function close() {
+    try { localStorage.setItem("einaudiplus.installAsked", "1"); } catch {}
+    setShow(false);
+  }
+  async function install() {
+    if (deferred) {
+      deferred.prompt();
+      try { await deferred.userChoice; } catch {}
+    }
+    close();
+  }
+
+  if (!show) return null;
+  return (
+    <div className="absolute inset-0 z-50 flex items-end animate-toast-in" style={{ background: "rgba(0,0,0,0.55)" }} onClick={close}>
+      <div className="w-full rounded-t-3xl pt-5 pb-7 px-6" style={{ background: "var(--background)" }} onClick={(e)=>e.stopPropagation()}>
+        <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
+        <div className="flex items-center gap-3 mb-3">
+          <div className="p-2.5 rounded-2xl" style={{ background: `color-mix(in srgb, var(--primary) 15%, transparent)`, color: RED }}>
+            <Download size={20}/>
+          </div>
+          <p className="text-lg font-bold" style={{ color: "var(--foreground)" }}>{t.installTitle}</p>
+        </div>
+        <p className="text-sm leading-relaxed mb-5" style={{ color: "var(--muted-foreground)" }}>
+          {isIOS ? t.installIosBody : t.installBody}
+        </p>
+        {isIOS ? (
+          <div className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 mb-2 border"
+            style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--foreground)" }}>
+            <Share size={16} style={{ color: RED }}/>
+            <span className="text-sm font-medium">{t.installIosStep}</span>
+          </div>
+        ) : (
+          <button onClick={install}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold mb-2 transition-all active:scale-[0.98]"
+            style={{ background: RED, color: RED_FG }}>
+            <Download size={16}/>{t.installCta}
+          </button>
+        )}
+        <button onClick={close} className="w-full py-3 rounded-2xl text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
+          {isIOS ? t.installIosDone : t.installLater}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -1737,6 +1821,7 @@ export default function App() {
       <div className="relative h-dvh w-full flex overflow-hidden"
         style={{ fontFamily:"'DM Sans', sans-serif", background:"var(--background)" }}>
         {globalStyle}
+        {showChrome && <InstallPrompt lang={lang}/>}
         <DesktopSidebar
           active={screen} onChange={setScreen} lang={lang} theme={theme}
           roomNumber={roomNumber} showNav={showChrome}
@@ -1760,6 +1845,7 @@ export default function App() {
       {globalStyle}
       <div className="relative flex flex-col overflow-hidden w-full h-dvh md:h-[844px] md:max-w-[420px] md:rounded-[3rem] md:shadow-2xl md:border"
         style={{ background:"var(--background)", borderColor:"var(--border)" }}>
+        {showChrome && <InstallPrompt lang={lang}/>}
 
         <div className="flex items-center justify-between px-7 pt-3 pb-0 shrink-0 mt-2 md:mt-0">
           {roomNumber !== null ? (
