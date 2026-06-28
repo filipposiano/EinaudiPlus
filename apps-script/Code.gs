@@ -12,8 +12,9 @@
  *       Lun  righe  2–7    Mar  righe  9–14   Mer  righe 16–21   Gio righe 23–28
  *       Ven  righe 30–35   Sab  righe 37–42   Dom  righe 44–49
  *   • Colonna B = orario, intervallo testuale tipo "18:00-20:00" (o "18:00 - 20:00")
- *   • Colonna C = nome di chi prenota
- *   • Colonna D = tipo (solo Cinema): "Riservata" / "Pubblica" — vuota per la Musica
+ *   • Colonna C = libera (NON usata dall'app)
+ *   • Colonna D = nome di chi prenota
+ *   • Colonna E = tipo (solo Cinema): "R" (Riservata) / "P" (Party) — vuota per la Musica
  *
  * Deploy: Estensioni → Apps Script, incolla questo file in OGNI foglio (cinema e
  * musica), poi Deploy → Nuova distribuzione → "App web" (Esegui come: te stesso;
@@ -29,9 +30,9 @@ var TOKEN = 'filipposiano';
 var FIRST_ROW   = 2;   // prima riga del blocco di Lunedì
 var ROWS_PER_DAY = 6;  // righe libere per ogni giorno (max 6 prenotazioni/giorno)
 var DAY_STRIDE  = 7;   // distanza in righe tra l'inizio di un giorno e il successivo
-var COL_TIME = 2;      // B
-var COL_NAME = 3;      // C
-var COL_TYPE = 4;      // D
+var COL_TIME = 2;      // B = orario "18:00-20:00"
+var COL_NAME = 4;      // D = nome (la colonna C resta libera, non viene toccata)
+var COL_TYPE = 5;      // E = tipo: "R" (Riservata) / "P" (Party) — solo Cinema
 var LAST_ROW = FIRST_ROW + 6 * DAY_STRIDE + ROWS_PER_DAY - 1; // = 49 (Domenica)
 
 // Nome ESATTO della scheda con la griglia delle prenotazioni.
@@ -77,31 +78,35 @@ function parseRange_(v) {
 function fmtMin_(min) { return pad2_(Math.floor(min / 60)) + ':' + pad2_(min % 60); }
 function fmtRange_(start, end) { return fmtMin_(start) + '-' + fmtMin_(end); }
 
-// Etichetta colonna D → tipo dell'app ("open" | "private" | undefined).
+// Etichetta colonna E → tipo dell'app ("open" | "private" | undefined).
+// "P" (Party) → open ; "R" (Riservata) → private. Tollera anche parole intere.
 function parseType_(v) {
   var s = String(v || '').toLowerCase().trim();
   if (!s) return undefined;
-  if (s.indexOf('pubbl') >= 0 || s.indexOf('apert') >= 0 || s === 'open') return 'open';
+  if (s.charAt(0) === 'p' || s.indexOf('apert') >= 0 || s === 'open') return 'open';
   return 'private';
 }
-// tipo dell'app → etichetta colonna D.
+// tipo dell'app → etichetta colonna E.
 function typeLabel_(type) {
-  if (type === 'open') return 'Pubblica';
-  if (type === 'private') return 'Riservata';
+  if (type === 'open') return 'P';
+  if (type === 'private') return 'R';
   return '';
 }
 
 // ─── Lettura di tutte le prenotazioni dalla griglia ─────────────────────────
 function readAll_(sh) {
   var nRows = LAST_ROW - FIRST_ROW + 1;
-  var values = sh.getRange(FIRST_ROW, COL_TIME, nRows, 3).getValues(); // [B,C,D]
+  var nCols = COL_TYPE - COL_TIME + 1;    // B..E
+  var values = sh.getRange(FIRST_ROW, COL_TIME, nRows, nCols).getValues();
+  var iName = COL_NAME - COL_TIME;        // colonna nome nell'array (D → 2)
+  var iType = COL_TYPE - COL_TIME;        // colonna tipo nell'array (E → 3)
   var out = [];
   for (var day = 0; day < 7; day++) {
     for (var off = 0; off < ROWS_PER_DAY; off++) {
       var row = rowFor_(day, off);
       var idx = row - FIRST_ROW;            // indice nell'array values
       var range = parseRange_(values[idx][0]);
-      var name  = String(values[idx][1] || '').trim();
+      var name  = String(values[idx][iName] || '').trim();
       if (!range || !name) continue;        // riga vuota o incompleta → ignora
       out.push({
         id: 'r' + row,                      // id stabile = numero di riga
@@ -109,7 +114,7 @@ function readAll_(sh) {
         start: range.start,
         end: range.end,
         name: name,
-        type: parseType_(values[idx][2])
+        type: parseType_(values[idx][iType])
       });
     }
   }
@@ -174,7 +179,8 @@ function doPost(e) {
       if (m) {
         var r = Number(m[1]);
         if (r >= FIRST_ROW && r <= LAST_ROW) {
-          sh.getRange(r, COL_TIME, 1, 3).clearContent();
+          sh.getRange(r, COL_TIME).clearContent();                                  // B
+          sh.getRange(r, COL_NAME, 1, COL_TYPE - COL_NAME + 1).clearContent();      // D:E
         }
       }
       return json_({ ok: true, bookings: readAll_(sh) });
@@ -187,9 +193,12 @@ function doPost(e) {
 }
 
 // ─── Reset settimanale ──────────────────────────────────────────────────────
-// Svuota tutta la griglia (B2:D49). Stesso nome della versione precedente:
-// il trigger a tempo (lunedì notte) è collegato a QUESTA funzione, quindi NON
-// rinominarla, altrimenti il trigger smette di funzionare.
+// Svuota orario (B), nome (D) e tipo (E) di tutte le righe — la colonna C NON
+// viene toccata. Stesso nome della versione precedente: il trigger a tempo
+// (lunedì notte) è collegato a QUESTA funzione, quindi NON rinominarla.
 function clearRange() {
-  grid_().getRange(FIRST_ROW, COL_TIME, LAST_ROW - FIRST_ROW + 1, 3).clearContent();
+  var sh = grid_();
+  var nRows = LAST_ROW - FIRST_ROW + 1;
+  sh.getRange(FIRST_ROW, COL_TIME, nRows, 1).clearContent();                       // B
+  sh.getRange(FIRST_ROW, COL_NAME, nRows, COL_TYPE - COL_NAME + 1).clearContent(); // D:E
 }
