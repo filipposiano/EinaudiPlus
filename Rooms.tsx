@@ -187,26 +187,32 @@ function Timeline({ room, bookings }: { room: RoomKind; bookings: RoomBooking[] 
   for (let m = winStart; m <= winEnd; m += stepH * 60) ticks.push(m);
 
   return (
-    <div className="px-1 pt-1 pb-5">
-      <div className="relative h-9 rounded-xl overflow-hidden" style={{ background: chip }}>
+    <div className="px-1 pt-1 pb-6">
+      <div className="relative h-16 rounded-xl overflow-hidden" style={{ background: chip }}>
+        {/* linee guida orarie */}
+        {ticks.map((m) => (
+          <div key={"g" + m} className="absolute top-0 bottom-0 w-px"
+            style={{ left: pct(m), background: "color-mix(in srgb, var(--foreground) 8%, transparent)" }} />
+        ))}
         {bookings.map((b) => {
           const open = b.type === "open";
           return (
-            <div key={b.id} className="absolute top-0 bottom-0 flex items-center justify-center overflow-hidden"
+            <div key={b.id} className="absolute top-0 bottom-0 flex flex-col items-center justify-center overflow-hidden px-1 gap-0.5"
               title={`${b.name} · ${fmtMin(b.start)}–${fmtMin(b.end)}`}
               style={{
                 left: pct(Math.max(b.start, winStart)), width: `${((Math.min(b.end, winEnd) - Math.max(b.start, winStart)) / span) * 100}%`,
-                background: open ? `color-mix(in srgb, ${RED} 75%, transparent)` : `color-mix(in srgb, ${OOS} 65%, transparent)`,
+                background: open ? `color-mix(in srgb, ${RED} 82%, transparent)` : `color-mix(in srgb, ${OOS} 72%, transparent)`,
                 borderLeft: "1px solid var(--background)",
               }}>
-              <span className="text-[8px] font-mono truncate px-1" style={{ color: "#fff" }}>{b.name}</span>
+              <span className="text-[11px] font-semibold leading-none truncate w-full text-center" style={{ color: "#fff" }}>{b.name}</span>
+              <span className="text-[9px] font-mono leading-none truncate w-full text-center" style={{ color: "rgba(255,255,255,0.85)" }}>{fmtMin(b.start)}–{fmtMin(b.end)}</span>
             </div>
           );
         })}
       </div>
-      <div className="relative h-4 mt-1">
+      <div className="relative h-5 mt-1.5">
         {ticks.map((m) => (
-          <span key={m} className="absolute text-[8px] font-mono -translate-x-1/2" style={{ left: pct(m), color: sub }}>{fmtMin(m)}</span>
+          <span key={m} className="absolute text-[10px] font-mono -translate-x-1/2" style={{ left: pct(m), color: sub }}>{fmtMin(m)}</span>
         ))}
       </div>
     </div>
@@ -279,7 +285,7 @@ export default function RoomView({ room, lang }: { room: RoomKind; lang: Lang })
   }
 
   return (
-    <div className="flex flex-col h-full lg:max-w-3xl lg:mx-auto lg:w-full">
+    <div className="flex flex-col h-full md:max-w-4xl md:mx-auto md:w-full">
       {rulesOpen && <RulesModal room={room} lang={lang} onClose={() => setRulesOpen(false)} />}
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-toast-in">
