@@ -18,7 +18,7 @@ import type { RoomKind, RoomBooking, CinemaType } from "./roomsApi";
 type Lang = "it" | "en";
 
 const RED = "var(--primary)", RED_FG = "var(--primary-foreground)";
-const GREEN = "#22c55e", OOS = "var(--destructive)";
+const OOS = "var(--destructive)";
 const fg = "var(--foreground)", sub = "var(--muted-foreground)";
 const surf = "var(--card)", div = "var(--border)", chip = "var(--secondary)";
 
