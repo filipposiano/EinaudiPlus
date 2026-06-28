@@ -33,23 +33,23 @@ Project → Settings → Environment Variables (Production), poi **Redeploy**:
 |------|--------|
 | `VAPID_PUBLIC_KEY` | la chiave pubblica qui sopra |
 | `VAPID_PRIVATE_KEY` | la chiave privata (segreta) |
-| `VAPID_SUBJECT` | `mailto:tua-email@example.com` |
+| `VAPID_SUBJECT` | `mailto:carlonefilippomm@gmail.com` |
 | `RELAY_SECRET` | una password a tua scelta (segreta) |
 
 La funzione relay sarà su `https://<tuo-progetto>.vercel.app/api/push`.
 
 ### 2. Apps Script lavanderia
-- Incolla `apps-script/laundry-push.gs` in fondo al `Code.gs` della lavanderia.
-- In `doPost`, dopo aver verificato il token, aggiungi:
-  ```js
-  if (action === 'subscribe')   return handleSubscribe_(body);
-  if (action === 'unsubscribe') return handleUnsubscribe_(body);
-  ```
-- In cima al file imposta `RELAY_URL` (l'URL Vercel `/api/push`) e `RELAY_SECRET`
-  (uguale a quello su Vercel).
-- Ridistribuisci la Web App (Nuova versione).
+- Sostituisci TUTTO il contenuto del `Code.gs` della lavanderia con
+  `apps-script/laundry-Code.gs` (è il tuo script con le notifiche già integrate;
+  dispatch `subscribe`/`unsubscribe` nel `doPost` e `sendDueReminders` inclusi).
+- In cima al file, nella sezione PUSH, imposta `RELAY_URL` (l'URL Vercel
+  `/api/push`) e `RELAY_SECRET` (uguale a quello su Vercel).
+- Ridistribuisci la Web App (Gestisci distribuzioni → ✏️ → Nuova versione).
 - Crea un **trigger a tempo**: orologio → Aggiungi trigger → funzione
   `sendDueReminders`, "In base al tempo" → "Timer a minuti" → "Ogni 5 minuti".
+
+> Il vecchio `apps-script/laundry-push.gs` (solo add-on) non serve più: la
+> versione completa è `laundry-Code.gs`.
 
 ### 3. iPhone (importante)
 Su iOS le push web funzionano SOLO se l'app è **aggiunta alla schermata Home**
