@@ -3,7 +3,7 @@ import {
   Wind, Clock, CalendarDays,
   Sun, Moon, Plus, CheckCircle2, AlertTriangle,
   LayoutGrid, Delete, X, Wrench, RotateCcw, Loader2, Star,
-  Shirt, Timer, Trash2, Film, Music,
+  History, Timer, Trash2, Film, Music,
   Bell, BellRing, Download, Share,
 } from "lucide-react";
 import * as api from "./api";
@@ -116,7 +116,7 @@ const T = {
     installCta: "Installa", installLater: "Più tardi", installIosDone: "Ho capito",
     skip:     "Continua senza accedere",
     machines: "Lavatrici", // <--- AGGIUNTO
-    washers:  "Lavatrici", dryers: "Asciugatrici",
+    washers:  "Lavatrici", dryers: "Asciugatrici", washer: "Lavatrice", dryer: "Asciugatrice",
     free:     "Libera", inUse: "In uso", oos: "Fuori servizio", operative: "Operativa",
     book:     "Prenota", reminder: "Reminder", sendReminder: "Manda reminder", sent: "Inviato ✓",
     currentSlot: "Turno corrente", prevSlot: "Turno precedente", now: "ora", prev: "prec.",
@@ -194,7 +194,7 @@ const T = {
     installCta: "Install", installLater: "Later", installIosDone: "Got it",
     skip:     "Continue without logging in",
     machines: "Machines", // <--- AGGIUNTO
-    washers:  "Washers", dryers: "Dryers",
+    washers:  "Washers", dryers: "Dryers", washer: "Washer", dryer: "Dryer",
     free:     "Free", inUse: "In use", oos: "Out of order", operative: "Operational",
     book:     "Book", reminder: "Remind", sendReminder: "Send reminder", sent: "Sent ✓",
     currentSlot: "Current slot", prevSlot: "Previous slot", now: "now", prev: "prev.",
@@ -770,27 +770,26 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
 
       <div className="md:flex md:flex-col">
 
-      {/* Lavatrici A/B/C (prenotabili) */}
+      {/* Macchine raggruppate per lettera: A (lavatrice + asciugatrice), B, C */}
       <section className="px-5 mb-4">
-        <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.washers}</p>
-        <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
-          {washers.map((m, i) => (
-            <MachineRow key={m.id} machine={m} lang={lang}
-              isLast={i === washers.length - 1} divColor={div}
-              onBook={() => setBooking(m)}/>
-          ))}
-        </div>
-      </section>
-
-      {/* Asciugatrici A/B/C (auto-riservate: occupante attuale e precedente) */}
-      <section className="px-5 mb-4">
-        <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.dryers}</p>
-        <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
-          {dryers.map((m, i) => (
-            <MachineRow key={m.id} machine={m} lang={lang}
-              isLast={i === dryers.length - 1} divColor={div}
-              onBook={() => {}}/>
-          ))}
+        <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.machines}</p>
+        <div className="flex flex-col gap-3">
+          {["A","B","C"].map((L) => {
+            const wm = washers.find((m) => m.label === L);
+            const dm = dryers.find((m) => m.label === L);
+            return (
+              <div key={L} className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
+                <div className="px-4 py-1.5 flex items-center border-b"
+                  style={{ borderColor:div, background:`color-mix(in srgb, var(--primary) 6%, transparent)` }}>
+                  <span className="text-xs font-mono font-bold tracking-[0.2em]" style={{ color:RED }}>{L}</span>
+                </div>
+                {wm && <MachineRow key={wm.id} machine={wm} lang={lang} groupLabel={t.washer}
+                  isLast={false} divColor={div} onBook={() => setBooking(wm)}/>}
+                {dm && <MachineRow key={dm.id} machine={dm} lang={lang} groupLabel={t.dryer}
+                  isLast divColor={div} onBook={() => {}}/>}
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -809,7 +808,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
               {/* Colore/icona + nome stato sopra */}
               <div className="flex items-center gap-2 mb-1">
                 {icon
-                  ? <Shirt size={13} className="shrink-0" style={{ color:ORANGE }}/>
+                  ? <History size={13} className="shrink-0" style={{ color:ORANGE }}/>
                   : <span className="size-2.5 rounded-full shrink-0" style={{ background:dot }}/>}
                 <p className="text-xs font-semibold" style={{ color: fg }}>{name}</p>
               </div>
@@ -837,8 +836,8 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
   );
 }
 
-function MachineRow({ machine, lang, isLast, divColor, onBook, combo = false }: {
-  machine: Machine; lang: Lang; isLast: boolean; divColor: string; onBook:()=>void; combo?: boolean;
+function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
+  machine: Machine; lang: Lang; isLast: boolean; divColor: string; onBook:()=>void; groupLabel?: string;
 }) {
   const t = T[lang];
   const fg  = "var(--foreground)";
@@ -853,14 +852,14 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, combo = false }: 
   return (
     <div style={{ borderBottom:isLast?"none":`1px solid ${divColor}`, background:rowBg }}>
       <div className="flex items-center gap-3 px-4 py-3">
-        {/* Dot + icona/e + label (combo = lavatrice+asciugatrice come unica unità) */}
-        <div className={`flex items-center gap-2.5 shrink-0 ${combo ? "w-20" : "w-16"}`}>
+        {/* Dot + icona + etichetta (lettera, oppure nome tipo se raggruppato) */}
+        <div className={`flex items-center gap-2.5 shrink-0 ${groupLabel ? "w-32" : "w-16"}`}>
           <span className="size-2 rounded-full shrink-0" style={{ background:dotColor }}/>
-          <div className="flex items-center gap-1" style={{ color:fg }}>
-            {combo
-              ? <span className="flex items-center gap-0.5"><WashingMachine size={16}/><Wind size={13} style={{ opacity:0.5 }}/></span>
-              : machine.type==="washer" ? <WashingMachine size={16}/> : <Wind size={15}/>}
-            <span className="text-base font-mono font-bold">{machine.label}</span>
+          <div className="flex items-center gap-1.5 min-w-0" style={{ color:fg }}>
+            {machine.type==="washer" ? <WashingMachine size={16} className="shrink-0"/> : <Wind size={15} className="shrink-0"/>}
+            {groupLabel
+              ? <span className="text-xs font-semibold truncate">{groupLabel}</span>
+              : <span className="text-base font-mono font-bold">{machine.label}</span>}
           </div>
         </div>
 
@@ -876,7 +875,7 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, combo = false }: 
           {machine.prevRoom && (
             <span className="flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-semibold"
               style={{ background:`color-mix(in srgb, ${ORANGE} 12%, transparent)`, color:ORANGE }}>
-              <Shirt size={13}/>
+              <History size={13}/>
               <span className="text-[11px] font-mono">{machine.prevRoom}</span>
             </span>
           )}
