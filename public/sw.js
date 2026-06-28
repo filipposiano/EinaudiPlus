@@ -3,6 +3,10 @@
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim()));
 
+// Handler 'fetch' di passaggio: non fa caching offline, ma la sua PRESENZA è
+// richiesta da Chrome per considerare la PWA installabile (beforeinstallprompt).
+self.addEventListener("fetch", () => { /* lascia gestire la richiesta al browser */ });
+
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (e) { data = {}; }

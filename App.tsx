@@ -1616,6 +1616,20 @@ function ReminderBell({ room, lang }: { room: string | null; lang: Lang }) {
   );
 }
 
+// Pulsante "Installa" nell'header: visibile solo se l'app NON è già installata.
+function InstallButton({ lang }: { lang: Lang }) {
+  const standalone = typeof window !== "undefined" &&
+    (window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true);
+  if (standalone) return null;
+  return (
+    <button onClick={() => window.dispatchEvent(new Event("open-install"))}
+      title={T[lang].installTitle} aria-label={T[lang].installTitle}
+      className="p-1.5 rounded-lg transition-colors" style={{ color: "var(--muted-foreground)" }}>
+      <Download size={13}/>
+    </button>
+  );
+}
+
 // ─── Prompt installazione PWA ───────────────────────────────────────────────────
 // Se l'app è già installata (standalone) o è già stata chiesta una volta → non
 // mostra nulla. Altrimenti propone l'installazione: su Android usa il prompt
@@ -1642,6 +1656,13 @@ function InstallPrompt({ lang }: { lang: Lang }) {
     window.addEventListener("pwa-installable", onReady);
     return () => window.removeEventListener("pwa-installable", onReady);
   }, [isIOS]);
+
+  // Apertura manuale dal pulsante in alto (ignora il flag "già chiesto").
+  useEffect(() => {
+    const open = () => { setDeferred((window as any).deferredPWAPrompt); setShow(true); };
+    window.addEventListener("open-install", open);
+    return () => window.removeEventListener("open-install", open);
+  }, []);
 
   function close() {
     try { localStorage.setItem("einaudiplus.installAsked", "1"); } catch {}
@@ -1860,6 +1881,7 @@ export default function App() {
             <div className="w-3 h-3 rounded-full border" style={{ background:"var(--background)", borderColor:"var(--border)" }}/>
           </div>
           <div className="flex items-center gap-1.5">
+            <InstallButton lang={lang} />
             <ReminderBell room={roomNumber} lang={lang} />
             <button onClick={()=>setLang(l=>l==="it"?"en":"it")}
               className="rounded-lg px-2 py-1 text-[10px] font-mono font-bold transition-colors"
