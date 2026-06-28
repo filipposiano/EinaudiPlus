@@ -4,8 +4,10 @@ import {
   Sun, Moon, Plus, CheckCircle2, AlertTriangle,
   LayoutGrid, Delete, X, Wrench, RotateCcw, Loader2, Star,
   BedDouble, Timer, Trash2, Film, Music,
+  Bell, BellRing,
 } from "lucide-react";
 import * as api from "./api";
+import * as push from "./push";
 import RoomView from "./Rooms";
 
 type Facility = "laundry" | "cinema" | "music";
@@ -1542,6 +1544,44 @@ function FacilitySwitcher({ facility, onChange, lang }: { facility: Facility; on
   );
 }
 
+// ─── Campanello promemoria push ────────────────────────────────────────────────
+function ReminderBell({ room, lang }: { room: string | null; lang: Lang }) {
+  const [state, setState] = useState<push.ReminderState>("unknown");
+  const [busy, setBusy]   = useState(false);
+
+  useEffect(() => { push.getReminderState().then(setState); }, []);
+
+  if (!push.pushSupported() || !room) return null;
+
+  const on = state === "on";
+  const label = lang === "it"
+    ? (state === "denied" ? "Notifiche bloccate nelle impostazioni del browser"
+       : on ? "Promemoria turni attivi (tocca per disattivare)"
+            : "Attiva promemoria 15 min prima del turno")
+    : (state === "denied" ? "Notifications blocked in browser settings"
+       : on ? "Shift reminders on (tap to turn off)"
+            : "Turn on a reminder 15 min before your shift");
+
+  async function toggle() {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (on) { await push.disableReminders(); setState("off"); }
+      else    { await push.enableReminders(room!); setState(await push.getReminderState()); }
+    } catch (e: any) {
+      if (String(e?.message) === "denied") setState("denied");
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <button onClick={toggle} disabled={busy} title={label} aria-label={label}
+      className="p-1.5 rounded-lg transition-colors"
+      style={{ color: on ? RED : "var(--muted-foreground)", opacity: busy ? 0.5 : 1 }}>
+      {on ? <BellRing size={13}/> : <Bell size={13}/>}
+    </button>
+  );
+}
+
 // ─── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -1709,6 +1749,7 @@ export default function App() {
             <div className="w-3 h-3 rounded-full border" style={{ background:"var(--background)", borderColor:"var(--border)" }}/>
           </div>
           <div className="flex items-center gap-1.5">
+            <ReminderBell room={roomNumber} lang={lang} />
             <button onClick={()=>setLang(l=>l==="it"?"en":"it")}
               className="rounded-lg px-2 py-1 text-[10px] font-mono font-bold transition-colors"
               style={{ background:"var(--secondary)", color:"var(--foreground)" }}>

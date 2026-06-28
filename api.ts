@@ -56,3 +56,15 @@ export async function setStatus(machine: string, isOos: boolean) {
   const res = await postAction("status", { machine, status: isOos ? "oos" : "ok" });
   return res.status; // Ritorna l'oggetto status aggiornato
 }
+
+// ─── Notifiche push ────────────────────────────────────────────────────────────
+// Registra (o aggiorna) la subscription push di questo dispositivo, legandola al
+// numero di camera: il backend userà la camera per sapere quali turni ricordare.
+export async function subscribePush(room: string, sub: PushSubscriptionJSON) {
+  return postAction("subscribe", { room, sub });
+}
+
+// Rimuove la subscription (identificata dall'endpoint) dal backend.
+export async function unsubscribePush(endpoint: string) {
+  return postAction("unsubscribe", { endpoint });
+}
