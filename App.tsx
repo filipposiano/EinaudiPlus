@@ -640,8 +640,8 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
         </div>
       </div>
 
-      <div className="lg:grid lg:grid-cols-2 lg:gap-x-5 lg:items-start">
-      <div className="lg:flex lg:flex-col">
+      <div className="md:grid md:grid-cols-2 md:gap-x-5 md:items-start">
+      <div className="md:flex md:flex-col">
 
       {/* Le tue prenotazioni */}
       {roomNumber && (
@@ -758,7 +758,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
 
       </div>{/* ── fine colonna 1 (personale) ── */}
 
-      <div className="lg:flex lg:flex-col">
+      <div className="md:flex md:flex-col">
 
       {/* Lavatrici A/B/C (prenotabili) */}
       <section className="px-5 mb-4">
@@ -1690,7 +1690,7 @@ export default function App() {
   }, []);
 
   const showChrome = roomNumber !== null && !loading && !error;
-  const isDesktop  = useMediaQuery("(min-width: 1024px)");
+  const isDesktop  = useMediaQuery("(min-width: 768px)");
 
   const globalStyle = (
     <style>{`
@@ -1746,7 +1746,7 @@ export default function App() {
           onToggleTheme={()=>setTheme(theme === "dark" ? "light" : "dark")}
         />
         <main className="flex-1 h-dvh min-h-0 flex flex-col overflow-y-auto overscroll-contain">
-          <div className="mx-auto w-full max-w-5xl flex-1 min-h-0 flex flex-col">
+          <div className="mx-auto w-full max-w-6xl flex-1 min-h-0 flex flex-col px-4 lg:px-6">
             {bodyContent}
           </div>
         </main>
