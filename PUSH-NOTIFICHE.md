@@ -33,7 +33,7 @@ Project → Settings → Environment Variables (Production), poi **Redeploy**:
 |------|--------|
 | `VAPID_PUBLIC_KEY` | la chiave pubblica qui sopra |
 | `VAPID_PRIVATE_KEY` | la chiave privata (segreta) |
-| `VAPID_SUBJECT` | `mailto:carlonefilippomm@gmail.com` |
+| `VAPID_SUBJECT` | `https://<tuo-progetto>.vercel.app` (l'URL del sito) |
 | `RELAY_SECRET` | una password a tua scelta (segreta) |
 
 La funzione relay sarà su `https://<tuo-progetto>.vercel.app/api/push`.
