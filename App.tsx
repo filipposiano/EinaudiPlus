@@ -4,7 +4,7 @@ import {
   Sun, Moon, Plus, CheckCircle2, AlertTriangle,
   LayoutGrid, Delete, X, Wrench, RotateCcw, Loader2, Star,
   History, Timer, Trash2, Film, Music,
-  Bell, BellRing, Download, Share,
+  Bell, BellRing, Download, Share, Menu,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -113,6 +113,8 @@ const T = {
     installBody: "Aggiungila alla schermata Home: si apre come un'app a tutto schermo e può inviarti i promemoria dei turni.",
     installIosBody: "Per installarla su iPhone: tocca il tasto Condividi del browser, poi scegli «Aggiungi a Home».",
     installIosStep: "Condividi  →  Aggiungi a Home",
+    installAndroidBody: "Apri il menu del browser e scegli «Aggiungi pagina a → Schermata Home» (o «Installa app»).",
+    installAndroidStep: "Menu  →  Aggiungi a Schermata Home",
     installCta: "Installa", installLater: "Più tardi", installIosDone: "Ho capito",
     skip:     "Continua senza accedere",
     machines: "Lavatrici", // <--- AGGIUNTO
@@ -191,6 +193,8 @@ const T = {
     installBody: "Add it to your Home Screen: it opens like a full-screen app and can send you shift reminders.",
     installIosBody: "To install on iPhone: tap the browser Share button, then choose “Add to Home Screen”.",
     installIosStep: "Share  →  Add to Home Screen",
+    installAndroidBody: "Open the browser menu and choose “Add page to → Home screen” (or “Install app”).",
+    installAndroidStep: "Menu  →  Add to Home screen",
     installCta: "Install", installLater: "Later", installIosDone: "Got it",
     skip:     "Continue without logging in",
     machines: "Machines", // <--- AGGIUNTO
@@ -1677,6 +1681,10 @@ function InstallPrompt({ lang }: { lang: Lang }) {
   }
 
   if (!show) return null;
+  // Modalità: iOS (istruzioni Condividi), nativa (prompt del browser),
+  // manuale (Android/Samsung senza prompt → istruzioni dal menu).
+  const mode: "ios" | "native" | "manual" = isIOS ? "ios" : deferred ? "native" : "manual";
+  const bodyText = mode === "ios" ? t.installIosBody : mode === "manual" ? t.installAndroidBody : t.installBody;
   return (
     <div className="absolute inset-0 z-50 flex items-end animate-toast-in" style={{ background: "rgba(0,0,0,0.55)" }} onClick={close}>
       <div className="w-full rounded-t-3xl pt-5 pb-7 px-6" style={{ background: "var(--background)" }} onClick={(e)=>e.stopPropagation()}>
@@ -1687,24 +1695,22 @@ function InstallPrompt({ lang }: { lang: Lang }) {
           </div>
           <p className="text-lg font-bold" style={{ color: "var(--foreground)" }}>{t.installTitle}</p>
         </div>
-        <p className="text-sm leading-relaxed mb-5" style={{ color: "var(--muted-foreground)" }}>
-          {isIOS ? t.installIosBody : t.installBody}
-        </p>
-        {isIOS ? (
-          <div className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 mb-2 border"
-            style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--foreground)" }}>
-            <Share size={16} style={{ color: RED }}/>
-            <span className="text-sm font-medium">{t.installIosStep}</span>
-          </div>
-        ) : (
+        <p className="text-sm leading-relaxed mb-5" style={{ color: "var(--muted-foreground)" }}>{bodyText}</p>
+        {mode === "native" ? (
           <button onClick={install}
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold mb-2 transition-all active:scale-[0.98]"
             style={{ background: RED, color: RED_FG }}>
             <Download size={16}/>{t.installCta}
           </button>
+        ) : (
+          <div className="flex items-center justify-center gap-2 rounded-2xl px-4 py-3 mb-2 border text-center"
+            style={{ borderColor: "var(--border)", background: "var(--card)", color: "var(--foreground)" }}>
+            {mode === "ios" ? <Share size={16} style={{ color: RED }}/> : <Menu size={16} style={{ color: RED }}/>}
+            <span className="text-sm font-medium">{mode === "ios" ? t.installIosStep : t.installAndroidStep}</span>
+          </div>
         )}
         <button onClick={close} className="w-full py-3 rounded-2xl text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
-          {isIOS ? t.installIosDone : t.installLater}
+          {mode === "native" ? t.installLater : t.installIosDone}
         </button>
       </div>
     </div>
