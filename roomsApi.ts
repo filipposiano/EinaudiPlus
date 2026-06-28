@@ -24,8 +24,8 @@ export interface RoomBooking {
 
 // URL /exec delle Web App Apps Script (una per sala).
 const ENDPOINTS: Record<RoomKind, { url: string; token: string }> = {
-  cinema: { url: "https://script.google.com/macros/s/AKfycbzH5MyubyGhohwmEhP-S9NOV7-8dMGjAwo2SvAy0txuQSllJ1TK8wI5pNiSPgDX7B6c9w/exec", token: "filipposiano" },
-  music:  { url: "https://script.google.com/macros/s/AKfycbxGUwtiJOCQ0Tt9wxwjVfWBSbcb2jyGyPJUewbBdqA8FQRm0sANXoEWEHeq0Rl-6EoBBg/exec",  token: "filipposiano" },
+  cinema: { url: "https://script.google.com/macros/s/AKfycbzAVtQbUXAmfelANPO5Z5n9Ka1PVzUKbOhf9CkWXk4Bm95mx1JW7TAYYyt6mrP4nJJy/exec", token: "filipposiano" },
+  music:  { url: "https://script.google.com/macros/s/AKfycbxSCDdrNKxf9ovXllkxnz0HfI0ITFu2tp3VSX0aI616NpHadmGdVB-Th8B7vqA7qF6Myw/exec",  token: "filipposiano" },
 };
 
 const isPlaceholder = (u: string) => u.startsWith("PLACEHOLDER");
