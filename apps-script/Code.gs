@@ -9,13 +9,19 @@
  *
  *   Riga 1            = intestazione (ignorata)
  *   Righe  2–7        = Lunedì      (6 righe = max 6 prenotazioni)
- *   Righe  8–13       = Martedì
- *   Righe 14–19       = Mercoledì
- *   Righe 20–25       = Giovedì
- *   Righe 26–31       = Venerdì
- *   Righe 32–37       = Sabato
- *   Righe 38–43       = Domenica
- *   → 6 righe contigue per giorno, SENZA righe vuote tra un giorno e l'altro.
+ *   Riga  8           = vuota (separatore)
+ *   Righe  9–14       = Martedì
+ *   Riga 15           = vuota
+ *   Righe 16–21       = Mercoledì
+ *   Riga 22           = vuota
+ *   Righe 23–28       = Giovedì
+ *   Riga 29           = vuota
+ *   Righe 30–35       = Venerdì
+ *   Riga 36           = vuota
+ *   Righe 37–42       = Sabato
+ *   Riga 43           = vuota
+ *   Righe 44–49       = Domenica
+ *   → 6 righe per giorno + 1 riga vuota di separazione (passo di 7 righe).
  *
  *   Colonna A = nome del giorno (decorativa, non letta)
  *   Colonna B = orario. Formati: "18:00-20:00", "18.00-20.00", "18/20",
@@ -37,7 +43,8 @@ var TOKEN = 'filipposiano';
 // ─── Geometria fissa ────────────────────────────────────────────────────────
 var FIRST_ROW    = 2;   // prima riga di dati (Lunedì)
 var ROWS_PER_DAY = 6;   // righe per ogni giorno (= max prenotazioni/giorno)
-var LAST_ROW     = FIRST_ROW + 7 * ROWS_PER_DAY - 1; // = 43 (ultima riga di Domenica)
+var DAY_STRIDE   = 7;   // 6 righe dati + 1 riga vuota di separazione
+var LAST_ROW     = FIRST_ROW + 6 * DAY_STRIDE + ROWS_PER_DAY - 1; // = 49 (fine Domenica)
 
 // Colonne (1 = A, 2 = B, …)
 var COL_TIME = 2;  // B = orario
@@ -63,7 +70,7 @@ function grid_() {
 }
 
 // Riga assoluta del foglio per (giorno 0..6, offset 0..5).
-function rowFor_(day, offset) { return FIRST_ROW + day * ROWS_PER_DAY + offset; }
+function rowFor_(day, offset) { return FIRST_ROW + day * DAY_STRIDE + offset; }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function pad2_(n) { return (n < 10 ? '0' : '') + n; }
@@ -110,12 +117,13 @@ function readAll_(sh) {
   var iType = COL_TYPE - COL_TIME;          // F → indice 4
   var out = [];
   for (var i = 0; i < vals.length; i++) {
+    if (i % DAY_STRIDE >= ROWS_PER_DAY) continue; // riga vuota di separazione
     var range = parseRange_(vals[i][0]);    // B
     var name  = String(vals[i][iName] || '').trim();
     if (!range || !name) continue;          // riga senza orario o senza nome
     out.push({
       id: 'r' + (FIRST_ROW + i),            // id stabile = numero di riga
-      day: Math.floor(i / ROWS_PER_DAY),    // 0..6 dalla posizione
+      day: Math.floor(i / DAY_STRIDE),      // 0..6 dalla posizione
       start: range.start,
       end: range.end,
       name: name,
