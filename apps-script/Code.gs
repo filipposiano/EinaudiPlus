@@ -19,7 +19,8 @@
  * musica), poi Deploy → Nuova distribuzione → "App web" (Esegui come: te stesso;
  * Accesso: chiunque). L'URL /exec va in roomsApi.ts.
  *
- * Le prenotazioni si resettano ogni LUNEDÌ notte (controllo settimana ISO).
+ * Le prenotazioni si resettano ogni LUNEDÌ notte tramite un TRIGGER A TEMPO
+ * collegato alla funzione clearRange() (vedi fondo file): non rinominarla.
  */
 
 var TOKEN = 'filipposiano';
@@ -75,25 +76,6 @@ function typeLabel_(type) {
   return '';
 }
 
-// ─── Reset settimanale (lunedì notte) ───────────────────────────────────────
-function isoWeekKey_(d) {
-  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  var day = (d.getUTCDay() + 6) % 7;
-  d.setUTCDate(d.getUTCDate() - day + 3);
-  var firstThu = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-  var week = 1 + Math.round(((d - firstThu) / 86400000 - 3 + ((firstThu.getUTCDay() + 6) % 7)) / 7);
-  return d.getUTCFullYear() + '-' + week;
-}
-
-function resetIfNewWeek_(sh) {
-  var props = PropertiesService.getDocumentProperties();
-  var cur = isoWeekKey_(new Date());
-  if (props.getProperty('weekKey') !== cur) {
-    sh.getRange(FIRST_ROW, COL_TIME, LAST_ROW - FIRST_ROW + 1, 3).clearContent();
-    props.setProperty('weekKey', cur);
-  }
-}
-
 // ─── Lettura di tutte le prenotazioni dalla griglia ─────────────────────────
 function readAll_(sh) {
   var nRows = LAST_ROW - FIRST_ROW + 1;
@@ -127,8 +109,7 @@ function json_(obj) {
 // ─── Endpoint ───────────────────────────────────────────────────────────────
 function doGet(e) {
   if (!e || e.parameter.token !== TOKEN) return json_({ ok: false, error: 'unauthorized' });
-  var sh = grid_(); resetIfNewWeek_(sh);
-  return json_({ ok: true, bookings: readAll_(sh) });
+  return json_({ ok: true, bookings: readAll_(grid_()) });
 }
 
 function doPost(e) {
@@ -141,7 +122,7 @@ function doPost(e) {
   var lock = LockService.getScriptLock();
   lock.waitLock(8000);
   try {
-    var sh = grid_(); resetIfNewWeek_(sh);
+    var sh = grid_();
 
     if (action === 'book') {
       var day = Number(body.day), start = Number(body.start), end = Number(body.end);
@@ -190,7 +171,10 @@ function doPost(e) {
   }
 }
 
-// ─── Utility manuale: svuota tutta la griglia ───────────────────────────────
+// ─── Reset settimanale ──────────────────────────────────────────────────────
+// Svuota tutta la griglia (B2:D49). Stesso nome della versione precedente:
+// il trigger a tempo (lunedì notte) è collegato a QUESTA funzione, quindi NON
+// rinominarla, altrimenti il trigger smette di funzionare.
 function clearRange() {
   grid_().getRange(FIRST_ROW, COL_TIME, LAST_ROW - FIRST_ROW + 1, 3).clearContent();
 }
