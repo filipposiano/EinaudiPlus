@@ -589,9 +589,11 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
     catch (e) { setToast(errMsg(e, lang)); }
   }
 
-  // Lavatrice + asciugatrice trattate come un'unica unità (A/B/C): mostriamo la lavatrice
-  // prenotabile; l'asciugatrice abbinata è implicita (auto-riservata dal backend).
+  // Mostriamo lavatrici e asciugatrici in due gruppi separati (A/B/C ciascuno):
+  // la lavatrice è prenotabile; l'asciugatrice è in sola lettura (auto-riservata
+  // dal backend col turno successivo) e mostra occupante attuale e precedente.
   const washers = machines.filter((m) => m.type === "washer");
+  const dryers  = machines.filter((m) => m.type === "dryer");
 
   return (
     <div className="flex flex-col pb-6">
@@ -758,14 +760,26 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
 
       <div className="lg:flex lg:flex-col">
 
-      {/* Macchine — lavatrice+asciugatrice come unica unità A/B/C */}
+      {/* Lavatrici A/B/C (prenotabili) */}
       <section className="px-5 mb-4">
-        <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.machines}</p>
+        <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.washers}</p>
         <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
           {washers.map((m, i) => (
-            <MachineRow key={m.id} machine={m} lang={lang} combo
+            <MachineRow key={m.id} machine={m} lang={lang}
               isLast={i === washers.length - 1} divColor={div}
               onBook={() => setBooking(m)}/>
+          ))}
+        </div>
+      </section>
+
+      {/* Asciugatrici A/B/C (auto-riservate: occupante attuale e precedente) */}
+      <section className="px-5 mb-4">
+        <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.dryers}</p>
+        <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
+          {dryers.map((m, i) => (
+            <MachineRow key={m.id} machine={m} lang={lang}
+              isLast={i === dryers.length - 1} divColor={div}
+              onBook={() => {}}/>
           ))}
         </div>
       </section>
