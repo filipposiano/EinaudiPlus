@@ -54,6 +54,7 @@ const T = {
     bookings: "Prenotazioni del giorno", none: "Nessuna prenotazione",
     needName: "Inserisci un nome", badRange: "L'orario di fine deve essere dopo l'inizio",
     overlap: "Si sovrappone a una prenotazione esistente", booked: "Prenotato ✓",
+    full: "Giorno pieno: massimo 6 prenotazioni.",
     deleted: "Prenotazione eliminata", errorGeneric: "Errore, riprova.",
     loading: "Carico…", retry: "Riprova", netError: "Impossibile contattare il foglio.",
     mockNote: "Modalità demo: i dati non sono ancora salvati sul foglio Google.",
@@ -73,6 +74,7 @@ const T = {
     bookings: "Bookings for the day", none: "No bookings",
     needName: "Enter a name", badRange: "End time must be after start",
     overlap: "Overlaps an existing booking", booked: "Booked ✓",
+    full: "Day is full: max 6 bookings.",
     deleted: "Booking deleted", errorGeneric: "Error, try again.",
     loading: "Loading…", retry: "Retry", netError: "Couldn't reach the sheet.",
     mockNote: "Demo mode: data is not yet saved to the Google sheet.",
@@ -252,7 +254,8 @@ export default function RoomView({ room, lang }: { room: RoomKind; lang: Lang })
       setBookings(await roomsApi.bookRoom(room, payload));
       setName(""); setToast(t.booked);
     } catch (e: any) {
-      setToast(String(e?.message) === "overlap" ? t.overlap : t.errorGeneric);
+      const msg = String(e?.message);
+      setToast(msg === "overlap" ? t.overlap : msg === "full" ? t.full : t.errorGeneric);
     } finally { setBusy(false); }
   }
 
