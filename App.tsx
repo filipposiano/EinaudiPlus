@@ -108,7 +108,7 @@ const T = {
     fmtDay:   (d: Date) => d.toLocaleDateString("it-IT", { weekday:"long", day:"numeric", month:"long" }),
     days:     ["Lun","Mar","Mer","Gio","Ven","Sab","Dom"],
     room:     "Camera", camera: "camera",
-    welcome:  "Benvenuto", enterRoom: "Inserisci il numero della tua stanza per accedere",
+    welcome:  "Einaudi Plus", enterRoom: "Inserisci il numero della tua stanza per accedere",
     skip:     "Continua senza accedere",
     machines: "Lavatrici", // <--- AGGIUNTO
     washers:  "Lavatrici", dryers: "Asciugatrici",
@@ -181,7 +181,7 @@ const T = {
     fmtDay:   (d: Date) => d.toLocaleDateString("en-GB", { weekday:"long", day:"numeric", month:"long" }),
     days:     ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"],
     room:     "Room", camera: "room",
-    welcome:  "Welcome", enterRoom: "Enter your room number to continue",
+    welcome:  "Einaudi Plus", enterRoom: "Enter your room number to continue",
     skip:     "Continue without logging in",
     machines: "Machines", // <--- AGGIUNTO
     washers:  "Washers", dryers: "Dryers",
