@@ -2,39 +2,47 @@
  * Apps Script per le SALE A FASCE LIBERE (Cinema / Musica).
  *
  * Legge e scrive DIRETTAMENTE sulla griglia leggibile del foglio (quella che
- * compilate a mano), non su un foglio di servizio. Così app e foglio mostrano
- * sempre le stesse prenotazioni.
+ * compilate a mano). App e foglio mostrano sempre le stesse prenotazioni.
  *
- * STRUTTURA DELLA GRIGLIA (robusta, niente righe fisse):
- *   • Colonna A = NOME DEL GIORNO (Lunedì, Martedì, …), anche in cella unita.
- *     Ogni prenotazione appartiene al giorno della più recente etichetta di
- *     colonna A che la precede (o sulla sua stessa riga). I blocchi possono avere
- *     un numero qualsiasi di righe.
- *   • Colonna B = orario. Formati accettati: "18:00-20:00", "18.00-20.00",
- *     "18/20", "20.30/23.30", "21:00-00:00" e orari oltre la mezzanotte
- *     ("20:00-03:00").
- *   • Colonna C = libera (NON usata dall'app).
- *   • Colonna D = nome di chi prenota.
- *   • Colonna E = libera (NON usata dall'app).
- *   • Colonna F = tipo/note (solo Cinema): "R" (Riservata) / "P" (Party).
- *     Per la Musica resta vuota.
+ * STRUTTURA FISSA DEL FOGLIO (il giorno si ricava dalla POSIZIONE della riga,
+ * quindi la colonna A è solo decorativa e può essere una cella unita):
  *
- * Deploy: Estensioni → Apps Script, incolla questo file in OGNI foglio (cinema e
- * musica). Per aggiornare SENZA cambiare URL: Distribuzione → Gestisci
- * distribuzioni → ✏️ → Versione: "Nuova versione" → Distribuisci.
+ *   Riga 1            = intestazione (ignorata)
+ *   Righe  2–7        = Lunedì      (6 righe = max 6 prenotazioni)
+ *   Righe  8–13       = Martedì
+ *   Righe 14–19       = Mercoledì
+ *   Righe 20–25       = Giovedì
+ *   Righe 26–31       = Venerdì
+ *   Righe 32–37       = Sabato
+ *   Righe 38–43       = Domenica
+ *   → 6 righe contigue per giorno, SENZA righe vuote tra un giorno e l'altro.
+ *
+ *   Colonna A = nome del giorno (decorativa, non letta)
+ *   Colonna B = orario. Formati: "18:00-20:00", "18.00-20.00", "18/20",
+ *               "20.30/23.30", "21:00-00:00", e fasce oltre mezzanotte "20:00-03:00".
+ *   Colonna C = libera (non usata)
+ *   Colonna D = nome di chi prenota
+ *   Colonna E = libera (non usata)
+ *   Colonna F = tipo (solo Cinema): "R" (Riservata) / "P" (Party). Vuota per Musica.
+ *
+ * Deploy/aggiornamento SENZA cambiare URL: Distribuzione → Gestisci distribuzioni
+ * → ✏️ → Versione: "Nuova versione" → Distribuisci (su entrambi i fogli).
  *
  * Reset settimanale (lunedì notte): TRIGGER A TEMPO collegato a clearRange()
- * (vedi fondo file). NON rinominarla, altrimenti il trigger smette di funzionare.
+ * (fondo file). NON rinominarla, altrimenti il trigger smette di funzionare.
  */
 
 var TOKEN = 'filipposiano';
 
-// ─── Colonne (1 = A, 2 = B, …) ──────────────────────────────────────────────
-var COL_DAY  = 1;  // A = nome del giorno
+// ─── Geometria fissa ────────────────────────────────────────────────────────
+var FIRST_ROW    = 2;   // prima riga di dati (Lunedì)
+var ROWS_PER_DAY = 6;   // righe per ogni giorno (= max prenotazioni/giorno)
+var LAST_ROW     = FIRST_ROW + 7 * ROWS_PER_DAY - 1; // = 43 (ultima riga di Domenica)
+
+// Colonne (1 = A, 2 = B, …)
 var COL_TIME = 2;  // B = orario
 var COL_NAME = 4;  // D = nome
-var COL_TYPE = 6;  // F = tipo "R"/"P" (solo Cinema). Se nel tuo foglio è la E, metti 5.
-var MAX_COL  = 6;  // ultima colonna che leggiamo (F)
+var COL_TYPE = 6;  // F = tipo "R"/"P" (solo Cinema)
 
 // Nome ESATTO della scheda con la griglia. Lascialo '' per scegliere la prima
 // scheda che NON sia il vecchio foglio "Bookings", oppure scrivi il nome qui.
@@ -54,19 +62,11 @@ function grid_() {
   return sheets[0];
 }
 
+// Riga assoluta del foglio per (giorno 0..6, offset 0..5).
+function rowFor_(day, offset) { return FIRST_ROW + day * ROWS_PER_DAY + offset; }
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 function pad2_(n) { return (n < 10 ? '0' : '') + n; }
-
-// Indice del giorno (0 = Lun … 6 = Dom) dal testo della colonna A, oppure -1.
-function dayIndex_(v) {
-  var s = String(v || '').toLowerCase().trim();
-  if (!s) return -1;
-  var pre = ['lun', 'mar', 'mer', 'gio', 'ven', 'sab', 'dom'];
-  for (var i = 0; i < pre.length; i++) {
-    if (s.indexOf(pre[i]) === 0) return i;
-  }
-  return -1;
-}
 
 // Orario → { start, end } in minuti, oppure null. Accetta separatori "-" o "/",
 // "." o ":" tra ore e minuti, minuti opzionali, e fasce che superano mezzanotte.
@@ -101,23 +101,21 @@ function typeLabel_(type) {
   return '';
 }
 
-// ─── Lettura: scorre tutte le righe e assegna il giorno via colonna A ────────
+// ─── Lettura: il giorno si ricava dalla posizione della riga ────────────────
 function readAll_(sh) {
-  var last = Math.max(sh.getLastRow(), 1);
-  var vals = sh.getRange(1, 1, last, MAX_COL).getValues(); // A..F
-  var iTime = COL_TIME - 1, iName = COL_NAME - 1, iType = COL_TYPE - 1;
+  var nRows = LAST_ROW - FIRST_ROW + 1;
+  var nCols = COL_TYPE - COL_TIME + 1;      // B..F
+  var vals = sh.getRange(FIRST_ROW, COL_TIME, nRows, nCols).getValues();
+  var iName = COL_NAME - COL_TIME;          // D → indice 2
+  var iType = COL_TYPE - COL_TIME;          // F → indice 4
   var out = [];
-  var curDay = -1;
   for (var i = 0; i < vals.length; i++) {
-    var d = dayIndex_(vals[i][COL_DAY - 1]);
-    if (d >= 0) curDay = d;                  // nuova etichetta di giorno
-    if (curDay < 0) continue;                // righe prima del primo giorno
-    var range = parseRange_(vals[i][iTime]);
+    var range = parseRange_(vals[i][0]);    // B
     var name  = String(vals[i][iName] || '').trim();
-    if (!range || !name) continue;           // riga senza orario o senza nome
+    if (!range || !name) continue;          // riga senza orario o senza nome
     out.push({
-      id: 'r' + (i + 1),                     // id stabile = numero di riga
-      day: curDay,
+      id: 'r' + (FIRST_ROW + i),            // id stabile = numero di riga
+      day: Math.floor(i / ROWS_PER_DAY),    // 0..6 dalla posizione
       start: range.start,
       end: range.end,
       name: name,
@@ -125,25 +123,6 @@ function readAll_(sh) {
     });
   }
   return out;
-}
-
-// Intervallo di righe [start,end] (1-based) del blocco di un giorno.
-function daySpan_(sh, day) {
-  var last = Math.max(sh.getLastRow(), 1);
-  var aVals = sh.getRange(1, COL_DAY, last, 1).getValues();
-  var start = -1, end = -1;
-  for (var i = 0; i < aVals.length; i++) {
-    var d = dayIndex_(aVals[i][0]);
-    if (start === -1) {
-      if (d === day) start = i + 1;
-    } else if (d >= 0) {                      // prossima etichetta → fine blocco
-      end = i;
-      break;
-    }
-  }
-  if (start === -1) return null;
-  if (end === -1) end = last;
-  return { start: start, end: end };
 }
 
 function json_(obj) {
@@ -182,11 +161,10 @@ function doPost(e) {
       var clash = all.some(function (b) { return b.day === day && start < b.end && b.start < end; });
       if (clash) return json_({ ok: false, error: 'overlap' });
 
-      // prima riga libera nel blocco del giorno
-      var span = daySpan_(sh, day);
-      if (!span) return json_({ ok: false, error: 'noday' });   // etichetta giorno assente nel foglio
+      // prima riga libera nelle 6 righe del giorno
       var freeRow = -1;
-      for (var r = span.start; r <= span.end; r++) {
+      for (var off = 0; off < ROWS_PER_DAY; off++) {
+        var r = rowFor_(day, off);
         var t = sh.getRange(r, COL_TIME).getValue();
         var n = sh.getRange(r, COL_NAME).getValue();
         if (String(t || '').trim() === '' && String(n || '').trim() === '') { freeRow = r; break; }
@@ -203,11 +181,11 @@ function doPost(e) {
       var id = String(body.id || '');
       var m = id.match(/^r(\d+)$/);
       if (m) {
-        var r = Number(m[1]);
-        if (r >= 1) {
-          sh.getRange(r, COL_TIME).clearContent();   // B
-          sh.getRange(r, COL_NAME).clearContent();   // D
-          sh.getRange(r, COL_TYPE).clearContent();   // F
+        var rr = Number(m[1]);
+        if (rr >= FIRST_ROW && rr <= LAST_ROW) {
+          sh.getRange(rr, COL_TIME).clearContent();   // B
+          sh.getRange(rr, COL_NAME).clearContent();   // D
+          sh.getRange(rr, COL_TYPE).clearContent();   // F
         }
       }
       return json_({ ok: true, bookings: readAll_(sh) });
@@ -220,14 +198,13 @@ function doPost(e) {
 }
 
 // ─── Reset settimanale ──────────────────────────────────────────────────────
-// Svuota orario (B), nome (D) e tipo (F) di TUTTE le righe — le etichette dei
-// giorni in colonna A e le colonne C/E NON vengono toccate. Stesso nome della
-// versione precedente: il trigger a tempo è collegato a QUESTA funzione, quindi
-// NON rinominarla.
+// Svuota orario (B), nome (D) e tipo (F) di tutte le righe dati — le etichette
+// dei giorni (A) e le colonne C/E restano intatte. Stesso nome della versione
+// precedente: il trigger a tempo è collegato a QUESTA funzione, non rinominarla.
 function clearRange() {
   var sh = grid_();
-  var last = Math.max(sh.getLastRow(), 1);
-  sh.getRange(1, COL_TIME, last, 1).clearContent();   // B
-  sh.getRange(1, COL_NAME, last, 1).clearContent();   // D
-  sh.getRange(1, COL_TYPE, last, 1).clearContent();   // F
+  var nRows = LAST_ROW - FIRST_ROW + 1;
+  sh.getRange(FIRST_ROW, COL_TIME, nRows, 1).clearContent();   // B
+  sh.getRange(FIRST_ROW, COL_NAME, nRows, 1).clearContent();   // D
+  sh.getRange(FIRST_ROW, COL_TYPE, nRows, 1).clearContent();   // F
 }
