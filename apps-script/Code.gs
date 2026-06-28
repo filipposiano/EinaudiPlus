@@ -34,9 +34,24 @@ var COL_NAME = 3;      // C
 var COL_TYPE = 4;      // D
 var LAST_ROW = FIRST_ROW + 6 * DAY_STRIDE + ROWS_PER_DAY - 1; // = 49 (Domenica)
 
-// Foglio su cui lavorare: la prima scheda della cartella.
+// Nome ESATTO della scheda con la griglia delle prenotazioni.
+// Lascialo '' per scegliere automaticamente la prima scheda che NON sia il
+// vecchio foglio di servizio "Bookings"; oppure scrivi qui il nome della tua
+// scheda (es. 'Foglio1', 'Prenotazioni', 'Cinema') per essere sicuro.
+var SHEET_NAME = '';
+
+// Foglio su cui leggere/scrivere. Non usa MAI il vecchio foglio "Bookings".
 function grid_() {
-  return SpreadsheetApp.getActiveSpreadsheet().getSheets()[0];
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (SHEET_NAME) {
+    var byName = ss.getSheetByName(SHEET_NAME);
+    if (byName) return byName;
+  }
+  var sheets = ss.getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    if (sheets[i].getName().toLowerCase() !== 'bookings') return sheets[i];
+  }
+  return sheets[0];
 }
 
 // Riga assoluta del foglio per (giorno 0..6, offset 0..5).
