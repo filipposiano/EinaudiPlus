@@ -32,8 +32,8 @@ const TELEGRAM_BOT_TOKEN = '';
 const TELEGRAM_CHAT_ID   = '';
 
 /***** PUSH — da impostare prima del deploy *****/
-const RELAY_URL    = 'https://INSERISCI-IL-TUO-PROGETTO.vercel.app/api/push';
-const RELAY_SECRET = 'CAMBIA-QUESTO-SEGRETO';   // uguale alla env var su Vercel
+const RELAY_URL    = 'https://einaudi-plus.vercel.app/api/push';
+const RELAY_SECRET = 'CAMBIA-QUESTO-SEGRETO';   // uguale alla env var RELAY_SECRET su Vercel
 const SUBS_SHEET   = 'PushSubs';                // scheda iscrizioni (creata da sola)
 const SLOT0_MIN    = 7 * 60;   // 07:00, inizio slot 0
 const SLOT_LEN     = 75;       // durata slot in minuti
