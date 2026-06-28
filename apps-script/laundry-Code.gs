@@ -73,6 +73,14 @@ function letterIdx_(machine) {
   return WASHER_LETTERS.indexOf(L);
 }
 
+// Sicurezza: neutralizza formula/CSV injection e limita la lunghezza prima di
+// scrivere un valore inviato dall'utente (es. la camera) nel foglio.
+function safeCell_(v) {
+  let s = String(v == null ? '' : v).trim().slice(0, 20);
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return s;
+}
+
 /***** MAPPATURA CELLE *****/
 function bookingRow_(slot, washerIdx) { return FIRST_ROW + slot * ROWS_PER_SLOT + washerIdx; }
 function bookingCol_(day)             { return FIRST_DAY_COL + day; }
@@ -140,18 +148,26 @@ function doPost(e) {
     if (b.action === 'book') {
       const w = letterIdx_(b.machine);
       if (w < 0) return json_({ ok: false, error: 'macchina non valida' });
-      const cell = sh.getRange(bookingRow_(b.slot, w), bookingCol_(b.day));
+      const day = Number(b.day), slot = Number(b.slot);
+      if (!(day >= 0 && day < N_DAYS) || !(slot >= 0 && slot < N_SLOTS))
+        return json_({ ok: false, error: 'parametri non validi' });
+      const room = safeCell_(b.room);
+      if (!room) return json_({ ok: false, error: 'camera mancante' });
+      const cell = sh.getRange(bookingRow_(slot, w), bookingCol_(day));
       const cur  = String(cell.getValue() || '').trim();
-      if (cur && cur !== String(b.room).trim())
+      if (cur && cur !== room)
         return json_({ ok: false, error: 'occupata', by: cur });   // race: già preso da un altro
-      cell.setValue(String(b.room).trim());
+      cell.setValue(room);
       return json_({ ok: true, week: getWeek_(), status: getStatus_() });
     }
 
     if (b.action === 'clear') {
       const w = letterIdx_(b.machine);
       if (w < 0) return json_({ ok: false, error: 'macchina non valida' });
-      sh.getRange(bookingRow_(b.slot, w), bookingCol_(b.day)).clearContent();
+      const day = Number(b.day), slot = Number(b.slot);
+      if (!(day >= 0 && day < N_DAYS) || !(slot >= 0 && slot < N_SLOTS))
+        return json_({ ok: false, error: 'parametri non validi' });
+      sh.getRange(bookingRow_(slot, w), bookingCol_(day)).clearContent();
       return json_({ ok: true, week: getWeek_(), status: getStatus_() });
     }
 

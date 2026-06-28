@@ -95,6 +95,15 @@ function parseRange_(v) {
 function fmtMin_(min) { return pad2_(Math.floor(min / 60) % 24) + ':' + pad2_(min % 60); }
 function fmtRange_(start, end) { return fmtMin_(start) + '-' + fmtMin_(end); }
 
+// Sicurezza: neutralizza la formula/CSV injection prima di scrivere nel foglio.
+// Un valore che inizia con = + - @ (o tab/CR) verrebbe eseguito come formula:
+// lo si forza a testo anteponendo un apostrofo.
+function safeCell_(v) {
+  var s = String(v == null ? '' : v).trim();
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  return s;
+}
+
 // Colonna F → tipo dell'app. Trova una "R" o "P" isolata (es. "20-23 R" → R).
 function parseType_(v) {
   var s = String(v || '').toUpperCase();
@@ -158,7 +167,7 @@ function doPost(e) {
 
     if (action === 'book') {
       var day = Number(body.day), start = Number(body.start), end = Number(body.end);
-      var name = String(body.name || '').trim();
+      var name = String(body.name || '').trim().slice(0, 40);   // cap lunghezza
       var type = body.type ? String(body.type) : '';
       if (!name || !(end > start) || !(day >= 0 && day <= 6)) {
         return json_({ ok: false, error: 'invalid' });
@@ -180,7 +189,7 @@ function doPost(e) {
       if (freeRow === -1) return json_({ ok: false, error: 'full' });
 
       sh.getRange(freeRow, COL_TIME).setValue(fmtRange_(start, end));
-      sh.getRange(freeRow, COL_NAME).setValue(name);
+      sh.getRange(freeRow, COL_NAME).setValue(safeCell_(name));
       sh.getRange(freeRow, COL_TYPE).setValue(typeLabel_(type));
       return json_({ ok: true, bookings: readAll_(sh) });
     }
