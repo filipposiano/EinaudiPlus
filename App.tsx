@@ -122,7 +122,7 @@ const T = {
     favorites: "Preferiti",
     noFavs: "Tocca la ★ accanto a un orario nella scheda Giornaliero per aggiungerlo ai preferiti.",
     favFree: "Libero", favFull: "Pieno", favPast: "Passato",
-    remainingChip: (n: number) => n >= 0 ? `${n} rimast${n === 1 ? "a" : "e"}` : `${n}`,
+    remainingChip: (n: number) => n >= 0 ? `${n} rimast${n === 1 ? "a" : "e"}` : `${-n} in più`,
     slotEndsIn: "Termina tra",
     remainingMsg: (n: number) => n > 0
       ? `Puoi ancora prenotare ${n} ${n === 1 ? "turno" : "turni"} questa settimana (max ${WEEKLY_QUOTA} a camera).`
@@ -195,7 +195,7 @@ const T = {
     favorites: "Favourites",
     noFavs: "Tap the ★ next to a time in the Daily tab to add it to favourites.",
     favFree: "Free", favFull: "Full", favPast: "Past",
-    remainingChip: (n: number) => n >= 0 ? `${n} left` : `${n}`,
+    remainingChip: (n: number) => n >= 0 ? `${n} left` : `${-n} extra`,
     slotEndsIn: "Ends in",
     remainingMsg: (n: number) => n > 0
       ? `You can book ${n} more ${n === 1 ? "slot" : "slots"} this week (max ${WEEKLY_QUOTA} per room).`
@@ -310,6 +310,17 @@ interface MyBooking { day: number; slot: number; mid: string; }
 
 // Turno preferito: giorno della settimana + slot orario (es. Domenica 14:30–15:45)
 interface Fav { day: number; slot: number; }
+
+// I preferiti sono PER CAMERA: chiave separata per ogni stanza, così cambiando
+// utente/stanza non restano i preferiti di quella precedente.
+const favsKey = (room: string | null) => `laundryhub.favs.${room ?? "_"}`;
+function loadFavs(room: string | null): Fav[] {
+  if (!room) return [];
+  try {
+    const raw = JSON.parse(localStorage.getItem(favsKey(room)) || "[]");
+    return Array.isArray(raw) ? raw.filter((x: any) => x && typeof x.day === "number" && typeof x.slot === "number") : [];
+  } catch { return []; }
+}
 
 function myWeekBookings(week: WeekData, room: string): MyBooking[] {
   const out: MyBooking[] = [];
@@ -1604,14 +1615,15 @@ export default function App() {
   const [status, setStatus]   = useState<StatusData>({});
   const [loading, setLoading] = useState(true);
   const [error,  setError]    = useState<string | null>(null);
-  const [favs,   setFavs]     = useState<Fav[]>(() => {
-    // Nuovo formato preferiti: {day, slot}. Il vecchio formato (solo numeri) viene scartato.
-    try {
-      const raw = JSON.parse(localStorage.getItem("laundryhub.favs") || "[]");
-      return Array.isArray(raw) ? raw.filter((x: any) => x && typeof x.day === "number" && typeof x.slot === "number") : [];
-    } catch { return []; }
-  });
+  // Preferiti caricati in base alla camera corrente (vedi loadFavs).
+  const [favs,   setFavs]     = useState<Fav[]>(() => loadFavs(
+    (() => { try { return localStorage.getItem("laundryhub.room"); } catch { return null; } })()
+  ));
   const t = T[lang];
+
+  // Quando cambia la stanza (login/logout/cambio camera) ricarico i preferiti
+  // di QUELLA stanza, evitando di mostrare quelli della stanza precedente.
+  useEffect(() => { setFavs(loadFavs(roomNumber)); }, [roomNumber]);
 
   const toggleFav = useCallback((day: number, slot: number) => {
     setFavs((prev) => {
@@ -1619,10 +1631,10 @@ export default function App() {
       const next = exists
         ? prev.filter((f) => !(f.day === day && f.slot === slot))
         : [...prev, { day, slot }].sort((a, b) => a.day - b.day || a.slot - b.slot);
-      try { localStorage.setItem("laundryhub.favs", JSON.stringify(next)); } catch {}
+      try { if (roomNumber) localStorage.setItem(favsKey(roomNumber), JSON.stringify(next)); } catch {}
       return next;
     });
-  }, []);
+  }, [roomNumber]);
 
   useEffect(() => {
     if (theme === "dark") {

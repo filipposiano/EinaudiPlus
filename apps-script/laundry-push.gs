@@ -4,11 +4,12 @@
  * Incolla TUTTO questo file in fondo al Code.gs della lavanderia (lo stesso che
  * gestisce book/clear/status). Poi:
  *
- *  1) Nel tuo doPost, dopo aver letto `body`, `token`, `action` e verificato il
- *     token, aggiungi due righe per smistare le nuove azioni:
+ *  1) Nel tuo doPost, subito dopo il controllo del token
+ *     (`if ((b.token || '') !== TOKEN) ...`), aggiungi due righe per smistare le
+ *     nuove azioni (la tua variabile del body si chiama `b`):
  *
- *         if (action === 'subscribe')   return handleSubscribe_(body);
- *         if (action === 'unsubscribe') return handleUnsubscribe_(body);
+ *         if (b.action === 'subscribe')   return handleSubscribe_(b);
+ *         if (b.action === 'unsubscribe') return handleUnsubscribe_(b);
  *
  *  2) Imposta qui sotto RELAY_URL (la funzione Vercel) e RELAY_SECRET.
  *

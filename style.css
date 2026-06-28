@@ -4,8 +4,8 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ─── Design system Figma Make ───────────────────────────────────────────────
-   Tema scuro (default) = accento teal #00d4b4 su nero #0c0c0f.
-   :root = variante chiara coerente; .dark = tema scuro Figma. */
+   Colore primario = ROSSO (#e11d2a chiaro / #ff3b30 scuro).
+   :root = variante chiara; .dark = tema scuro. */
 
 :root {
   --font-size: 16px;
@@ -15,13 +15,13 @@
   --card-foreground: #0c0c0f;
   --popover: #ffffff;
   --popover-foreground: #0c0c0f;
-  --primary: #00bfa0;
+  --primary: #e11d2a;
   --primary-foreground: #ffffff;
   --secondary: #f1f1f4;
   --secondary-foreground: #0c0c0f;
   --muted: #f1f1f4;
   --muted-foreground: #6b6b80;
-  --accent: #00bfa0;
+  --accent: #e11d2a;
   --accent-foreground: #ffffff;
   --destructive: #ff4757;
   --destructive-foreground: #ffffff;
@@ -31,7 +31,7 @@
   --switch-background: #cbced4;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: #00bfa0;
+  --ring: #e11d2a;
   --chart-1: oklch(0.646 0.222 41.116);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
@@ -40,12 +40,12 @@
   --radius: 0.625rem;
   --sidebar: #ffffff;
   --sidebar-foreground: #0c0c0f;
-  --sidebar-primary: #00bfa0;
+  --sidebar-primary: #e11d2a;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #f1f1f4;
   --sidebar-accent-foreground: #0c0c0f;
   --sidebar-border: rgba(0, 0, 0, 0.08);
-  --sidebar-ring: #00bfa0;
+  --sidebar-ring: #e11d2a;
 }
 
 .dark {
@@ -55,21 +55,21 @@
   --card-foreground: #f0f0f5;
   --popover: #1e1e26;
   --popover-foreground: #f0f0f5;
-  --primary: #00d4b4;
-  --primary-foreground: #0c0c0f;
+  --primary: #ff3b30;
+  --primary-foreground: #ffffff;
   --secondary: #1e1e26;
   --secondary-foreground: #f0f0f5;
   --muted: #1e1e26;
   --muted-foreground: #6b6b80;
-  --accent: #00d4b4;
-  --accent-foreground: #0c0c0f;
+  --accent: #ff3b30;
+  --accent-foreground: #ffffff;
   --destructive: #ff4757;
   --destructive-foreground: #ffffff;
   --border: rgba(255, 255, 255, 0.08);
   --input: transparent;
   --input-background: #1e1e26;
   --switch-background: #2e2e3a;
-  --ring: #00d4b4;
+  --ring: #ff3b30;
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
@@ -77,12 +77,12 @@
   --chart-5: oklch(0.645 0.246 16.439);
   --sidebar: #16161c;
   --sidebar-foreground: #f0f0f5;
-  --sidebar-primary: #00d4b4;
-  --sidebar-primary-foreground: #0c0c0f;
+  --sidebar-primary: #ff3b30;
+  --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #1e1e26;
   --sidebar-accent-foreground: #f0f0f5;
   --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #00d4b4;
+  --sidebar-ring: #ff3b30;
 }
 
 @theme inline {
