@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Wind, Clock, CalendarDays,
-  Sun, Moon, Zap, Plus, CheckCircle2, AlertTriangle,
+  Sun, Moon, Plus, CheckCircle2, AlertTriangle,
   LayoutGrid, Delete, X, Wrench, RotateCcw, Loader2, Star,
   BedDouble, Timer, Trash2, Film, Music,
 } from "lucide-react";
@@ -361,7 +361,6 @@ function BookModal({ target, bookings, myRoom, lang, onConfirm, onClose }: {
   const [step, setStep] = useState<"pick"|"owner"|"input"|"confirm">(firstStep);
 
   const slot      = TIME_SLOTS[target.slotIdx];
-  const nextSlot  = TIME_SLOTS[target.slotIdx + 1];
   const dayIdx    = target.dayIdx ?? TODAY_DOW;
   const taken     = new Set(Object.keys(bookings[dayIdx]?.[target.slotIdx] ?? {}));
   
@@ -914,7 +913,6 @@ function DaySchedule({ lang, week, roomNumber: sessionRoom, favs, onToggleFav, o
         <h2 className="text-base font-bold mb-2" style={{ color:fg }}>{t.daily}</h2>
         <div className="grid grid-cols-7 gap-1">
           {t.days.map((d, i) => {
-            const isToday  = i===TODAY_DOW;
             const isActive = i===selDay;
             const isPast   = i<TODAY_DOW;
             return (
