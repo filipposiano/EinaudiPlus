@@ -1996,12 +1996,14 @@ export default function App() {
     }
   }, []);
 
-  // Refresh manuale (con feedback visivo di rotazione).
+  // Refresh manuale: ricarica la pagina. Serve un reload completo (non solo
+  // un re-fetch dei dati) perché il giorno/turno correnti — TODAY_DOW e
+  // CUR_SLOT — sono calcolati al caricamento e non si aggiornano al cambio d'ora.
   const [refreshing, setRefreshing] = useState(false);
-  const doRefresh = useCallback(async () => {
+  const doRefresh = useCallback(() => {
     setRefreshing(true);
-    try { await refresh(); } finally { setRefreshing(false); }
-  }, [refresh]);
+    window.location.reload();
+  }, []);
 
   useEffect(() => { refresh(); }, [refresh]);
 
