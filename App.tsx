@@ -123,7 +123,7 @@ const T = {
     addFav: "Aggiungi preferito", day: "Giorno", timeSlot: "Fascia oraria", favAlready: "Già nei preferiti",
     chooseWasher: "Scegli la lavatrice", noFreeWashers: "Nessuna lavatrice libera in questo turno.",
     feedback: "Feedback", feedbackBody: "Hai suggerimenti o hai trovato un problema? Scrivici.",
-    feedbackPlaceholder: "Scrivi qui il tuo messaggio…", feedbackSend: "Invia",
+    feedbackPlaceholder: "Scrivi qui il tuo messaggio…", feedbackSend: "Invia", feedbackSending: "Invio feedback…",
     feedbackThanks: "Grazie! Feedback inviato ✓", feedbackError: "Invio non riuscito, riprova.",
     skip:     "Continua senza accedere",
     machines: "Lavatrici", // <--- AGGIUNTO
@@ -208,7 +208,7 @@ const T = {
     addFav: "Add favourite", day: "Day", timeSlot: "Time slot", favAlready: "Already a favourite",
     chooseWasher: "Choose a washer", noFreeWashers: "No free washer in this slot.",
     feedback: "Feedback", feedbackBody: "Got suggestions or found a problem? Let us know.",
-    feedbackPlaceholder: "Type your message here…", feedbackSend: "Send",
+    feedbackPlaceholder: "Type your message here…", feedbackSend: "Send", feedbackSending: "Sending feedback…",
     feedbackThanks: "Thanks! Feedback sent ✓", feedbackError: "Couldn't send, try again.",
     skip:     "Continue without logging in",
     machines: "Machines", // <--- AGGIUNTO
@@ -714,7 +714,7 @@ function FeedbackModal({ lang, room, onClose }: { lang: Lang; room: string | nul
             <button onClick={send} disabled={!text.trim() || busy}
               className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
               style={{ background:RED, color:RED_FG, opacity:(!text.trim() || busy) ? 0.5 : 1 }}>
-              <Send size={15}/>{busy ? t.loading : t.feedbackSend}
+              <Send size={15}/>{busy ? t.feedbackSending : t.feedbackSend}
             </button>
           </>
         )}

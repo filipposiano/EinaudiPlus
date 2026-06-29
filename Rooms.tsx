@@ -179,12 +179,20 @@ function RulesModal({ room, lang, onClose }: { room: RoomKind; lang: Lang; onClo
 // ─── Timeline giornaliera ──────────────────────────────────────────────────────
 function Timeline({ room, bookings }: { room: RoomKind; bookings: RoomBooking[] }) {
   const { winStart, winEnd } = ROOM_CFG[room];
-  const span = winEnd - winStart;
+  // Fine "normalizzata": una fascia che termina a 00:00 (o oltre la mezzanotte)
+  // arriva con end ≤ start → la trattiamo come +24h (00:00 = 24:00 = 1440).
+  const endOf = (b: RoomBooking) => (b.end <= b.start ? b.end + 24 * 60 : b.end);
+  // La timeline si estende fino a includere la prenotazione più "tarda",
+  // così le fasce 23–00 (e oltre mezzanotte) restano sempre visibili.
+  const spanEnd = bookings.reduce((mx, b) => Math.max(mx, endOf(b)), winEnd);
+  const span = spanEnd - winStart;
   const pct = (m: number) => `${((m - winStart) / span) * 100}%`;
   // tick ogni 3 ore (cinema) o 2 ore (musica)
   const stepH = room === "cinema" ? 3 : 2;
   const ticks: number[] = [];
-  for (let m = winStart; m <= winEnd; m += stepH * 60) ticks.push(m);
+  for (let m = winStart; m <= spanEnd; m += stepH * 60) ticks.push(m);
+  // 1440 = mezzanotte di fine giornata → mostrala come "24:00" sull'asse.
+  const tickLabel = (m: number) => (m === 24 * 60 ? "24:00" : fmtMin(m));
 
   return (
     <div className="px-1 pt-1 pb-6">
@@ -196,11 +204,13 @@ function Timeline({ room, bookings }: { room: RoomKind; bookings: RoomBooking[] 
         ))}
         {bookings.map((b) => {
           const open = b.type === "open";
+          const left = Math.max(b.start, winStart);
+          const right = Math.min(endOf(b), spanEnd);
           return (
             <div key={b.id} className="absolute top-0 bottom-0 flex flex-col items-center justify-center overflow-hidden px-1 gap-0.5"
               title={`${b.name} · ${fmtMin(b.start)}–${fmtMin(b.end)}`}
               style={{
-                left: pct(Math.max(b.start, winStart)), width: `${((Math.min(b.end, winEnd) - Math.max(b.start, winStart)) / span) * 100}%`,
+                left: pct(left), width: `${((right - left) / span) * 100}%`, minWidth: "10px",
                 background: open ? `color-mix(in srgb, ${RED} 82%, transparent)` : `color-mix(in srgb, ${OOS} 72%, transparent)`,
                 borderLeft: "1px solid var(--background)",
               }}>
@@ -212,7 +222,7 @@ function Timeline({ room, bookings }: { room: RoomKind; bookings: RoomBooking[] 
       </div>
       <div className="relative h-5 mt-1.5">
         {ticks.map((m) => (
-          <span key={m} className="absolute text-[10px] font-mono -translate-x-1/2" style={{ left: pct(m), color: sub }}>{fmtMin(m)}</span>
+          <span key={m} className="absolute text-[10px] font-mono -translate-x-1/2" style={{ left: pct(m), color: sub }}>{tickLabel(m)}</span>
         ))}
       </div>
     </div>
