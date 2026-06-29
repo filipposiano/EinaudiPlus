@@ -121,6 +121,7 @@ const T = {
     installAndroidStep: "Menu  →  Aggiungi a Schermata Home",
     installCta: "Installa", installLater: "Più tardi", installIosDone: "Ho capito",
     addFav: "Aggiungi preferito", day: "Giorno", timeSlot: "Fascia oraria", favAlready: "Già nei preferiti",
+    chooseWasher: "Scegli la lavatrice", noFreeWashers: "Nessuna lavatrice libera in questo turno.",
     feedback: "Feedback", feedbackBody: "Hai suggerimenti o hai trovato un problema? Scrivici.",
     feedbackPlaceholder: "Scrivi qui il tuo messaggio…", feedbackSend: "Invia",
     feedbackThanks: "Grazie! Feedback inviato ✓", feedbackError: "Invio non riuscito, riprova.",
@@ -205,6 +206,7 @@ const T = {
     installAndroidStep: "Menu  →  Add to Home screen",
     installCta: "Install", installLater: "Later", installIosDone: "Got it",
     addFav: "Add favourite", day: "Day", timeSlot: "Time slot", favAlready: "Already a favourite",
+    chooseWasher: "Choose a washer", noFreeWashers: "No free washer in this slot.",
     feedback: "Feedback", feedbackBody: "Got suggestions or found a problem? Let us know.",
     feedbackPlaceholder: "Type your message here…", feedbackSend: "Send",
     feedbackThanks: "Thanks! Feedback sent ✓", feedbackError: "Couldn't send, try again.",
@@ -608,6 +610,74 @@ function FavPicker({ lang, favs, onAdd, onClose }: {
   );
 }
 
+// ─── Modale scelta lavatrice (da un turno preferito) ────────────────────────────
+function QuickBookModal({ lang, day, slot, week, status, onBook, onClose }: {
+  lang: Lang; day: number; slot: number; week: WeekData; status: StatusData;
+  onBook: (day:number, slot:number, mid:string)=>Promise<void>; onClose: ()=>void;
+}) {
+  const t = T[lang];
+  const fg="var(--foreground)", sub="var(--muted-foreground)", div="var(--border)", surf="var(--card)";
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr]   = useState<string | null>(null);
+  const sl = TIME_SLOTS[slot];
+
+  const washers = ["A","B","C"].map((L) => {
+    const wid = "W-" + L;
+    const oos = status[wid] === "oos";
+    const room = bookingAt(week, day, slot, wid);
+    return { L, wid, oos, room, free: !oos && !room };
+  });
+  const anyFree = washers.some((w) => w.free);
+
+  async function book(wid: string) {
+    if (busy) return;
+    setBusy(wid); setErr(null);
+    try { await onBook(day, slot, wid); onClose(); }
+    catch (e) { setErr(errMsg(e, lang)); setBusy(null); }
+  }
+
+  return (
+    <div className="absolute inset-0 z-50 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
+      <div className="w-full rounded-t-3xl pt-5 pb-7 px-6" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
+        <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background:"color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-lg font-bold" style={{ color:fg }}>{t.chooseWasher}</p>
+          <button onClick={onClose} className="p-2 rounded-xl" style={{ background:"var(--secondary)", color:sub }}><X size={16}/></button>
+        </div>
+        <p className="text-sm font-mono mb-4" style={{ color:sub }}>{t.days[day]} · {sl.start}–{sl.end}</p>
+
+        <div className="rounded-2xl overflow-hidden border mb-3" style={{ background:surf, borderColor:div }}>
+          {washers.map((w, i) => {
+            const dot = w.oos ? OOS_C : w.free ? GREEN : YELLOW;
+            const statusText = w.oos ? t.oos : w.free ? t.free : `${t.room} ${w.room}`;
+            return (
+              <div key={w.L} className="flex items-center gap-3 px-4 py-3"
+                style={{ borderBottom: i < washers.length - 1 ? `1px solid ${div}` : "none" }}>
+                <span className="size-2 rounded-full shrink-0" style={{ background:dot }}/>
+                <WashingMachine size={17} style={{ color:fg }}/>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold leading-tight" style={{ color:fg }}>{t.washer} {w.L}</p>
+                  <p className="text-xs leading-tight truncate" style={{ color: w.oos ? OOS_C : w.free ? GREEN : sub }}>{statusText}</p>
+                </div>
+                {w.free
+                  ? <button onClick={()=>book(w.wid)} disabled={!!busy}
+                      className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all active:scale-95 shrink-0"
+                      style={{ background:RED, color:RED_FG, opacity: busy && busy!==w.wid ? 0.5 : 1 }}>
+                      {busy===w.wid ? <Loader2 size={12} className="animate-spin-slow"/> : <Plus size={12}/>}{t.book}
+                    </button>
+                  : <span className="text-xs font-medium shrink-0" style={{ color: w.oos ? OOS_C : sub }}>{w.oos ? t.oos : t.favFull}</span>}
+              </div>
+            );
+          })}
+        </div>
+
+        {!anyFree && <p className="text-xs text-center" style={{ color:sub }}>{t.noFreeWashers}</p>}
+        {err && <p className="text-xs text-center" style={{ color:OOS_C }}>{err}</p>}
+      </div>
+    </div>
+  );
+}
+
 // ─── Modale Feedback ────────────────────────────────────────────────────────────
 function FeedbackModal({ lang, room, onClose }: { lang: Lang; room: string | null; onClose: ()=>void }) {
   const t = T[lang];
@@ -669,6 +739,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
   const [adminOpen, setAdminOpen] = useState(false);
   const [favPicker, setFavPicker] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [quickTarget, setQuickTarget] = useState<{ day:number; slot:number } | null>(null);
 
   const fg   = "var(--foreground)";
   const sub  = "var(--muted-foreground)";
@@ -695,10 +766,12 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
   const firstFreeWasherAt = (day: number, s: number): string | null =>
     ["W-A","W-B","W-C"].find((wid) => status[wid] !== "oos" && !week[day]?.[s]?.[wid]) ?? null;
 
+  // Prenota una lavatrice scelta a mano (dal modale dei preferiti).
+  // Rilancia l'errore così il modale resta aperto e lo mostra.
   async function quickBook(day: number, s: number, mid: string) {
     if (!roomNumber) return;
-    try { await onBook(day, s, mid, roomNumber); setToast(t.booked(mid[2])); }
-    catch (e) { setToast(errMsg(e, lang)); }
+    await onBook(day, s, mid, roomNumber);
+    setToast(t.booked(mid[2]));
   }
 
   async function cancelBooking(b: MyBooking) {
@@ -732,6 +805,11 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
           onAdd={(d, s)=>{ if (!favs.some((f)=>f.day===d && f.slot===s)) onToggleFav(d, s); setFavPicker(false); }}/>
       )}
       {feedbackOpen && <FeedbackModal lang={lang} room={roomNumber} onClose={()=>setFeedbackOpen(false)}/>}
+      {quickTarget && (
+        <QuickBookModal lang={lang} day={quickTarget.day} slot={quickTarget.slot}
+          week={week} status={status} onBook={quickBook}
+          onClose={()=>setQuickTarget(null)}/>
+      )}
 
       {/* Header */}
       <div className="px-5 pt-6 pb-5">
@@ -868,10 +946,12 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
                       {past ? t.favPast : freeMid ? t.favFree : t.favFull}
                     </p>
                   </div>
-                  {freeMid && roomNumber && (
-                    <button onClick={()=>quickBook(f.day, f.slot, freeMid)}
+                  {!past && roomNumber && (
+                    <button onClick={()=>setQuickTarget({ day:f.day, slot:f.slot })}
                       className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all active:scale-95 shrink-0"
-                      style={{ background:`color-mix(in srgb, ${GREEN} 18%, transparent)`, color:GREEN }}>
+                      style={ freeMid
+                        ? { background:`color-mix(in srgb, ${GREEN} 18%, transparent)`, color:GREEN }
+                        : { background:"var(--secondary)", color:sub } }>
                       <Plus size={12}/>{t.book}
                     </button>
                   )}
