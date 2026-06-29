@@ -48,7 +48,7 @@ const T = {
     rules: "Regole", close: "Chiudi",
     free: "Libera tutto il giorno", occupied: "Occupata",
     newBooking: "Nuova prenotazione",
-    start: "Inizio", end: "Fine", name: "Nome", yourName: "Il tuo nome",
+    start: "Inizio", end: "Fine", name: "Nome", yourName: "Il tuo nome", roomLabel: "Stanza",
     type: "Tipo di proiezione", priv: "Privata", open: "Aperta a tutti (es. partite)",
     book: "Prenota blocco", cancel: "Annulla",
     bookings: "Prenotazioni del giorno", none: "Nessuna prenotazione",
@@ -68,7 +68,7 @@ const T = {
     rules: "Rules", close: "Close",
     free: "Free all day", occupied: "Booked",
     newBooking: "New booking",
-    start: "Start", end: "End", name: "Name", yourName: "Your name",
+    start: "Start", end: "End", name: "Name", yourName: "Your name", roomLabel: "Room",
     type: "Screening type", priv: "Private", open: "Open to all (e.g. matches)",
     book: "Book block", cancel: "Cancel",
     bookings: "Bookings for the day", none: "No bookings",
@@ -230,10 +230,11 @@ function Timeline({ room, bookings }: { room: RoomKind; bookings: RoomBooking[] 
 }
 
 // ─── Vista sala ────────────────────────────────────────────────────────────────
-export default function RoomView({ room, lang }: { room: RoomKind; lang: Lang }) {
+export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; lang: Lang; roomNumber?: string | null }) {
   const t = T[lang];
   const cfg = ROOM_CFG[room];
   const opts = timeOptions(cfg.winStart, cfg.winEnd, cfg.step);
+  const myRoom = (roomNumber || "").trim();   // identità = numero camera (come lavanderia)
 
   const [bookings, setBookings] = useState<RoomBooking[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -259,16 +260,17 @@ export default function RoomView({ room, lang }: { room: RoomKind; lang: Lang })
   const dayBookings = bookings.filter((b) => b.day === selDay).sort((a, b) => a.start - b.start);
 
   async function submit() {
-    if (!name.trim()) { setToast(t.needName); return; }
+    const who = myRoom || name.trim();
+    if (!who) { setToast(t.needName); return; }
     if (end <= start) { setToast(t.badRange); return; }
     if (roomsApi.hasOverlap(bookings, selDay, start, end)) { setToast(t.overlap); return; }
     setBusy(true);
     try {
       const payload: Omit<RoomBooking, "id"> = room === "cinema"
-        ? { day: selDay, start, end, name: name.trim(), type: ctype }
-        : { day: selDay, start, end, name: name.trim() };
+        ? { day: selDay, start, end, name: who, type: ctype }
+        : { day: selDay, start, end, name: who };
       setBookings(await roomsApi.bookRoom(room, payload));
-      setName(""); setToast(t.booked);
+      if (!myRoom) setName(""); setToast(t.booked);
     } catch (e: any) {
       const msg = String(e?.message);
       setToast(msg === "overlap" ? t.overlap : msg === "full" ? t.full : t.errorGeneric);
@@ -360,12 +362,22 @@ export default function RoomView({ room, lang }: { room: RoomKind; lang: Lang })
             </label>
           </div>
 
-          <label className="block mb-3">
-            <span className="text-[11px]" style={{ color: sub }}>{t.name}</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.yourName}
-              className="w-full mt-1 rounded-xl px-3 py-2.5 text-sm outline-none"
-              style={{ background: chip, color: fg, border: `1px solid ${div}` }} />
-          </label>
+          {myRoom ? (
+            <div className="block mb-3">
+              <span className="text-[11px]" style={{ color: sub }}>{t.roomLabel}</span>
+              <div className="w-full mt-1 rounded-xl px-3 py-2.5 text-sm font-mono font-semibold"
+                style={{ background: chip, color: fg, border: `1px solid ${div}` }}>
+                {t.roomLabel} {myRoom}
+              </div>
+            </div>
+          ) : (
+            <label className="block mb-3">
+              <span className="text-[11px]" style={{ color: sub }}>{t.name}</span>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t.yourName}
+                className="w-full mt-1 rounded-xl px-3 py-2.5 text-sm outline-none"
+                style={{ background: chip, color: fg, border: `1px solid ${div}` }} />
+            </label>
+          )}
 
           {room === "cinema" && (
             <div className="mb-3">

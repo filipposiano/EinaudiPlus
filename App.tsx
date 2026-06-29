@@ -2064,7 +2064,7 @@ export default function App() {
 
   // Lavanderia → schermate laundry; Cinema/Musica → sala a fasce libere
   const isRoom = facility !== "laundry";
-  const bodyContent = isRoom ? <RoomView room={facility as "cinema" | "music"} lang={lang}/> : mainContent;
+  const bodyContent = isRoom ? <RoomView room={facility as "cinema" | "music"} lang={lang} roomNumber={roomNumber}/> : mainContent;
 
   if (isDesktop) {
     return (
