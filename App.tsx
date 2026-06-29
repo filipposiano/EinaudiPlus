@@ -1690,7 +1690,7 @@ function DesktopSidebar({ active, onChange, lang, theme, roomNumber, showNav, fa
         <div className="p-2 rounded-xl" style={{ background:"color-mix(in srgb, var(--primary) 15%, transparent)" }}>
           <WashingMachine size={20} style={{ color:RED }}/>
         </div>
-        <span className="text-lg font-bold" style={{ color:fg }}>Sezione Valentino</span>
+        <span className="text-lg font-bold" style={{ color:fg }}>Sez. Valentino</span>
       </div>
 
       {/* Navigazione */}
