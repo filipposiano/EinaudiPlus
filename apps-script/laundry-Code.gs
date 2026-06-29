@@ -185,6 +185,17 @@ function doPost(e) {
       return json_({ ok: true });
     }
 
+    if (b.action === 'feedback') {
+      // testo lungo: niente cap a 20, ma neutralizziamo la formula injection
+      var fullText = String(b.text == null ? '' : b.text).slice(0, 2000);
+      if (/^[=+\-@\t\r]/.test(fullText)) fullText = "'" + fullText;
+      if (!fullText.trim()) return json_({ ok: false, error: 'feedback vuoto' });
+      var fb = ss_().getSheetByName('Feedback');
+      if (!fb) { fb = ss_().insertSheet('Feedback'); fb.appendRow(['data', 'camera', 'messaggio']); }
+      fb.appendRow([new Date(), safeCell_(b.room), fullText]);
+      return json_({ ok: true });
+    }
+
     return json_({ ok: false, error: 'azione sconosciuta' });
   } catch (err) {
     return json_({ ok: false, error: String(err) });

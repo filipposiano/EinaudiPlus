@@ -68,3 +68,8 @@ export async function subscribePush(room: string, sub: PushSubscriptionJSON) {
 export async function unsubscribePush(endpoint: string) {
   return postAction("unsubscribe", { endpoint });
 }
+
+// Invia un feedback/segnalazione (salvato su foglio "Feedback" lato Apps Script).
+export async function sendFeedback(room: string | null, text: string) {
+  return postAction("feedback", { room: room || "", text });
+}

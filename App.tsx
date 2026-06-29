@@ -5,6 +5,7 @@ import {
   LayoutGrid, Delete, X, Wrench, RotateCcw, Loader2, Star,
   History, Timer, Trash2, Film, Music,
   Bell, BellRing, Download, Share, Menu,
+  RefreshCw, MessageSquare, Send,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -59,6 +60,9 @@ const TIME_SLOTS = buildSlots();
 
 // Limite "morbido" di prenotazioni per camera a settimana (non bloccante: può andare in negativo)
 const WEEKLY_QUOTA = 2;
+
+// Versione app (mostrata in modo discreto nella UI)
+const APP_VERSION = "0.2.1";
 
 // ─── "Adesso": giorno e slot correnti calcolati dall'orologio ──────────────────
 
@@ -116,6 +120,10 @@ const T = {
     installAndroidBody: "Apri il menu del browser e scegli «Aggiungi pagina a → Schermata Home» (o «Installa app»).",
     installAndroidStep: "Menu  →  Aggiungi a Schermata Home",
     installCta: "Installa", installLater: "Più tardi", installIosDone: "Ho capito",
+    addFav: "Aggiungi preferito", day: "Giorno", timeSlot: "Fascia oraria", favAlready: "Già nei preferiti",
+    feedback: "Feedback", feedbackBody: "Hai suggerimenti o hai trovato un problema? Scrivici.",
+    feedbackPlaceholder: "Scrivi qui il tuo messaggio…", feedbackSend: "Invia",
+    feedbackThanks: "Grazie! Feedback inviato ✓", feedbackError: "Invio non riuscito, riprova.",
     skip:     "Continua senza accedere",
     machines: "Lavatrici", // <--- AGGIUNTO
     washers:  "Lavatrici", dryers: "Asciugatrici", washer: "Lavatrice", dryer: "Asciugatrice",
@@ -196,6 +204,10 @@ const T = {
     installAndroidBody: "Open the browser menu and choose “Add page to → Home screen” (or “Install app”).",
     installAndroidStep: "Menu  →  Add to Home screen",
     installCta: "Install", installLater: "Later", installIosDone: "Got it",
+    addFav: "Add favourite", day: "Day", timeSlot: "Time slot", favAlready: "Already a favourite",
+    feedback: "Feedback", feedbackBody: "Got suggestions or found a problem? Let us know.",
+    feedbackPlaceholder: "Type your message here…", feedbackSend: "Send",
+    feedbackThanks: "Thanks! Feedback sent ✓", feedbackError: "Couldn't send, try again.",
     skip:     "Continue without logging in",
     machines: "Machines", // <--- AGGIUNTO
     washers:  "Washers", dryers: "Dryers", washer: "Washer", dryer: "Dryer",
@@ -552,6 +564,95 @@ function ModifyModal({ target, lang, onEdit, onDelete, onClose }: {
   );
 }
 
+// ─── Popup "Aggiungi preferito": scegli giorno + fascia oraria ──────────────────
+function FavPicker({ lang, favs, onAdd, onClose }: {
+  lang: Lang; favs: Fav[]; onAdd: (day:number, slot:number)=>void; onClose: ()=>void;
+}) {
+  const t = T[lang];
+  const fg="var(--foreground)", sub="var(--muted-foreground)", chip="var(--secondary)";
+  const [day, setDay]   = useState(TODAY_DOW);
+  const [slot, setSlot] = useState(0);
+  const already = favs.some((f)=>f.day===day && f.slot===slot);
+  return (
+    <div className="absolute inset-0 z-50 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
+      <div className="w-full rounded-t-3xl pt-5 pb-7 px-6 max-h-[88%] overflow-y-auto" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
+        <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background:"color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-lg font-bold" style={{ color:fg }}>{t.addFav}</p>
+          <button onClick={onClose} className="p-2 rounded-xl" style={{ background:chip, color:sub }}><X size={16}/></button>
+        </div>
+
+        <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.day}</p>
+        <div className="grid grid-cols-7 gap-1 mb-4">
+          {t.days.map((d, i)=>(
+            <button key={i} onClick={()=>setDay(i)} className="py-2 rounded-xl text-xs font-semibold transition-colors"
+              style={ i===day ? { background:RED, color:RED_FG } : { background:chip, color:sub } }>{d}</button>
+          ))}
+        </div>
+
+        <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.timeSlot}</p>
+        <div className="grid grid-cols-3 gap-2 mb-5">
+          {TIME_SLOTS.map((s, i)=>(
+            <button key={i} onClick={()=>setSlot(i)} className="py-2 rounded-xl text-[11px] font-mono font-semibold transition-colors"
+              style={ i===slot ? { background:RED, color:RED_FG } : { background:chip, color:fg } }>{s.start}</button>
+          ))}
+        </div>
+
+        <button onClick={()=>onAdd(day, slot)} disabled={already}
+          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
+          style={{ background:RED, color:RED_FG, opacity: already ? 0.5 : 1 }}>
+          <Star size={15}/>{already ? t.favAlready : `${t.addFav} · ${t.days[day]} ${TIME_SLOTS[slot].start}`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modale Feedback ────────────────────────────────────────────────────────────
+function FeedbackModal({ lang, room, onClose }: { lang: Lang; room: string | null; onClose: ()=>void }) {
+  const t = T[lang];
+  const fg="var(--foreground)", sub="var(--muted-foreground)", chip="var(--secondary)", div="var(--border)";
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [err,  setErr]  = useState(false);
+
+  async function send() {
+    if (!text.trim() || busy) return;
+    setBusy(true); setErr(false);
+    try { await api.sendFeedback(room, text.trim()); setDone(true); setTimeout(onClose, 1300); }
+    catch { setErr(true); setBusy(false); }
+  }
+
+  return (
+    <div className="absolute inset-0 z-50 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
+      <div className="w-full rounded-t-3xl pt-5 pb-7 px-6" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
+        <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background:"color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
+        <div className="flex items-center gap-3 mb-2">
+          <div className="p-2.5 rounded-2xl" style={{ background:`color-mix(in srgb, var(--primary) 15%, transparent)`, color:RED }}><MessageSquare size={18}/></div>
+          <p className="text-lg font-bold" style={{ color:fg }}>{t.feedback}</p>
+        </div>
+        {done ? (
+          <p className="text-sm py-6 text-center font-medium" style={{ color:GREEN }}>{t.feedbackThanks}</p>
+        ) : (
+          <>
+            <p className="text-sm mb-3" style={{ color:sub }}>{t.feedbackBody}</p>
+            <textarea value={text} onChange={(e)=>setText(e.target.value)} rows={4} placeholder={t.feedbackPlaceholder}
+              className="w-full rounded-2xl px-3 py-2.5 text-sm outline-none mb-2 resize-none"
+              style={{ background:chip, color:fg, border:`1px solid ${div}` }}/>
+            {err && <p className="text-xs mb-2" style={{ color:OOS_C }}>{t.feedbackError}</p>}
+            <button onClick={send} disabled={!text.trim() || busy}
+              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
+              style={{ background:RED, color:RED_FG, opacity:(!text.trim() || busy) ? 0.5 : 1 }}>
+              <Send size={15}/>{busy ? t.loading : t.feedbackSend}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Dashboard ─────────────────────────────────────────────────────────────────
 
 function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, onClear, onStatus }: {
@@ -566,6 +667,8 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
   const [toast, setToast]       = useState<string | null>(null);
   const [booking, setBooking]   = useState<Machine | null>(null);
   const [adminOpen, setAdminOpen] = useState(false);
+  const [favPicker, setFavPicker] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
 
   const fg   = "var(--foreground)";
   const sub  = "var(--muted-foreground)";
@@ -624,6 +727,11 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
           onClose={()=>setBooking(null)}
         />
       )}
+      {favPicker && (
+        <FavPicker lang={lang} favs={favs} onClose={()=>setFavPicker(false)}
+          onAdd={(d, s)=>{ if (!favs.some((f)=>f.day===d && f.slot===s)) onToggleFav(d, s); setFavPicker(false); }}/>
+      )}
+      {feedbackOpen && <FeedbackModal lang={lang} room={roomNumber} onClose={()=>setFeedbackOpen(false)}/>}
 
       {/* Header */}
       <div className="px-5 pt-6 pb-5">
@@ -729,7 +837,14 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
       */}
       {/* Preferiti */}
       <section className="px-5 mb-4">
-        <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.favorites}</p>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[11px] font-mono tracking-widest uppercase" style={{ color:sub }}>{t.favorites}</p>
+          <button onClick={()=>setFavPicker(true)}
+            className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-all active:scale-95"
+            style={{ background:`color-mix(in srgb, var(--primary) 12%, transparent)`, color:RED }}>
+            <Plus size={12}/>{t.addFav}
+          </button>
+        </div>
         <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
           {favs.length === 0 ? (
             <div className="flex items-start gap-3 px-4 py-3">
@@ -783,9 +898,10 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
             const dm = dryers.find((m) => m.label === L);
             return (
               <div key={L} className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
-                <div className="px-4 py-1.5 flex items-center border-b"
-                  style={{ borderColor:div, background:`color-mix(in srgb, var(--primary) 6%, transparent)` }}>
-                  <span className="text-xs font-mono font-bold tracking-[0.2em]" style={{ color:RED }}>{L}</span>
+                <div className="px-4 py-2 flex items-center gap-2 border-b"
+                  style={{ borderColor:div, background:"var(--card)" }}>
+                  <span className="size-1.5 rounded-full" style={{ background:RED }}/>
+                  <span className="text-xs font-mono font-bold tracking-[0.2em]" style={{ color:fg }}>{L}</span>
                 </div>
                 {wm && <MachineRow key={wm.id} machine={wm} lang={lang} groupLabel={t.washer}
                   isLast={false} divColor={div} onBook={() => setBooking(wm)}/>}
@@ -823,8 +939,8 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
         </div>
       </section>
 
-      {/* Admin trigger */}
-      <div className="px-5 pt-3 pb-1">
+      {/* Admin + Feedback */}
+      <div className="px-5 pt-3 pb-1 flex flex-col gap-2">
         <button
           onClick={() => setAdminOpen(true)}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] border"
@@ -832,10 +948,20 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
           <Wrench size={14}/>
           {t.reportOos}
         </button>
+        <button
+          onClick={() => setFeedbackOpen(true)}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] border"
+          style={{ background: "var(--secondary)", color:sub, borderColor: "var(--border)" }}>
+          <MessageSquare size={14}/>
+          {t.feedback}
+        </button>
       </div>
 
       </div>{/* ── fine colonna 2 (macchine) ── */}
       </div>{/* ── fine griglia desktop ── */}
+
+      {/* Versione */}
+      <p className="text-center text-[10px] font-mono mt-4" style={{ color: sub }}>v. {APP_VERSION} (beta)</p>
     </div>
   );
 }
@@ -853,34 +979,34 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
   const dotColor = isOOO ? OOS_C : isFree ? GREEN : YELLOW;
   const rowBg = isFree ? `color-mix(in srgb, ${GREEN} 6%, transparent)` : "transparent";
 
+  const statusText = isFree ? t.free : isInUse ? `${t.room} ${machine.room}` : t.oos;
+  const statusColor = isFree ? GREEN : isOOO ? OOS_C : fg;
+
   return (
     <div style={{ borderBottom:isLast?"none":`1px solid ${divColor}`, background:rowBg }}>
-      <div className="flex items-center gap-3 px-4 py-3">
-        {/* Dot + icona + etichetta (lettera, oppure nome tipo se raggruppato) */}
-        <div className={`flex items-center gap-2.5 shrink-0 ${groupLabel ? "w-32" : "w-16"}`}>
+      <div className="flex items-center gap-3 px-4 py-2.5">
+        {/* Dot + icona */}
+        <div className="flex items-center gap-2.5 shrink-0">
           <span className="size-2 rounded-full shrink-0" style={{ background:dotColor }}/>
-          <div className="flex items-center gap-1.5 min-w-0" style={{ color:fg }}>
-            {machine.type==="washer" ? <WashingMachine size={16} className="shrink-0"/> : <Wind size={15} className="shrink-0"/>}
-            {groupLabel
-              ? <span className="text-xs font-semibold truncate">{groupLabel}</span>
-              : <span className="text-base font-mono font-bold">{machine.label}</span>}
-          </div>
+          {machine.type==="washer" ? <WashingMachine size={18}/> : <Wind size={17}/>}
         </div>
 
-        {/* Status */}
+        {/* Etichetta + stato, impilati (così non si accavallano su mobile) */}
         <div className="flex-1 min-w-0">
-          {isFree  && <p className="text-sm font-semibold" style={{ color:GREEN }}>{t.free}</p>}
-          {isInUse && <p className="text-sm font-medium"   style={{ color:fg }}>{t.room} {machine.room}</p>}
-          {isOOO   && <p className="text-sm font-medium"   style={{ color:OOS_C }}>{t.oos}</p>}
+          {groupLabel
+            ? <p className="text-sm font-semibold leading-tight truncate" style={{ color:fg }}>{groupLabel}</p>
+            : <p className="text-base font-mono font-bold leading-tight" style={{ color:fg }}>{machine.label}</p>}
+          <p className="text-xs font-medium leading-tight truncate" style={{ color:statusColor }}>{statusText}</p>
         </div>
 
-        {/* Actions */}
+        {/* Azioni */}
         <div className="flex items-center gap-2 shrink-0">
           {machine.prevRoom && (
-            <span className="flex items-center gap-1 rounded-xl px-2.5 py-2 text-xs font-semibold"
-              style={{ background:`color-mix(in srgb, ${ORANGE} 12%, transparent)`, color:ORANGE }}>
-              <History size={13}/>
-              <span className="text-[11px] font-mono">{machine.prevRoom}</span>
+            <span className="flex items-center gap-1 rounded-xl px-2 py-1.5"
+              style={{ background:`color-mix(in srgb, ${ORANGE} 12%, transparent)`, color:ORANGE }}
+              title={`${t.lgPrev}: ${machine.prevRoom}`}>
+              <History size={13} className="shrink-0"/>
+              <span className="text-[11px] font-mono font-semibold">{machine.prevRoom}</span>
             </span>
           )}
           {isFree && machine.type==="washer" && (
@@ -1418,6 +1544,8 @@ function LoginScreen({ lang, onLogin }: { theme?: Theme; lang: Lang; onLogin: (r
         style={{ borderColor:"var(--border)", color:sub, background:"transparent" }}>
         {t.skip}
       </button>
+
+      <p className="text-[10px] font-mono mt-6" style={{ color:sub }}>v. {APP_VERSION} (beta)</p>
     </div>
   );
 }
@@ -1459,11 +1587,12 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
-function DesktopSidebar({ active, onChange, lang, theme, roomNumber, showNav, facility, onFacility, onChangeRoom, onToggleLang, onToggleTheme }: {
+function DesktopSidebar({ active, onChange, lang, theme, roomNumber, showNav, facility, onFacility, onChangeRoom, onToggleLang, onToggleTheme, onRefresh, refreshing }: {
   active: number; onChange: (i: number) => void; lang: Lang; theme: Theme;
   roomNumber: string | null; showNav: boolean;
   facility: Facility; onFacility: (f: Facility) => void;
   onChangeRoom: () => void; onToggleLang: () => void; onToggleTheme: () => void;
+  onRefresh: () => void; refreshing: boolean;
 }) {
   const t   = T[lang];
   const fg  = "var(--foreground)";
@@ -1538,7 +1667,13 @@ function DesktopSidebar({ active, onChange, lang, theme, roomNumber, showNav, fa
             style={{ background:"var(--secondary)", color:sub }}>
             {theme==="dark" ? <Sun size={15}/> : <Moon size={15}/>}
           </button>
+          <button onClick={onRefresh} disabled={refreshing} aria-label="Refresh"
+            className="flex-1 rounded-xl py-2 flex items-center justify-center transition-colors"
+            style={{ background:"var(--secondary)", color:sub }}>
+            <RefreshCw size={15} className={refreshing ? "animate-spin-slow" : ""}/>
+          </button>
         </div>
+        <p className="text-center text-[10px] font-mono pt-1" style={{ color:sub }}>v. {APP_VERSION} (beta)</p>
       </div>
     </aside>
   );
@@ -1781,6 +1916,13 @@ export default function App() {
     }
   }, []);
 
+  // Refresh manuale (con feedback visivo di rotazione).
+  const [refreshing, setRefreshing] = useState(false);
+  const doRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try { await refresh(); } finally { setRefreshing(false); }
+  }, [refresh]);
+
   useEffect(() => { refresh(); }, [refresh]);
 
   function chooseRoom(room: string) {
@@ -1855,6 +1997,7 @@ export default function App() {
           onChangeRoom={changeRoom}
           onToggleLang={()=>setLang(l=>l==="it"?"en":"it")}
           onToggleTheme={()=>setTheme(theme === "dark" ? "light" : "dark")}
+          onRefresh={doRefresh} refreshing={refreshing}
         />
         <main className="flex-1 h-dvh min-h-0 flex flex-col overflow-y-auto overscroll-contain">
           <div className="mx-auto w-full max-w-6xl flex-1 min-h-0 flex flex-col px-4 lg:px-6">
@@ -1887,6 +2030,12 @@ export default function App() {
             <div className="w-3 h-3 rounded-full border" style={{ background:"var(--background)", borderColor:"var(--border)" }}/>
           </div>
           <div className="flex items-center gap-1.5">
+            {showChrome && (
+              <button onClick={doRefresh} disabled={refreshing} aria-label="Refresh"
+                className="p-1.5 rounded-lg" style={{ color:"var(--muted-foreground)" }}>
+                <RefreshCw size={13} className={refreshing ? "animate-spin-slow" : ""}/>
+              </button>
+            )}
             <InstallButton lang={lang} />
             <ReminderBell room={roomNumber} lang={lang} />
             <button onClick={()=>setLang(l=>l==="it"?"en":"it")}
