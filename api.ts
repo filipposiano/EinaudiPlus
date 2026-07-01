@@ -7,13 +7,13 @@ const TOKEN = process.env.REACT_APP_SECRET_TOKEN;
 export type WeekData = Record<string, Record<string, Record<string, string>>>;
 export type StatusData = Record<string, string>;
 
-// Ottiene i dati iniziali (Snapshot)
+// Ottiene i dati iniziali (Snapshot) 
 export async function getSnapshot(): Promise<{ week: WeekData; status: StatusData }> {
   const res = await fetch(`${API_URL}?token=${TOKEN}`);
   if (!res.ok) throw new Error("Errore di rete durante il caricamento");
   
   const data = await res.json();
-  if (!data.ok) throw new Error("Errore restituito dal server");
+  if (!data.ok) throw new Error("Errore restituito dal server.");
   
   return { 
     week: data.week || {}, 
