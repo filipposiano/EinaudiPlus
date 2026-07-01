@@ -23,8 +23,7 @@ export interface RoomBooking {
 }
 
 // URL /exec delle Web App Apps Script (una per sala).
-declare const process: { env: { REACT_APP_SECRET_TOKEN?: string } };
-const TOKEN = process.env.REACT_APP_SECRET_TOKEN || "";
+const TOKEN = import.meta.env.VITE_SECRET_TOKEN;
 
 const ENDPOINTS: Record<RoomKind, { url: string; token: string }> = {
   cinema: { url: "https://script.google.com/macros/s/AKfycbzxr9JEZ5jPAhL0sfPYHwQ61KtpkROZJOSBhF7pn-k2b9Bc5-B4yQf5JBgw_Pox1fSY/exec", token: TOKEN},

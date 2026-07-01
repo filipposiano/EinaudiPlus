@@ -1,8 +1,7 @@
 // api.ts
 
-declare const process: { env: { REACT_APP_SECRET_TOKEN?: string } };
 const API_URL = "https://script.google.com/macros/s/AKfycbwDIvaEQB0hbrrXpXVwA94BqkmfBRQQy1ECTP9hvVxwrsXwE9D0opaZFOzBDsN1jgJoMw/exec";
-const TOKEN = process.env.REACT_APP_SECRET_TOKEN;
+const TOKEN = import.meta.env.VITE_SECRET_TOKEN;
 
 export type WeekData = Record<string, Record<string, Record<string, string>>>;
 export type StatusData = Record<string, string>;
