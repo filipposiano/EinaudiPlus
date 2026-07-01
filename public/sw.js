@@ -18,6 +18,10 @@ self.addEventListener("push", (event) => {
     tag: data.tag || "laundry-reminder",
     renotify: true,
     data: { url: data.url || "/" },
+    
+    // AGGIUNTE PER RISOLVERE IL PROBLEMA DEL SILENZIO:
+    vibrate: [200, 100, 200, 100, 200, 100, 200], // Pattern di vibrazione (vibra-pausa-vibra...)
+    requireInteraction: true // Evita che la notifica sparisca da sola dopo pochi secondi
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
