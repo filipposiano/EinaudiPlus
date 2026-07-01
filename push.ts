@@ -10,7 +10,7 @@ import * as api from "./api";
 // Chiave VAPID PUBBLICA (non è un segreto: può stare nel frontend).
 // La privata corrispondente va impostata SOLO come variabile d'ambiente su Vercel.
 const VAPID_PUBLIC_KEY =
-  "BLG2P3_gpSsGhGi9vrVKD_Kr2-Ql6S-8bh3xDaB8s5U-aA3o59LMtPjRAoww6DzbJ_Gkl7So00O_o0DOQPSuVWg";
+  "BFhjaxEm1slqol4X1nJ6-KTtPmA7lK_K8f5tsA6BpoX3mpNlNr8eGR5qEuRM81ofyKM5ooS0iQzCvr6OcAATdQo";
 
 export type ReminderState = "unknown" | "unsupported" | "denied" | "on" | "off";
 
