@@ -1,6 +1,6 @@
 // api.ts
 
-const API_URL = "https://script.google.com/macros/s/AKfycbzjbXMoG5fvS_VaWdZ-8Gde7PQebS2j7ShiIHv8rlXz660XaJuTcGeAPKtwtbkYJYNiRA/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbwDIvaEQB0hbrrXpXVwA94BqkmfBRQQy1ECTP9hvVxwrsXwE9D0opaZFOzBDsN1jgJoMw/exec";
 const TOKEN = "filipposiano";
 
 export type WeekData = Record<string, Record<string, Record<string, string>>>;
