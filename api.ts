@@ -6,13 +6,29 @@ const TOKEN = import.meta.env.VITE_SECRET_TOKEN;
 export type WeekData = Record<string, Record<string, Record<string, string>>>;
 export type StatusData = Record<string, string>;
 
+const NEW_API_URL: string = "https://script.google.com/macros/s/AKfycbxErpUn1wYL0af9wtAgqdGYLr-zL8aKvs5BsIoKWu85YIuwfPHc4sKFnVAehN1F8Les9Q/exec"; // DA COMPILARE: inserisci qui l'URL della nuova Web App per camere < 100
+
+function getApiUrl() {
+  try {
+    const r = localStorage.getItem("laundryhub.room");
+    if (!r) return API_URL;
+    const match = r.match(/^(\d+)/);
+    const num = match ? parseInt(match[1], 10) : 0;
+    if (num > 0 && num < 100 && NEW_API_URL !== "") {
+      return NEW_API_URL;
+    }
+  } catch (e) {}
+  return API_URL;
+}
+
 // Ottiene i dati iniziali (Snapshot) 
 export async function getSnapshot(): Promise<{ week: WeekData; status: StatusData }> {
-  const res = await fetch(`${API_URL}?token=${TOKEN}`);
+  const url = getApiUrl();
+  const res = await fetch(`${url}?token=${TOKEN}`);
   if (!res.ok) throw new Error("Errore di rete durante il caricamento");
   
   const data = await res.json();
-  if (!data.ok) throw new Error("Errore restituito dal server.");
+  if (!data.ok) throw new Error(data.error || "Errore restituito dal server.");
   
   return { 
     week: data.week || {}, 
@@ -26,7 +42,8 @@ export async function getSnapshot(): Promise<{ week: WeekData; status: StatusDat
 // non dalla query string (a differenza del doGet). Vanno quindi inseriti nel body,
 // altrimenti la scrittura viene rifiutata con {ok:false, error:"unauthorized"}.
 async function postAction(action: string, payload: any) {
-  const res = await fetch(API_URL, {
+  const url = getApiUrl();
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "text/plain;charset=utf-8",

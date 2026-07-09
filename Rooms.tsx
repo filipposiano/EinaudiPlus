@@ -247,6 +247,8 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   const [toast, setToast]       = useState<string | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [busy, setBusy]         = useState(false);
+  const [forOther, setForOther]   = useState(false);
+  const [otherRoom, setOtherRoom] = useState("");
 
   const refresh = useCallback(async () => {
     try { setBookings(await roomsApi.getRoomBookings(room)); setError(false); }
@@ -260,8 +262,17 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   const dayBookings = bookings.filter((b) => b.day === selDay).sort((a, b) => a.start - b.start);
 
   async function submit() {
-    const who = myRoom || name.trim();
+    const who = myRoom ? (forOther && otherRoom.trim() ? otherRoom.trim() : myRoom) : name.trim();
     if (!who) { setToast(t.needName); return; }
+    
+    // Validazione regex
+    if (who !== name.trim()) {
+      const regexCamera = /^\d+(?:-?[a-bA-B])?$/;
+      if (!regexCamera.test(who)) {
+        setToast("Formato camera non valido!"); return;
+      }
+    }
+    
     if (end <= start) { setToast(t.badRange); return; }
     if (roomsApi.hasOverlap(bookings, selDay, start, end)) { setToast(t.overlap); return; }
     setBusy(true);
@@ -364,11 +375,20 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
 
           {myRoom ? (
             <div className="block mb-3">
-              <span className="text-[11px]" style={{ color: sub }}>{t.roomLabel}</span>
-              <div className="w-full mt-1 rounded-xl px-3 py-2.5 text-sm font-mono font-semibold"
-                style={{ background: chip, color: fg, border: `1px solid ${div}` }}>
-                {t.roomLabel} {myRoom}
-              </div>
+              <label className="flex items-center gap-2 mb-2 cursor-pointer">
+                <input type="checkbox" checked={forOther} onChange={(e) => setForOther(e.target.checked)} />
+                <span className="text-[11px]" style={{ color: sub }}>Prenota per un'altra camera</span>
+              </label>
+              {forOther ? (
+                <input value={otherRoom} onChange={(e) => setOtherRoom(e.target.value.toUpperCase())} placeholder="es. 112-A"
+                  className="w-full mt-1 rounded-xl px-3 py-2.5 text-sm font-mono outline-none"
+                  style={{ background: chip, color: fg, border: `1px solid ${div}` }} />
+              ) : (
+                <div className="w-full mt-1 rounded-xl px-3 py-2.5 text-sm font-mono font-semibold"
+                  style={{ background: chip, color: fg, border: `1px solid ${div}` }}>
+                  {t.roomLabel} {myRoom}
+                </div>
+              )}
             </div>
           ) : (
             <label className="block mb-3">

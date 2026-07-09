@@ -62,7 +62,7 @@ const TIME_SLOTS = buildSlots();
 const WEEKLY_QUOTA = 2;
 
 // Versione app (mostrata in modo discreto nella UI)
-const APP_VERSION = "0.2.1";
+const APP_VERSION = "0.3.0";
 
 // ─── "Adesso": giorno e slot correnti calcolati dall'orologio ──────────────────
 
@@ -313,7 +313,10 @@ function prevRef(day: number, slot: number) {
   if (slot > 0) return { day, slot: slot - 1 };
   return { day: (day + 6) % 7, slot: N_SLOTS - 1 };
 }
-function deriveMachines(week: WeekData, status: StatusData, day: number, slot: number): Machine[] {
+function deriveMachines(week: WeekData, status: StatusData, day: number, slot: number, roomNumber: string | null): Machine[] {
+  const num = parseInt(roomNumber?.match(/^(\d+)/)?.[1] || "0", 10);
+  const isSecond = num > 0 && num < 100;
+  
   const p  = prevRef(day, slot);
   const pp = prevRef(p.day, p.slot);
   const mk = (id: string, type: MachineType, room?: string, prevRoom?: string): Machine => {
@@ -321,11 +324,14 @@ function deriveMachines(week: WeekData, status: StatusData, day: number, slot: n
     return { id, label: id[2], type, status: st, room, prevRoom };
   };
   const out: Machine[] = [];
-  for (const L of ["A","B","C"]) {
+  const washersList = isSecond ? ["A"] : ["A","B","C"];
+  const dryersList  = isSecond ? [] : ["A","B","C"];
+
+  for (const L of washersList) {
     const wid = "W-" + L;
     out.push(mk(wid, "washer", bookingAt(week, day, slot, wid), bookingAt(week, p.day, p.slot, wid)));
   }
-  for (const L of ["A","B","C"]) {
+  for (const L of dryersList) {
     const did = "D-" + L, wid = "W-" + L;
     out.push(mk(did, "dryer", bookingAt(week, p.day, p.slot, wid), bookingAt(week, pp.day, pp.slot, wid)));
   }
@@ -427,7 +433,7 @@ function BookModal({ target, bookings, myRoom, lang, onConfirm, onClose }: {
           <>
             <p className="text-sm font-semibold mb-3" style={{ color:fg }}>{t.chooseFree}</p>
             <div className="flex gap-3 mb-4">
-              {["W-A","W-B","W-C"].map((id) => {
+              {((parseInt(myRoom?.match(/^(\d+)/)?.[1] || "0", 10) > 0 && parseInt(myRoom?.match(/^(\d+)/)?.[1] || "0", 10) < 100) ? ["W-A"] : ["W-A","W-B","W-C"]).map((id) => {
                 const isTaken = taken.has(id);
                 return (
                   <button key={id} disabled={isTaken}
@@ -746,9 +752,18 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
   const surf = "var(--card)";
   const div  = "var(--border)";
 
-  useEffect(() => { const id = setInterval(()=>setNow(new Date()),1000); return ()=>clearInterval(id); },[]);
+  useEffect(() => {
+    const id = setInterval(() => {
+      const n = new Date();
+      setNow(n);
+      if (slotEndDate(CUR_SLOT).getTime() - n.getTime() <= 0) {
+        window.location.reload();
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
 
-  const machines = deriveMachines(week, status, TODAY_DOW, CUR_SLOT);
+  const machines = deriveMachines(week, status, TODAY_DOW, CUR_SLOT, roomNumber);
 
   async function confirmBooking(m: Machine, room: string) {
     try { await onBook(TODAY_DOW, CUR_SLOT, m.id, room); setBooking(null); setToast(t.booked(m.label)); }
@@ -763,8 +778,11 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
   const activeBookings = myBookings.filter((b) => !isPastBooking(b));
 
   // Prima lavatrice libera in un dato (giorno, slot)
-  const firstFreeWasherAt = (day: number, s: number): string | null =>
-    ["W-A","W-B","W-C"].find((wid) => status[wid] !== "oos" && !week[day]?.[s]?.[wid]) ?? null;
+  const firstFreeWasherAt = (day: number, s: number): string | null => {
+    const num = parseInt(roomNumber?.match(/^(\d+)/)?.[1] || "0", 10);
+    const washIds = (num > 0 && num < 100) ? ["W-A"] : ["W-A","W-B","W-C"];
+    return washIds.find((wid) => status[wid] !== "oos" && !week[day]?.[s]?.[wid]) ?? null;
+  };
 
   // Prenota una lavatrice scelta a mano (dal modale dei preferiti).
   // Rilancia l'errore così il modale resta aperto e lo mostra.
@@ -788,7 +806,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
   return (
     <div className="flex flex-col pb-6">
       {toast     && <Toast msg={toast} onClose={()=>setToast(null)}/>}
-      {adminOpen && <AdminSheet lang={lang} status={status} onStatus={onStatus} onClose={()=>setAdminOpen(false)}/>}
+      {adminOpen && <AdminSheet lang={lang} status={status} onStatus={onStatus} onClose={()=>setAdminOpen(false)} roomNumber={roomNumber}/>}
       {booking && (
         <BookModal
           target={{ slotIdx:CUR_SLOT, machineId:booking.id }}
@@ -973,7 +991,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
       <section className="px-5 mb-4">
         <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.machines}</p>
         <div className="flex flex-col gap-3">
-          {["A","B","C"].map((L) => {
+          {((parseInt(roomNumber?.match(/^(\d+)/)?.[1] || "0", 10) > 0 && parseInt(roomNumber?.match(/^(\d+)/)?.[1] || "0", 10) < 100) ? ["A"] : ["A","B","C"]).map((L) => {
             const wm = washers.find((m) => m.label === L);
             const dm = dryers.find((m) => m.label === L);
             return (
@@ -1123,6 +1141,9 @@ function DaySchedule({ lang, week, roomNumber: sessionRoom, favs, onToggleFav, o
   const div = "var(--border)";
   const dayData = week[selDay] ?? {};
 
+  const num = parseInt(sessionRoom?.match(/^(\d+)/)?.[1] || "0", 10);
+  const washIds = (num > 0 && num < 100) ? ["W-A"] : ["W-A","W-B","W-C"];
+
   async function confirmBooking(room: string) {
     if (!target) return;
     const ti = target;
@@ -1175,7 +1196,7 @@ function DaySchedule({ lang, week, roomNumber: sessionRoom, favs, onToggleFav, o
 
       <div className="flex items-center px-5 py-2 border-b shrink-0" style={{ background:hdr, borderColor:div }}>
         <div className="w-[56px] shrink-0"/>
-        {["W-A","W-B","W-C"].map((id)=>(
+        {washIds.map((id)=>(
           <div key={id} className="flex-1 flex flex-col items-center gap-0.5">
             <WashingMachine size={11} style={{ color:sub }}/>
             <span className="text-[9px] font-mono" style={{ color:sub }}>Lav. {id[2]}</span>
@@ -1204,7 +1225,7 @@ function DaySchedule({ lang, week, roomNumber: sessionRoom, favs, onToggleFav, o
                   <Star size={11} style={{ color:isFav?ORANGE:sub, fill:isFav?ORANGE:"none", opacity:isFav?1:0.45 }}/>
                 </button>
               </div>
-              {["W-A","W-B","W-C"].map((mid) => {
+              {washIds.map((mid) => {
                 const room = dayData[si]?.[mid];
                 const isMe = !!sessionRoom && room === sessionRoom;
                 return (
@@ -1244,11 +1265,12 @@ function DaySchedule({ lang, week, roomNumber: sessionRoom, favs, onToggleFav, o
 
 interface SlotDetailTarget { dayIdx: number; slotIdx: number; }
 
-function SlotDetailSheet({ target, bookings, lang, onBook, onModify, onDelete, onClose }: {
+function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify, onDelete, onClose }: {
   target: SlotDetailTarget;
   bookings: WeekData;
   isDark: boolean;
   lang: Lang;
+  roomNumber: string | null;
   onBook: (machineId: string) => void;
   onModify: (machineId: string, currentRoom: string) => void;
   onDelete: (machineId: string) => void;
@@ -1263,6 +1285,9 @@ function SlotDetailSheet({ target, bookings, lang, onBook, onModify, onDelete, o
   const sub      = "var(--muted-foreground)";
   const chip     = "var(--secondary)";
   const divC     = "var(--border)";
+
+  const num = parseInt(roomNumber?.match(/^(\d+)/)?.[1] || "0", 10);
+  const washIds = (num > 0 && num < 100) ? ["W-A"] : ["W-A","W-B","W-C"];
 
   return (
     <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.65)" }} onClick={onClose}>
@@ -1283,7 +1308,7 @@ function SlotDetailSheet({ target, bookings, lang, onBook, onModify, onDelete, o
         </div>
 
         <div className="px-6 pt-4 flex flex-col gap-2.5">
-          {["W-A","W-B","W-C"].map((mid) => {
+          {washIds.map((mid) => {
             const room = slotData[mid];
             const lbl  = mid[2];
             return (
@@ -1394,6 +1419,7 @@ function WeekOverview({ lang, week, roomNumber: sessionRoom, onBook, onClear }: 
           bookings={week}
           isDark={false}
           lang={lang}
+          roomNumber={sessionRoom}
           onBook={(mid)=>{ setTarget({ dayIdx:slotDetail.dayIdx, slotIdx:slotDetail.slotIdx, machineId:mid }); setSlotDetail(null); }}
           onModify={(mid, room)=>{ setModTarget({ dayIdx:slotDetail.dayIdx, slotIdx:slotDetail.slotIdx, machineId:mid, currentRoom:room }); setSlotDetail(null); }}
           onDelete={(mid)=>{ deleteFromDetail(slotDetail.dayIdx, slotDetail.slotIdx, mid); }}
@@ -1477,8 +1503,8 @@ function WeekOverview({ lang, week, roomNumber: sessionRoom, onBook, onClear }: 
 
 // ─── Admin sheet (bottom sheet dalla dashboard) ───────────────────────────────
 
-function AdminSheet({ lang, status, onStatus, onClose }: {
-  theme?: Theme; lang: Lang; status: StatusData;
+function AdminSheet({ lang, status, onStatus, onClose, roomNumber }: {
+  theme?: Theme; lang: Lang; status: StatusData; roomNumber: string | null;
   onStatus: (machine:string, oos:boolean)=>Promise<void>; onClose: () => void;
 }) {
   const t = T[lang];
@@ -1492,8 +1518,11 @@ function AdminSheet({ lang, status, onStatus, onClose }: {
   const mk = (id: string, type: MachineType): Machine => ({
     id, label: id[2], type, status: status[id] === "oos" ? "out-of-order" : "available",
   });
-  const washers: Machine[] = ["W-A","W-B","W-C"].map((id)=>mk(id,"washer"));
-  const dryers:  Machine[] = ["D-A","D-B","D-C"].map((id)=>mk(id,"dryer"));
+  
+  const num = parseInt(roomNumber?.match(/^(\d+)/)?.[1] || "0", 10);
+  const isSecond = num > 0 && num < 100;
+  const washers: Machine[] = (isSecond ? ["W-A"] : ["W-A","W-B","W-C"]).map((id)=>mk(id,"washer"));
+  const dryers:  Machine[] = (isSecond ? [] : ["D-A","D-B","D-C"]).map((id)=>mk(id,"dryer"));
 
   async function toggle(m: Machine) {
     const goingOos = m.status !== "out-of-order";
@@ -1601,20 +1630,29 @@ function LoginScreen({ lang, onLogin }: { theme?: Theme; lang: Lang; onLogin: (r
         </span>
       </div>
 
-      <div className="grid grid-cols-3 gap-2.5 w-full mb-4">
-        {["1","2","3","4","5","6","7","8","9"].map((k)=>(
-          <button key={k} onClick={()=>room.length<4&&setRoom(room+k)}
+      <div className="grid grid-cols-4 gap-2.5 w-full mb-4">
+        {["1","2","3","A", "4","5","6","B", "7","8","9","-"].map((k)=>(
+          <button key={k} onClick={()=>room.length<6&&setRoom(room+k)}
             className="rounded-2xl h-14 text-xl font-bold transition-all active:scale-95"
             style={{ background:chip, color:fg }}>{k}</button>
         ))}
         <button onClick={()=>setRoom(room.slice(0,-1))}
-          className="rounded-2xl h-14 flex items-center justify-center transition-all active:scale-95"
+          className="rounded-2xl h-14 flex items-center justify-center transition-all active:scale-95 col-span-1"
           style={{ background:chip, color:sub }}><Delete size={20}/></button>
-        <button onClick={()=>room.length<4&&setRoom(room+"0")}
-          className="rounded-2xl h-14 text-xl font-bold transition-all active:scale-95"
+        <button onClick={()=>room.length<6&&setRoom(room+"0")}
+          className="rounded-2xl h-14 text-xl font-bold transition-all active:scale-95 col-span-1"
           style={{ background:chip, color:fg }}>0</button>
-        <button onClick={()=>room.length>0&&onLogin(room)}
-          className="rounded-2xl h-14 text-xl font-bold transition-all active:scale-95 text-white"
+        <button onClick={()=>{
+          if (room.length > 0) {
+            const regexCamera = /^\d+(?:-?[a-bA-B])?$/;
+            if (!regexCamera.test(room)) {
+              alert("Formato non valido. Esempi validi: 112, 21-b, 112A");
+              return;
+            }
+            onLogin(room);
+          }
+        }}
+          className="rounded-2xl h-14 text-xl font-bold transition-all active:scale-95 text-white col-span-2"
           style={{ background:room.length>0?RED:chip, color:room.length>0?RED_FG:sub }}>→</button>
       </div>
 
@@ -2047,6 +2085,7 @@ export default function App() {
     <CenterState>
       <AlertTriangle size={28} style={{ color:OOS_C }}/>
       <p className="text-sm">{t.netError}</p>
+      <p className="text-xs mt-2" style={{ color: "#888", userSelect: "text" }}>{error}</p>
       <button onClick={()=>{ setLoading(true); refresh(); }}
         className="mt-1 rounded-xl px-4 py-2 text-sm font-semibold" style={{ background:RED, color:RED_FG }}>
         {t.retry}
