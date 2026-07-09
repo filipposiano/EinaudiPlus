@@ -16,7 +16,7 @@
 
 /***** CONFIG *****/
 const SHEET_NAME    = 'Foglio1';        // tab gid=0
-const TOKEN         = 'filipposiano';   // stessa stringa usata dall'app e su Vercel
+const TOKEN         = '';   // stessa stringa usata dall'app e su Vercel
 const FIRST_DAY_COL = 3;     // colonna C = Lunedì
 const N_DAYS        = 7;     // C..I = Lun..Dom
 const N_SLOTS       = 19;    // 07:00 -> 06:45, turni da 75'
@@ -77,7 +77,7 @@ function letterIdx_(machine) {
 // scrivere un valore inviato dall'utente (es. la camera) nel foglio.
 function safeCell_(v) {
   let s = String(v == null ? '' : v).trim().slice(0, 20);
-  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+  if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; // Solo per neutralizzare formule
   return s;
 }
 
@@ -157,7 +157,7 @@ function doPost(e) {
       const cur  = String(cell.getValue() || '').trim();
       if (cur && cur !== room)
         return json_({ ok: false, error: 'occupata', by: cur });   // race: già preso da un altro
-      cell.setValue(room);
+      cell.setNumberFormat('@').setValue(room);
       return json_({ ok: true, week: getWeek_(), status: getStatus_() });
     }
 

@@ -1985,7 +1985,7 @@ export default function App() {
     }
   });
   const [lang,   setLang]     = useState<Lang>("it");
-  const [roomNumber, setRoomNumber] = useState<string | null>(() => {
+  const [roomNumber] = useState<string | null>(() => {
     try { return localStorage.getItem("laundryhub.room"); } catch { return null; }
   });
   const [week,   setWeek]     = useState<WeekData>({});
@@ -2047,9 +2047,12 @@ export default function App() {
 
   function chooseRoom(room: string) {
     try { localStorage.setItem("laundryhub.room", room); } catch {}
-    setRoomNumber(room);
+    window.location.reload();
   }
-  function changeRoom() { setRoomNumber(null); }
+  function changeRoom() { 
+    try { localStorage.removeItem("laundryhub.room"); } catch {}
+    window.location.reload(); 
+  }
 
   const handleBook = useCallback(async (day:number, slot:number, machine:string, room:string) => {
     const s = await api.book(day, slot, machine, room); setWeek(s.week); setStatus(s.status);
