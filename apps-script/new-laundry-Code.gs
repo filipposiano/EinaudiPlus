@@ -2,6 +2,7 @@
 // Codice da inserire nel NUOVO foglio (https://docs.google.com/spreadsheets/d/1-s9ZkViZVObAKU8ceDnhvgbzqIJL9wdygvB2KGl-Bj0/edit)
 // Gestisce solo "Lavatrice A" e salva i turni a righe alterne nella Colonna A.
 // Questo script va pubblicato come App Web.
+// v0.3.1 — 3 promemoria push (pre-turno/fine-lavatrice/fine-asciugatura) + fix bug formattazione data camera/persona
 
 const TOKEN = ''; // Deve corrispondere al frontend
 const SHEET_NAME = 'Foglio1'; // Nome del foglio dove inserire i dati
@@ -13,6 +14,7 @@ const SUBS_SHEET   = 'PushSubs';
 const SLOT0_MIN    = 7 * 60;
 const SLOT_LEN     = 75;
 const LEAD_MIN     = 16;
+const CRON_INTERVAL_MIN = 5; // cadenza del trigger sendDueReminders
 
 function getSheet_() {
   var ss = SpreadsheetApp.openById("1-s9ZkViZVObAKU8ceDnhvgbzqIJL9wdygvB2KGl-Bj0");
@@ -24,12 +26,14 @@ function json_(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// Sicurezza + fix bug data: apice singolo iniziale forza l'interpretazione come
+// testo puro, impedendo a Google Sheets di convertire input tipo "19/1" in data.
+function safeCell_(v) {
+  return "'" + String(v == null ? '' : v).trim().slice(0, 20);
+}
+
 // ── GET SNAPSHOT ──
-// Il frontend richiede lo snapshot dell'intera settimana per popolare la griglia.
-// Dato che usiamo un solo giorno (o la logica è che si prenota solo per oggi nel nuovo foglio?), 
-// la richiesta originale non specificava i giorni, ma il frontend EinaudiPlus carica una matrice WeekData[day][slot]['W-A'].
-// Poiché il nuovo foglio ha "turni nella colonna A a righe alterne", assumiamo che si riferisca al giorno corrente (oggi).
-// Ma se l'app carica un'intera settimana, serve restituire almeno la struttura prevista.
+// Restituisce la settimana intera: week[day][slot] = { 'W-A': room }.
 function getWeek_() {
   const sh = getSheet_();
   // Legge colonne A-H (1-8). Colonna A: orari. B: Lun, C: Mar... H: Dom
@@ -77,19 +81,20 @@ function doPost(e) {
 
     if (b.action === 'book') {
       if (b.machine !== 'W-A') return json_({ ok: false, error: 'In questa lavanderia esiste solo la Lavatrice A' });
-      const room = String(b.room || '').trim().slice(0, 20);
+      const room = safeCell_(b.room);
       const row = (b.slot * 2) + 2;
       const col = (b.day !== undefined ? Number(b.day) : ((new Date().getDay() + 6) % 7)) + 2;
       const cell = sh.getRange(row, col);
-      
+
       if (String(cell.getValue() || '').trim() !== '') {
         return json_({ ok: false, error: 'Turno già occupato' });
       }
-      
-      cell.setNumberFormat('@').setValue(room);
+
+      cell.setNumberFormat('@');
+      cell.setValue(room);
       return json_({ ok: true, week: getWeek_(), status: getStatus_() });
     }
-    
+
     if (b.action === 'clear') {
       const row = (b.slot * 2) + 2;
       const col = (b.day !== undefined ? Number(b.day) : ((new Date().getDay() + 6) % 7)) + 2;
@@ -183,6 +188,8 @@ function sendDueReminders() {
   }
 
   var props = PropertiesService.getDocumentProperties();
+  var sentProps = props.getProperties();  // snapshot: 1 lettura invece di una per promemoria
+  var newSent = {};                       // scritture accumulate, flush unico a fine funzione
   var base = mondayBase_(now);
   var toDelete = {};
 
@@ -192,38 +199,55 @@ function sendDueReminders() {
     for (var slStr in slots) {
       var slot = Number(slStr);
       if (slot < 0 || slot >= N_SLOTS) continue;
-      var slotStartMin = SLOT0_MIN + slot * SLOT_LEN;
-      var dt = new Date(base.getTime() + day * 86400000 + slotStartMin * 60000);
-      var minsUntil = (dt.getTime() - now.getTime()) / 60000;
-      if (minsUntil <= 0 || minsUntil > LEAD_MIN) continue;
+      var room = String((slots[slStr] || {})['W-A'] || '').trim();
+      if (!room) continue;
+      var targets = byRoom[room];
+      if (!targets || !targets.length) continue;
 
-      var machines = slots[slStr] || {};
-      for (var machine in machines) {
-        var room = String(machines[machine] || '').trim();
-        if (!room) continue;
-        var targets = byRoom[room];
-        if (!targets || !targets.length) continue;
+      var washerStartMin = SLOT0_MIN + slot * SLOT_LEN;
+      var washerEndMin   = washerStartMin + SLOT_LEN;   // = inizio asciugatrice (regola d'oro)
+      var dryerEndMin    = washerEndMin + SLOT_LEN;
+      var dayBase        = base.getTime() + day * 86400000;
 
-        var sentKey = 'sent_' + Utilities.formatDate(dt, Session.getScriptTimeZone(), 'yyyyMMddHHmm') + '_' + machine;
-        if (props.getProperty(sentKey)) continue;
-
-        var payload = {
+      // before=true: promemoria PRIMA dell'istante (finestra futura, es. 15' prima).
+      // before=false: promemoria ALL'istante appena passato (finestra = cadenza del cron).
+      var reminders = [
+        { dt: new Date(dayBase + washerStartMin * 60000), windowMin: LEAD_MIN, before: true, kind: 'pre',
           title: 'Lavanderia · turno tra poco',
-          body: 'St. ' + room + ' · ' + machine + ' · ' + fmtMinPush_(slotStartMin) + '–' + fmtMinPush_(slotStartMin + SLOT_LEN),
-          url: '/',
-          tag: 'laundry-' + day + '-' + slot + '-' + machine
-        };
+          body: 'St. ' + room + ' · W-A · ' + fmtMinPush_(washerStartMin) + '–' + fmtMinPush_(washerEndMin) },
+        { dt: new Date(dayBase + washerEndMin * 60000), windowMin: CRON_INTERVAL_MIN, before: false, kind: 'washerend',
+          title: 'Lavanderia · lavatrice terminata',
+          body: 'St. ' + room + ' · sposta il bucato in asciugatrice' },
+        { dt: new Date(dayBase + dryerEndMin * 60000), windowMin: CRON_INTERVAL_MIN, before: false, kind: 'dryerend',
+          title: 'Lavanderia · asciugatura terminata',
+          body: 'St. ' + room + ' · ritira il bucato' }
+      ];
 
-        for (var k = 0; k < targets.length; k++) {
-          if (sendOnePush_(targets[k], payload) === 'gone') toDelete[targets[k].endpoint] = true;
-        }
-        props.setProperty(sentKey, '1');
+      for (var r = 0; r < reminders.length; r++) {
+        maybeSendReminder_(reminders[r], now, sentProps, newSent, targets, toDelete, day, slot);
       }
     }
   }
 
+  if (Object.keys(newSent).length) props.setProperties(newSent, false);
   pruneSubs_(sh, toDelete);
   pruneSentKeys_(props, now);
+}
+
+function maybeSendReminder_(r, now, sentProps, newSent, targets, toDelete, day, slot) {
+  var diffMin = r.before
+    ? (r.dt.getTime() - now.getTime()) / 60000
+    : (now.getTime() - r.dt.getTime()) / 60000;
+  if (diffMin <= 0 || diffMin > r.windowMin) return;
+
+  var sentKey = 'sent_' + Utilities.formatDate(r.dt, Session.getScriptTimeZone(), 'yyyyMMddHHmm') + '_' + r.kind;
+  if (sentProps[sentKey] || newSent[sentKey]) return;
+
+  var payload = { title: r.title, body: r.body, url: '/', tag: 'laundry-' + day + '-' + slot + '-' + r.kind };
+  for (var k = 0; k < targets.length; k++) {
+    if (sendOnePush_(targets[k], payload) === 'gone') toDelete[targets[k].endpoint] = true;
+  }
+  newSent[sentKey] = '1';
 }
 
 function sendOnePush_(sub, payload) {
