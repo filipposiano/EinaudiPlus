@@ -5,13 +5,19 @@ import {
   LayoutGrid, Delete, X, Wrench, RotateCcw, Loader2, Star,
   History, Timer, Trash2, Film, Music,
   Bell, BellRing, Download, Share, Menu,
-  RefreshCw, MessageSquare, Send,
+  RefreshCw, MessageSquare, Send, Eye, LogOut,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
 import RoomView from "./Rooms";
+import AccessibilityPanel from "./AccessibilityPanel";
+import { loadPrefs, savePrefs, applyToDOM, type AccessibilityPrefs } from "./statusConfig";
 
 type Facility = "laundry" | "cinema" | "music";
+
+// Preferenze accessibilità a livello di modulo — lette da tutti i componenti,
+// aggiornate da App.handleAccessibilityChange. Evita il prop-drilling profondo.
+let accessibilityPrefs: AccessibilityPrefs = loadPrefs();
 
 // ─── Icona lavatrice ───────────────────────────────────────────────────────────
 function WashingMachine({ size = 16, style, className }: { size?: number; style?: React.CSSProperties; className?: string }) {
@@ -62,7 +68,7 @@ const TIME_SLOTS = buildSlots();
 const WEEKLY_QUOTA = 2;
 
 // Versione app (mostrata in modo discreto nella UI)
-const APP_VERSION = "0.3.0";
+const APP_VERSION = "0.4.0";
 
 // ─── "Adesso": giorno e slot correnti calcolati dall'orologio ──────────────────
 
@@ -98,10 +104,10 @@ const monShort = (i: number, lang: Lang) => MON_SHORT[lang][WEEK_DATES[i].getMon
 
 const RED    = "var(--primary)";
 const RED_FG = "var(--primary-foreground)";
-const YELLOW = "#eab308";
+const YELLOW = "var(--status-inuse)";
 const ORANGE = "#f59e0b";
-const OOS_C  = "var(--destructive)";
-const GREEN  = "#22c55e";
+const OOS_C  = "var(--status-oos)";
+const GREEN  = "var(--status-free)";
 
 // ─── i18n ─────────────────────────────────────────────────────────────────────
 
@@ -1016,18 +1022,20 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
         <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.howItWorks}</p>
         <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
           {[
-            { dot:GREEN,  name:t.lgFree,  desc:t.lgFreeD },
-            { dot:YELLOW, name:t.lgInUse, desc:t.lgInUseD(TIME_SLOTS[CUR_SLOT].end) },
-            { dot:OOS_C,  name:t.lgOos,   desc:t.lgOosD },
-            { icon:true,  name:t.lgPrev,  desc:t.lgPrevD },
-          ].map(({ dot, icon, name, desc }, i, arr) => (
+            { dot:GREEN,  statusKey:"free" as const,  name:t.lgFree,  desc:t.lgFreeD },
+            { dot:YELLOW, statusKey:"inuse" as const, name:t.lgInUse, desc:t.lgInUseD(TIME_SLOTS[CUR_SLOT].end) },
+            { dot:OOS_C,  statusKey:"oos" as const,   name:t.lgOos,   desc:t.lgOosD },
+            { icon:true,  statusKey:undefined,         name:t.lgPrev,  desc:t.lgPrevD },
+          ].map(({ dot, icon, statusKey, name, desc }, i, arr) => (
             <div key={name} className="px-4 py-3"
               style={{ borderBottom: i < arr.length - 1 ? `1px solid ${div}` : "none" }}>
               {/* Colore/icona + nome stato sopra */}
               <div className="flex items-center gap-2 mb-1">
                 {icon
                   ? <History size={13} className="shrink-0" style={{ color:ORANGE }}/>
-                  : <span className="size-2.5 rounded-full shrink-0" style={{ background:dot }}/>}
+                  : statusKey && accessibilityPrefs.icons[statusKey] !== "●"
+                    ? <span className="shrink-0 text-[13px] leading-none" style={{ color:dot }}>{accessibilityPrefs.icons[statusKey]}</span>
+                    : <span className="size-2.5 rounded-full shrink-0" style={{ background:dot }}/>}
                 <p className="text-xs font-semibold" style={{ color: fg }}>{name}</p>
               </div>
               {/* Spiegazione in grigio chiaro, sotto al colore */}
@@ -1083,9 +1091,15 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
   return (
     <div style={{ borderBottom:isLast?"none":`1px solid ${divColor}`, background:rowBg }}>
       <div className="flex items-center gap-3 px-4 py-2.5">
-        {/* Dot + icona */}
+        {/* Dot/icona stato + icona macchina */}
         <div className="flex items-center gap-2.5 shrink-0">
-          <span className="size-2 rounded-full shrink-0" style={{ background:dotColor }}/>
+          {(() => {
+            const sk = isOOO ? "oos" : isFree ? "free" : "inuse";
+            const ci = accessibilityPrefs.icons[sk as "free"|"inuse"|"oos"];
+            return ci !== "●"
+              ? <span className="shrink-0 text-[11px] leading-none" style={{ color:dotColor }}>{ci}</span>
+              : <span className="size-2 rounded-full shrink-0" style={{ background:dotColor }}/>;
+          })()}
           {machine.type==="washer" ? <WashingMachine size={18}/> : <Wind size={17}/>}
         </div>
 
@@ -1705,12 +1719,13 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
-function DesktopSidebar({ active, onChange, lang, theme, roomNumber, showNav, facility, onFacility, onChangeRoom, onToggleLang, onToggleTheme, onRefresh, refreshing }: {
+function DesktopSidebar({ active, onChange, lang, theme, roomNumber, showNav, facility, onFacility, onChangeRoom, onToggleLang, onToggleTheme, onRefresh, refreshing, onAccessibility }: {
   active: number; onChange: (i: number) => void; lang: Lang; theme: Theme;
   roomNumber: string | null; showNav: boolean;
   facility: Facility; onFacility: (f: Facility) => void;
   onChangeRoom: () => void; onToggleLang: () => void; onToggleTheme: () => void;
   onRefresh: () => void; refreshing: boolean;
+  onAccessibility: () => void;
 }) {
   const t   = T[lang];
   const fg  = "var(--foreground)";
@@ -1771,7 +1786,7 @@ function DesktopSidebar({ active, onChange, lang, theme, roomNumber, showNav, fa
             className="flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors desk-nav"
             style={{ color:fg }}>
             <span className="font-mono">{roomNumber ? `St. ${roomNumber}` : t.changeRoom}</span>
-            <RotateCcw size={13} style={{ color:sub }}/>
+            <LogOut size={13} style={{ color:sub }}/>
           </button>
         )}
         <div className="flex gap-2">
@@ -1791,6 +1806,11 @@ function DesktopSidebar({ active, onChange, lang, theme, roomNumber, showNav, fa
             <RefreshCw size={15} className={refreshing ? "animate-spin-slow" : ""}/>
           </button>
         </div>
+        <button onClick={onAccessibility}
+          className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-colors desk-nav"
+          style={{ color:sub }}>
+          <Eye size={14}/>{lang === "it" ? "Accessibilità" : "Accessibility"}
+        </button>
         <p className="text-center text-[10px] font-mono pt-1" style={{ color:sub }}>v. {APP_VERSION} (beta)</p>
       </div>
     </aside>
@@ -1975,6 +1995,8 @@ function InstallPrompt({ lang }: { lang: Lang }) {
 export default function App() {
   const [screen, setScreen]   = useState(0);
   const [facility, setFacility] = useState<Facility>("laundry");
+  const [accessibilityOpen, setAccessibilityOpen] = useState(false);
+  const [_aPrefs, _setAPrefs] = useState<AccessibilityPrefs>(loadPrefs);
   const [theme, setTheme] = useState<Theme>(() => {
     try {
       const saved = localStorage.getItem("laundryhub.theme");
@@ -2022,6 +2044,16 @@ export default function App() {
     // Salviamo la preferenza ogni volta che cambia
     try { localStorage.setItem("laundryhub.theme", theme); } catch {}
   }, [theme]);
+
+  // Applica preferenze accessibilità al DOM al mount
+  useEffect(() => { applyToDOM(accessibilityPrefs); }, []);
+
+  const handleAccessibilityChange = useCallback((prefs: AccessibilityPrefs) => {
+    accessibilityPrefs = prefs;  // aggiorna riferimento modulo per i componenti figli
+    _setAPrefs(prefs);           // trigger re-render
+    savePrefs(prefs);
+    applyToDOM(prefs);
+  }, []);
   
   const refresh = useCallback(async () => {
     try {
@@ -2108,12 +2140,23 @@ export default function App() {
   const isRoom = facility !== "laundry";
   const bodyContent = isRoom ? <RoomView room={facility as "cinema" | "music"} lang={lang} roomNumber={roomNumber}/> : mainContent;
 
+  // Pannello accessibilità (modale, condiviso tra mobile e desktop)
+  const accessibilityModal = accessibilityOpen && (
+    <AccessibilityPanel
+      lang={lang}
+      prefs={_aPrefs}
+      onPrefsChange={handleAccessibilityChange}
+      onClose={() => setAccessibilityOpen(false)}
+    />
+  );
+
   if (isDesktop) {
     return (
       <div className="relative h-dvh w-full flex overflow-hidden"
         style={{ fontFamily:"'DM Sans', sans-serif", background:"var(--background)" }}>
         {globalStyle}
         {showChrome && <InstallPrompt lang={lang}/>}
+        {accessibilityModal}
         <DesktopSidebar
           active={screen} onChange={setScreen} lang={lang} theme={theme}
           roomNumber={roomNumber} showNav={showChrome}
@@ -2122,6 +2165,7 @@ export default function App() {
           onToggleLang={()=>setLang(l=>l==="it"?"en":"it")}
           onToggleTheme={()=>setTheme(theme === "dark" ? "light" : "dark")}
           onRefresh={doRefresh} refreshing={refreshing}
+          onAccessibility={() => setAccessibilityOpen(true)}
         />
         <main className="flex-1 h-dvh min-h-0 flex flex-col overflow-y-auto overscroll-contain">
           <div className="mx-auto w-full max-w-6xl flex-1 min-h-0 flex flex-col px-4 lg:px-6">
@@ -2139,6 +2183,7 @@ export default function App() {
       <div className="relative flex flex-col overflow-hidden w-full h-dvh md:h-[844px] md:max-w-[420px] md:rounded-[3rem] md:shadow-2xl md:border"
         style={{ background:"var(--background)", borderColor:"var(--border)" }}>
         {showChrome && <InstallPrompt lang={lang}/>}
+        {accessibilityModal}
 
         <div className="flex items-center justify-between px-7 pt-3 pb-0 shrink-0 mt-2 md:mt-0">
           {roomNumber !== null ? (
@@ -2169,6 +2214,9 @@ export default function App() {
             </button>
             <button onClick={()=>setTheme(theme === "dark" ? "light" : "dark")} className="p-1.5 rounded-lg" style={{ color:"var(--muted-foreground)" }}>
               {theme === "dark" ? <Sun size={13}/> : <Moon size={13}/>}
+            </button>
+            <button onClick={() => setAccessibilityOpen(true)} className="p-1.5 rounded-lg" style={{ color:"var(--muted-foreground)" }} aria-label="Accessibilità">
+              <Eye size={13}/>
             </button>
           </div>
         </div>
