@@ -190,7 +190,12 @@ declare
   v_l  laundry%rowtype;
   v_ws date;
 begin
-  select * into v_l from laundry where id = laundry_for_room(p_room);
+  -- Il client attuale chiama clearBooking(day, slot, machine) SENZA camera:
+  -- si ricade sulla lavanderia principale finche' la fase 5 non la aggiunge.
+  -- Ricaduta innocua: se la prenotazione stava nell'altra lavanderia il
+  -- laundry_id non combacia e la delete non tocca nulla.
+  select * into v_l from laundry
+  where id = coalesce(laundry_for_room(p_room), (select id from laundry where slug = 'valentino'));
   if not found then
     return jsonb_build_object('ok', false, 'error', 'camera non valida');
   end if;
