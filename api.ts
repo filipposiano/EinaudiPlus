@@ -117,3 +117,13 @@ export async function unsubscribePush(endpointUrl: string) {
 export async function sendFeedback(room: string | null, text: string) {
   return postAction("feedback", { room: room || "", text });
 }
+
+/**
+ * Codice usa-e-getta da incollare al bot Telegram per collegare la chat a
+ * questa camera. Serve un codice perché senza, chiunque potrebbe scrivere al
+ * bot "sono la 112" e ricevere i promemoria di un altro.
+ */
+export async function telegramCode(): Promise<string> {
+  const res = await postAction("telegramCode", { room: currentRoom() });
+  return res.code as string;
+}

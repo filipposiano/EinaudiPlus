@@ -76,6 +76,12 @@ export default async function handler(req, res) {
           p_endpoint: String(body.endpoint || ""),
         }));
 
+      // Il codice da incollare al bot Telegram. Serve un codice e non basta la
+      // camera: altrimenti chiunque potrebbe scrivere al bot "sono la 112" e
+      // ricevere i promemoria di un altro.
+      case "telegramCode":
+        return json(res, 200, await rpc("telegram_create_code", { p_room: room }));
+
       case "feedback": {
         if (!(await allow(req, "feedback", 10, 86400))) {
           return fail(res, "hai gia' inviato molte segnalazioni oggi", {}, 429);

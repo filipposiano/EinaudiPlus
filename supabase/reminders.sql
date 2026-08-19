@@ -192,6 +192,9 @@ begin
   delete from rate_limit where window_start < now() - interval '2 days';
   delete from audit_log  where at < now() - interval '180 days';
 
+  -- Codici Telegram generati e mai usati: non devono restare validi per sempre.
+  perform telegram_prune_pending(24);
+
   return v_n;
 end;
 $$;
