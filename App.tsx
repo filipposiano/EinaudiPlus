@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Wind, Clock, CalendarDays,
   Sun, Moon, Plus, CheckCircle2, AlertTriangle,
-  LayoutGrid, Delete, X, Wrench, RotateCcw, Loader2, Star,
+  LayoutGrid, Delete, X, Wrench, Loader2, Star,
   History, Timer, Trash2, Film, Music,
   Bell, BellRing, Download, Share, Menu,
   RefreshCw, MessageSquare, Send, Eye, LogOut,
@@ -169,12 +169,15 @@ const T = {
     wantModify:     "Vuoi modificare questa prenotazione?",
     bookedBy:       (r: string) => `Prenotata dalla stanza ${r}`,
     machineMgmt:    "Gestione macchine",
-    reportOos:      "Segnala macchina fuori servizio",
+    reportOos:      "Segnala un guasto",
     restore:        "Ripristina",
-    oosDesc:        "Segnala una macchina non disponibile o ripristinala.",
+    oosDesc:        "Segnala una macchina che non funziona: un amministratore verifica e la mette fuori servizio.",
     reminderSent:   (r: string) => `Reminder inviato · Stanza ${r}`,
     oosSet:         (lbl: string) => `${lbl} segnalata fuori servizio`,
     oosCleared:     (lbl: string) => `${lbl} ripristinata`,
+    reportAction:   "Segnala",
+    alreadyOos:     "Già segnalata",
+    reportSent:     (lbl: string) => `Guasto segnalato per ${lbl}. Un amministratore verificherà.`,
     booked:         (lbl: string) => `Lavatrice ${lbl} prenotata!`,
     prevHad:        (r: string) => `La stanza ${r} aveva questo turno prima di te — ha già ritirato il bucato?`,
     legendFree:     "Verde — Libera", legendFreeDesc: "Puoi prenotarla subito.",
@@ -254,9 +257,12 @@ const T = {
     wantModify:     "Do you want to edit this booking?",
     bookedBy:       (r: string) => `Booked by room ${r}`,
     machineMgmt:    "Machine management",
-    reportOos:      "Report machine out of order",
+    reportOos:      "Report a fault",
     restore:        "Restore",
-    oosDesc:        "Mark a machine as unavailable or restore it.",
+    oosDesc:        "Report a machine that isn't working: an admin will check and mark it out of order.",
+    reportAction:   "Report",
+    alreadyOos:     "Already reported",
+    reportSent:     (lbl: string) => `Fault reported for ${lbl}. An admin will check it.`,
     reminderSent:   (r: string) => `Reminder sent · Room ${r}`,
     oosSet:         (lbl: string) => `${lbl} marked out of order`,
     oosCleared:     (lbl: string) => `${lbl} restored`,
@@ -1539,8 +1545,8 @@ function AdminSheet({ lang, status, onStatus, onClose, roomNumber }: {
   const dryers:  Machine[] = (isSecond ? [] : ["D-A","D-B","D-C"]).map((id)=>mk(id,"dryer"));
 
   async function toggle(m: Machine) {
-    const goingOos = m.status !== "out-of-order";
-    try { await onStatus(m.id, goingOos); setToast(goingOos ? t.oosSet(m.label) : t.oosCleared(m.label)); }
+    if (m.status === "out-of-order") return;   // gia' segnalata, niente da fare
+    try { await onStatus(m.id, true); setToast(t.reportSent(m.label)); }
     catch (e) { setToast(errMsg(e, lang)); }
   }
 
@@ -1604,12 +1610,16 @@ function AdminRow({ machine, lang, isLast, divColor, onToggle }: {
           {isOOO ? t.oos : t.operative}
         </span>
       </div>
-      <button onClick={onToggle}
-        className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold shrink-0 transition-all active:scale-95"
+      {/* Il residente segnala, non decide: mettere e togliere il fuori servizio
+          e' passato agli amministratori. Se e' gia' segnalata non c'e' niente
+          da fare, quindi il pulsante e' disattivato invece che nascosto —
+          cosi' si capisce che la segnalazione e' gia' arrivata. */}
+      <button onClick={onToggle} disabled={isOOO}
+        className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold shrink-0 transition-all active:scale-95 disabled:active:scale-100"
         style={isOOO
-          ? { background:`color-mix(in srgb, ${GREEN} 12%, transparent)`, color:GREEN }
+          ? { background:"var(--secondary)", color:"var(--muted-foreground)", cursor:"default" }
           : { background:`color-mix(in srgb, var(--destructive) 12%, transparent)`, color:OOS_C }}>
-        {isOOO ? <><RotateCcw size={12}/>{t.restore}</> : <><Wrench size={12}/>{t.oos}</>}
+        {isOOO ? <><AlertTriangle size={12}/>{t.alreadyOos}</> : <><Wrench size={12}/>{t.reportAction}</>}
       </button>
     </div>
   );
@@ -2077,6 +2087,18 @@ export default function App() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // Riallinea in silenzio la subscription push col server.
+  //
+  // Due motivi: il nuovo database parte senza le subscription vecchie, e la
+  // chiave VAPID è cambiata — in entrambi i casi chi aveva i promemoria attivi
+  // smetterebbe di riceverli senza alcun segnale, perché il browser continua a
+  // mostrarli come attivi. Girando a ogni avvio, ogni dispositivo si ripara da
+  // solo la prima volta che qualcuno apre l'app.
+  useEffect(() => {
+    if (!roomNumber) return;
+    push.refreshSubscription(roomNumber);
+  }, [roomNumber]);
+
   function chooseRoom(room: string) {
     try { localStorage.setItem("laundryhub.room", room); } catch {}
     window.location.reload();
@@ -2092,8 +2114,11 @@ export default function App() {
   const handleClear = useCallback(async (day:number, slot:number, machine:string) => {
     const s = await api.clearBooking(day, slot, machine); setWeek(s.week); setStatus(s.status);
   }, []);
-  const handleStatus = useCallback(async (machine:string, oos:boolean) => {
-    const st = await api.setStatus(machine, oos); setStatus(st);
+  // Il residente segnala il guasto, non cambia lo stato: la segnalazione finisce
+  // fra i feedback e un amministratore decide. Lo stato mostrato non cambia
+  // subito, ed e' corretto cosi' — cambiera' quando l'admin l'avra' verificato.
+  const handleStatus = useCallback(async (machine:string, _oos:boolean) => {
+    await api.reportBroken(machine);
   }, []);
 
   const showChrome = roomNumber !== null && !loading && !error;
