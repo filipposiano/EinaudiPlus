@@ -126,12 +126,15 @@ begin
     return jsonb_build_object('ok', false, 'error', 'parametri non validi');
   end if;
 
+  -- `bookable = false` e `is_oos = true` sono due cose diverse:
+  --  - bookable=false: la macchina non esiste fisicamente (es. W-B in sezione).
+  --    Prenotarla non ha senso, si rifiuta.
+  --  - is_oos=true: la macchina c'è ma è guasta. Si può prenotare lo stesso,
+  --    il client mostra un avviso. Serve a non bloccare chi vuole mettersi in
+  --    coda per quando sarà riparata, e a non perdere lo slot nel frattempo.
   select * into v_m from machine where laundry_id = v_l.id and code = p_machine;
   if not found or not v_m.bookable then
     return jsonb_build_object('ok', false, 'error', 'macchina non valida');
-  end if;
-  if v_m.is_oos then
-    return jsonb_build_object('ok', false, 'error', 'macchina fuori servizio');
   end if;
 
   v_ws := current_week_start(v_l.tz);
@@ -167,11 +170,16 @@ begin
     return jsonb_build_object('ok', false, 'error', 'occupata', 'by', v_by);
   end if;
 
+  -- Prenotazione riuscita su macchina guasta: il client usa `warning` per
+  -- mostrare l'avviso, ma la prenotazione è valida a tutti gli effetti.
   return jsonb_build_object(
     'ok', true,
     'week', week_snapshot(v_l.id, v_ws),
     'status', status_snapshot(v_l.id)
-  );
+  ) || case when v_m.is_oos
+            then jsonb_build_object('warning', 'oos')
+            else '{}'::jsonb
+       end;
 end;
 $$;
 
@@ -207,8 +215,15 @@ begin
 end;
 $$;
 
--- Il caso d'uso oggi rotto: il client manda action 'status' con {status:'oos'},
--- il backend si aspettava 'setStatus' con {oos:true}. Nessun ramo combaciava.
+-- SOLO ADMIN. L'autorizzazione si applica a monte, nelle funzioni serverless:
+-- questa è raggiungibile unicamente da /api/admin, mai da /api/laundry.
+-- Prima era esposta a chiunque tramite l'AdminSheet dentro l'app — anche se in
+-- pratica non funzionava, perché il client mandava action 'status' con
+-- {status:'oos'} mentre il backend si aspettava 'setStatus' con {oos:true}:
+-- nessun ramo combaciava e si finiva su 'azione sconosciuta'.
+--
+-- Segnare una macchina fuori servizio NON impedisce di prenotarla: rende solo
+-- lo stato visibile, e book_laundry risponde con warning='oos'.
 create or replace function set_machine_status(
   p_room text, p_machine text, p_oos boolean
 ) returns jsonb language plpgsql as $$
