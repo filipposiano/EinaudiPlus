@@ -325,10 +325,25 @@ function prevRef(day: number, slot: number) {
   if (slot > 0) return { day, slot: slot - 1 };
   return { day: (day + 6) % 7, slot: N_SLOTS - 1 };
 }
-function deriveMachines(week: WeekData, status: StatusData, day: number, slot: number, roomNumber: string | null): Machine[] {
+/**
+ * Quali macchine esistono fisicamente nella lavanderia di una camera.
+ *
+ * Unico posto in cui vive questa regola. Prima la stessa condizione
+ * (`num > 0 && num < 100`) era ricopiata in sei punti, e infatti erano già
+ * divergenti: in uno l'elenco delle asciugatrici della Manica era vuoto.
+ *
+ * Camere 1-99 → Manica: una lavatrice e un'asciugatrice.
+ * Dal 100 in su → Valentino: tre e tre.
+ */
+export function machinesFor(roomNumber: string | null | undefined): { washers: string[]; dryers: string[] } {
   const num = parseInt(roomNumber?.match(/^(\d+)/)?.[1] || "0", 10);
-  const isSecond = num > 0 && num < 100;
-  
+  const manica = num > 0 && num < 100;
+  return manica
+    ? { washers: ["W-A"], dryers: ["D-A"] }
+    : { washers: ["W-A", "W-B", "W-C"], dryers: ["D-A", "D-B", "D-C"] };
+}
+
+function deriveMachines(week: WeekData, status: StatusData, day: number, slot: number, roomNumber: string | null): Machine[] {
   const p  = prevRef(day, slot);
   const pp = prevRef(p.day, p.slot);
   const mk = (id: string, type: MachineType, room?: string, prevRoom?: string): Machine => {
@@ -336,8 +351,9 @@ function deriveMachines(week: WeekData, status: StatusData, day: number, slot: n
     return { id, label: id[2], type, status: st, room, prevRoom };
   };
   const out: Machine[] = [];
-  const washersList = isSecond ? ["A"] : ["A","B","C"];
-  const dryersList  = isSecond ? [] : ["A","B","C"];
+  const { washers, dryers } = machinesFor(roomNumber);
+  const washersList = washers.map((id) => id.slice(2));
+  const dryersList  = dryers.map((id) => id.slice(2));
 
   for (const L of washersList) {
     const wid = "W-" + L;
@@ -445,7 +461,7 @@ function BookModal({ target, bookings, myRoom, lang, onConfirm, onClose }: {
           <>
             <p className="text-sm font-semibold mb-3" style={{ color:fg }}>{t.chooseFree}</p>
             <div className="flex gap-3 mb-4">
-              {((parseInt(myRoom?.match(/^(\d+)/)?.[1] || "0", 10) > 0 && parseInt(myRoom?.match(/^(\d+)/)?.[1] || "0", 10) < 100) ? ["W-A"] : ["W-A","W-B","W-C"]).map((id) => {
+              {machinesFor(myRoom).washers.map((id) => {
                 const isTaken = taken.has(id);
                 return (
                   <button key={id} disabled={isTaken}
@@ -791,8 +807,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
 
   // Prima lavatrice libera in un dato (giorno, slot)
   const firstFreeWasherAt = (day: number, s: number): string | null => {
-    const num = parseInt(roomNumber?.match(/^(\d+)/)?.[1] || "0", 10);
-    const washIds = (num > 0 && num < 100) ? ["W-A"] : ["W-A","W-B","W-C"];
+    const washIds = machinesFor(roomNumber).washers;
     return washIds.find((wid) => status[wid] !== "oos" && !week[day]?.[s]?.[wid]) ?? null;
   };
 
@@ -1161,8 +1176,7 @@ function DaySchedule({ lang, week, roomNumber: sessionRoom, favs, onToggleFav, o
   const div = "var(--border)";
   const dayData = week[selDay] ?? {};
 
-  const num = parseInt(sessionRoom?.match(/^(\d+)/)?.[1] || "0", 10);
-  const washIds = (num > 0 && num < 100) ? ["W-A"] : ["W-A","W-B","W-C"];
+  const washIds = machinesFor(sessionRoom).washers;
 
   async function confirmBooking(room: string) {
     if (!target) return;
@@ -1306,8 +1320,7 @@ function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify,
   const chip     = "var(--secondary)";
   const divC     = "var(--border)";
 
-  const num = parseInt(roomNumber?.match(/^(\d+)/)?.[1] || "0", 10);
-  const washIds = (num > 0 && num < 100) ? ["W-A"] : ["W-A","W-B","W-C"];
+  const washIds = machinesFor(roomNumber).washers;
 
   return (
     <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.65)" }} onClick={onClose}>
@@ -1393,8 +1406,25 @@ function WeekOverview({ lang, week, roomNumber: sessionRoom, onBook, onClear }: 
   const sub = "var(--muted-foreground)";
   const div = "var(--border)";
   const hdr = "var(--muted)";
-  const DAY_W = 68;
-  const TIME_W = 48;
+
+  // Su mobile le colonne hanno larghezza fissa e la griglia scorre in
+  // orizzontale: è l'unico modo per far stare sette giorni su un telefono.
+  // Su desktop quella stessa griglia diventava una colonnina di 524px persa in
+  // un contenitore largo il doppio, con testo da 8px. Qui le colonne si
+  // dividono lo spazio disponibile e tutto cresce di conseguenza.
+  const isDesktop = useMediaQuery("(min-width: 768px)");
+
+  const DAY_W  = 68;
+  const TIME_W = isDesktop ? 60 : 48;
+  const ROW_H  = isDesktop ? 76 : 60;
+
+  const dayCol = isDesktop
+    ? { flex: "1 1 0", minWidth: 0 }
+    : { width: DAY_W, flexShrink: 0 };
+
+  const fsDay   = isDesktop ? "text-[11px]" : "text-[9px]";
+  const fsSlot  = isDesktop ? "text-[11px]" : "text-[9px]";
+  const fsChip  = isDesktop ? "text-[11px]" : "text-[8px]";
 
   async function confirmBooking(room: string) {
     if (!target) return;
@@ -1452,20 +1482,20 @@ function WeekOverview({ lang, week, roomNumber: sessionRoom, onBook, onClear }: 
       </div>
 
       <div className="flex-1 overflow-auto">
-        <div style={{ minWidth: TIME_W + DAY_W * 7 }}>
+        <div style={isDesktop ? { width: "100%" } : { minWidth: TIME_W + DAY_W * 7 }}>
 
           <div className="flex" style={{ position:"sticky", top:0, zIndex:3, background:hdr, borderBottom:`1px solid ${div}` }}>
             <div style={{ width:TIME_W, flexShrink:0, position:"sticky", left:0, zIndex:4, background:hdr }}
               className="flex items-end justify-center pb-2">
-              <span className="text-[8px] font-mono uppercase" style={{ color:sub }}>{t.now}</span>
+              <span className={`${fsDay} font-mono uppercase`} style={{ color:sub }}>{t.now}</span>
             </div>
             {t.days.map((d, i) => {
               const isToday = i===TODAY_DOW;
               const isPast  = i<TODAY_DOW;
               return (
-                <div key={d} className="shrink-0 flex flex-col items-center py-2 gap-0.5" style={{ width:DAY_W }}>
-                  <span className="text-[9px] font-mono uppercase" style={{ color:isToday?RED:isPast?`color-mix(in srgb, var(--muted-foreground) 40%, transparent)`:sub }}>{d}</span>
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center" style={{ background:isToday?RED:"transparent" }}>
+                <div key={d} className="flex flex-col items-center py-2 gap-0.5" style={dayCol}>
+                  <span className={`${fsDay} font-mono uppercase`} style={{ color:isToday?RED:isPast?`color-mix(in srgb, var(--muted-foreground) 40%, transparent)`:sub }}>{d}</span>
+                  <div className={`${isDesktop ? "w-8 h-8" : "w-7 h-7"} rounded-full flex items-center justify-center`} style={{ background:isToday?RED:"transparent" }}>
                     <span className="text-sm font-bold" style={{ color:isToday?RED_FG:isPast?`color-mix(in srgb, var(--muted-foreground) 40%, transparent)`:sub }}>{DAYS_DATE[i]}</span>
                   </div>
                 </div>
@@ -1475,9 +1505,9 @@ function WeekOverview({ lang, week, roomNumber: sessionRoom, onBook, onClear }: 
 
           {TIME_SLOTS.map((slot, si) => (
             <div key={slot.start} className="flex" style={{ borderBottom:`1px solid ${div}` }}>
-              <div style={{ width:TIME_W, flexShrink:0, position:"sticky", left:0, zIndex:1, background:hdr, minHeight:60 }}
+              <div style={{ width:TIME_W, flexShrink:0, position:"sticky", left:0, zIndex:1, background:hdr, minHeight:ROW_H }}
                 className="flex items-start justify-end pr-2 pt-1.5">
-                <span className="text-[9px] font-mono tabular-nums" style={{ color:sub }}>{slot.start}</span>
+                <span className={`${fsSlot} font-mono tabular-nums`} style={{ color:sub }}>{slot.start}</span>
               </div>
 
               {t.days.map((_, dayIdx) => {
@@ -1493,20 +1523,20 @@ function WeekOverview({ lang, week, roomNumber: sessionRoom, onBook, onClear }: 
                 return (
                   <button key={dayIdx}
                     onClick={()=>{ if(!isPast) setSlotDetail({ dayIdx, slotIdx:si }); }}
-                    className="relative flex flex-col justify-start pt-1 px-1 gap-0.5 shrink-0 text-left transition-colors border-l"
-                    style={{ width:DAY_W, minHeight:60, background:isCur?`color-mix(in srgb, var(--primary) 8%, transparent)`:isPrevSl?`color-mix(in srgb, var(--chart-4) 5%, transparent)`:"transparent", borderColor:div, opacity:isPast?0.38:1, cursor:isPast?"default":"pointer" }}>
+                    className={`relative flex flex-col justify-start pt-1 gap-0.5 text-left transition-colors border-l ${isDesktop ? "px-1.5 hover:brightness-95" : "px-1"}`}
+                    style={{ ...dayCol, minHeight:ROW_H, background:isCur?`color-mix(in srgb, var(--primary) 8%, transparent)`:isPrevSl?`color-mix(in srgb, var(--chart-4) 5%, transparent)`:"transparent", borderColor:div, opacity:isPast?0.38:1, cursor:isPast?"default":"pointer" }}>
                     {isCur    && <div className="absolute left-0 top-0 bottom-0 w-0.5" style={{ background:RED }}/>}
                     {isPrevSl && <div className="absolute left-0 top-0 bottom-0 w-0.5" style={{ background:ORANGE }}/>}
                     {rooms.map(([mid, room]) => {
                       const isMe = !!sessionRoom && room === sessionRoom;
                       return (
-                        <div key={mid} className="rounded-md px-1 py-0.5 flex items-center gap-1 w-full border"
+                        <div key={mid} className={`rounded-md flex items-center gap-1 w-full border ${isDesktop ? "px-1.5 py-1" : "px-1 py-0.5"}`}
                           style={{
                             background: isMe ? RED : "var(--secondary)",
                             borderColor: isMe ? RED : "var(--border)",
                           }}>
-                          <span className="text-[8px] font-mono font-bold shrink-0" style={{ color:isMe?RED_FG:sub }}>{mid[2]}</span>
-                          <span className="text-[8px] font-mono truncate" style={{ color:isMe?RED_FG:fg }}>{room}</span>
+                          <span className={`${fsChip} font-mono font-bold shrink-0`} style={{ color:isMe?RED_FG:sub }}>{mid[2]}</span>
+                          <span className={`${fsChip} font-mono truncate`} style={{ color:isMe?RED_FG:fg }}>{room}</span>
                         </div>
                       );
                     })}
@@ -1539,10 +1569,9 @@ function AdminSheet({ lang, status, onStatus, onClose, roomNumber }: {
     id, label: id[2], type, status: status[id] === "oos" ? "out-of-order" : "available",
   });
   
-  const num = parseInt(roomNumber?.match(/^(\d+)/)?.[1] || "0", 10);
-  const isSecond = num > 0 && num < 100;
-  const washers: Machine[] = (isSecond ? ["W-A"] : ["W-A","W-B","W-C"]).map((id)=>mk(id,"washer"));
-  const dryers:  Machine[] = (isSecond ? [] : ["D-A","D-B","D-C"]).map((id)=>mk(id,"dryer"));
+  const avail = machinesFor(roomNumber);
+  const washers: Machine[] = avail.washers.map((id)=>mk(id,"washer"));
+  const dryers:  Machine[] = avail.dryers.map((id)=>mk(id,"dryer"));
 
   async function toggle(m: Machine) {
     if (m.status === "out-of-order") return;   // gia' segnalata, niente da fare

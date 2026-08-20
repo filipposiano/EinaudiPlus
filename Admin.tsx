@@ -12,7 +12,9 @@ import { useCallback, useEffect, useState } from "react";
 
 type Machine = { code: string; kind: "washer" | "dryer"; oos: boolean; bookable: boolean };
 type Laundry = {
-  id: number; slug: string; name: string; rooms: string;
+  id: number; slug: string; name: string;
+  rooms: string;        // testo per chi legge, es. "dal 100 in su"
+  sample_room: string;  // una camera qualsiasi, per le chiamate che ne hanno bisogno
   quota: number; reminders: string; week_start: string;
   bookings: number; machines: Machine[];
 };
@@ -140,7 +142,7 @@ function Macchine({ laundries, reload }: { laundries: Laundry[]; reload: () => v
       // set_machine_status risolve la lavanderia dalla camera: passiamo un
       // numero qualsiasi dell'intervallo giusto.
       await call("setMachineStatus", {
-        room: l.rooms.split("–")[0], machine: m.code, oos: !m.oos,
+        room: l.sample_room, machine: m.code, oos: !m.oos,
       });
       reload();
     } catch (e: any) { alert(e.message); }

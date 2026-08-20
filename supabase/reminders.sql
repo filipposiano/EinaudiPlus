@@ -112,7 +112,17 @@ language sql as $$
     from laundry_booking b
     join laundry l on l.id = b.laundry_id
     cross join lateral reminders_for_booking(b.id) r
-    where b.week_start = current_week_start(l.tz)
+    -- Anche la settimana precedente, e non e' una rete di sicurezza: gli slot
+    -- dal 14 in poi iniziano DOPO la mezzanotte del loro giorno. Il turno 15
+    -- di domenica si svolge lunedi' dall'01:45 alle 03:00, quindi appartiene
+    -- alla settimana appena finita ma i suoi promemoria vanno mandati nella
+    -- nuova. Filtrando sulla sola settimana corrente, chi lava di notte fra
+    -- domenica e lunedi' non riceveva "lavatrice terminata" ne' "ritira il
+    -- bucato".
+    --
+    -- Allargare non fa danni: e' trigger_at a decidere cosa e' dovuto, e
+    -- reminder_log a garantire che parta una volta sola.
+    where b.week_start >= current_week_start(l.tz) - 7
       and now() >= r.trigger_at
       and now() <  r.trigger_at + make_interval(mins => p_grace_min)
   ),

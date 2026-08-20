@@ -14,7 +14,16 @@ returns jsonb language sql stable as $$
       'id', l.id,
       'slug', l.slug,
       'name', l.name,
-      'rooms', l.room_min || '–' || l.room_max,
+      -- Il limite superiore del Valentino è una sentinella tecnica, non una
+      -- regola della residenza: chi legge intende "dal 100 in su".
+      'rooms', case when l.room_max >= 9999
+                    then 'dal ' || l.room_min || ' in su'
+                    else l.room_min || '–' || l.room_max end,
+      -- Una camera qualsiasi di questa lavanderia, per le chiamate che
+      -- risolvono la lavanderia dalla camera. Prima il pannello ricavava
+      -- questo numero spezzando la stringa `rooms`, che è di sola
+      -- visualizzazione: cambiandone il formato si sarebbe rotto in silenzio.
+      'sample_room', l.room_min::text,
       'quota', l.weekly_quota,
       'reminders', l.reminder_mode,
       'week_start', current_week_start(l.tz),
