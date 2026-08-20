@@ -10,13 +10,22 @@ import * as api from "./api";
 // Chiave VAPID PUBBLICA (non è un segreto: può stare nel frontend).
 // La privata corrispondente va impostata SOLO come variabile d'ambiente su Vercel.
 //
-// ATTENZIONE: cambiando questa chiave, tutte le subscription create con la
-// precedente smettono di funzionare. E lo fanno in silenzio: il browser
-// continua a dire che le notifiche sono attive, ma il servizio push rifiuta
-// quelle firmate con la chiave nuova. Per questo sotto c'è sameKey(), che
-// riconosce le subscription vecchie e le rifà.
+// DEVE corrispondere a VAPID_PUBLIC_KEY nelle variabili d'ambiente di Vercel,
+// e quella privata deve essere la sua coppia. Se divergono, le notifiche
+// partono e nessun servizio push le accetta.
+//
+// Questa è la coppia storica, che su Vercel è sempre stata configurata.
+// Durante la migrazione ne era stata generata una nuova, perché la privata
+// sembrava irrecuperabile: si è poi visto che era già su Vercel e funzionante.
+// Tenere questa significa che le iscrizioni push esistenti continuano a
+// ricevere, invece di doversi rifare tutte.
+//
+// Se un domani la si cambia davvero: sotto c'è sameKey(), che riconosce le
+// subscription firmate con la chiave precedente e le rifà. Senza quel
+// controllo il browser continuerebbe a mostrarle attive mentre non arriva
+// più nulla.
 const VAPID_PUBLIC_KEY =
-  "BPzyOFozfWw5LapO8sCkE4ukqpXDiezU8unudCfDhd6e7mDUGdJVNXqm46uyVDAykZ4ilb7lKFppTTDgZ1bjo2c";
+  "BFhjaxEm1slqol4X1nJ6-KTtPmA7lK_K8f5tsA6BpoX3mpNlNr8eGR5qEuRM81ofyKM5ooS0iQzCvr6OcAATdQo";
 
 export type ReminderState = "unknown" | "unsupported" | "denied" | "on" | "off";
 
