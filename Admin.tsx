@@ -20,7 +20,14 @@ type Booking = { id: number; day: number; slot: number; machine: string; room: s
 type Feedback = { id: number; room: string | null; body: string; laundry: string | null; created_at: string; handled: boolean };
 type SpaceBooking = { id: number; space: string; day: number; start: number; end: number; name: string; type: string | null };
 
-type Tab = "macchine" | "settimana" | "segnalazioni" | "sale";
+type Recurring = {
+  id: number; kind: "laundry" | "space"; day: number; active: boolean; note?: string;
+  laundry?: string; laundry_id?: number; slot?: number; machine?: string; room?: string;
+  space?: string; space_id?: number; start?: number; end?: number; name?: string; type?: string;
+};
+
+type Role = "portineria" | "sistemista";
+type Tab = "macchine" | "settimana" | "segnalazioni" | "sale" | "ricorrenti" | "manutenzione";
 
 // ─── Chiamate ────────────────────────────────────────────────────────────────
 
@@ -382,10 +389,244 @@ function Sale() {
   );
 }
 
+// ─── Regole ricorrenti (sistemista) ──────────────────────────────────────────
+//
+// Una regola non è una prenotazione: è la ricetta con cui, ogni notte, le
+// prenotazioni della settimana corrente vengono create. Cancellare la regola
+// non cancella le prenotazioni già scritte — quelle restano fino a fine
+// settimana e si tolgono dalla scheda Prenotazioni.
+
+function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
+  const [items, setItems] = useState<Recurring[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  // Form lavanderia
+  const [lid, setLid] = useState(laundries[0]?.id ?? 0);
+  const [day, setDay] = useState(0);
+  const [slot, setSlot] = useState(0);
+  const [machine, setMachine] = useState("W-A");
+  const [room, setRoom] = useState("");
+
+  // Form sala
+  const [space, setSpace] = useState<"cinema" | "music">("cinema");
+  const [sDay, setSDay] = useState(0);
+  const [sStart, setSStart] = useState("21:00");
+  const [sEnd, setSEnd] = useState("23:00");
+  const [sName, setSName] = useState("");
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    try { setItems((await call("recurringList")).items); }
+    catch (e: any) { setMsg(e.message); }
+    finally { setBusy(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const toMin = (hhmm: string) => {
+    const [h, m] = hhmm.split(":").map(Number);
+    return (h || 0) * 60 + (m || 0);
+  };
+
+  async function addLaundry() {
+    if (!room.trim()) { setMsg("Indica la camera."); return; }
+    setBusy(true); setMsg(null);
+    try {
+      const r = await call("recurringAddLaundry", {
+        laundry_id: lid, day, slot, machine, room: room.trim(),
+      });
+      setMsg(r.ok ? "Regola creata e applicata a questa settimana." : r.error);
+      setRoom(""); load();
+    } catch (e: any) { setMsg(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function addSpace() {
+    if (!sName.trim()) { setMsg("Indica un nome."); return; }
+    setBusy(true); setMsg(null);
+    try {
+      await call("recurringAddSpace", {
+        space_id: space === "cinema" ? 1 : 2, day: sDay,
+        start: toMin(sStart), end: toMin(sEnd), name: sName.trim(),
+      });
+      setMsg("Regola creata e applicata a questa settimana.");
+      setSName(""); load();
+    } catch (e: any) { setMsg(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function remove(r: Recurring) {
+    if (!confirm("Eliminare la regola?\n\nLe prenotazioni già create restano fino a fine settimana: si tolgono dalla scheda Prenotazioni.")) return;
+    try { await call("recurringDelete", { id: r.id }); load(); }
+    catch (e: any) { setMsg(e.message); }
+  }
+
+  async function toggle(r: Recurring) {
+    try { await call("recurringSetActive", { id: r.id, active: !r.active }); load(); }
+    catch (e: any) { setMsg(e.message); }
+  }
+
+  async function applyNow() {
+    setBusy(true);
+    try {
+      const r = await call("applyRecurring", { offset: 0 });
+      setMsg(`Applicate: ${r.lavanderia} in lavanderia, ${r.sale} nelle sale, ${r.saltate} già occupate.`);
+    } catch (e: any) { setMsg(e.message); }
+    finally { setBusy(false); }
+  }
+
+  const machines = laundries.find((l) => l.id === lid)?.machines.filter((m) => m.bookable) ?? [];
+
+  return (
+    <>
+      <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
+        Le regole vengono applicate ogni notte alla settimana corrente. Una regola creata adesso
+        vale già da subito. Cancellare una regola <strong>non</strong> cancella le prenotazioni
+        già create: quelle restano fino a fine settimana.
+      </p>
+
+      {msg && (
+        <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>
+      )}
+
+      {/* Nuova regola lavanderia */}
+      <div style={{ ...S.card, padding: 18, marginBottom: 16 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Nuova regola · lavanderia</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
+          <select style={S.input} value={lid} onChange={(e) => setLid(Number(e.target.value))}>
+            {laundries.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+          </select>
+          <select style={S.input} value={day} onChange={(e) => setDay(Number(e.target.value))}>
+            {DAYS.map((d, i) => <option key={i} value={i}>Ogni {d.toLowerCase()}</option>)}
+          </select>
+          <select style={S.input} value={slot} onChange={(e) => setSlot(Number(e.target.value))}>
+            {Array.from({ length: 19 }, (_, i) => <option key={i} value={i}>{slotLabel(i)}</option>)}
+          </select>
+          <select style={S.input} value={machine} onChange={(e) => setMachine(e.target.value)}>
+            {machines.map((m) => <option key={m.code} value={m.code}>{m.code}</option>)}
+          </select>
+          <input style={S.input} placeholder="Camera" value={room} onChange={(e) => setRoom(e.target.value)} />
+          <button style={{ ...S.btn, background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
+                  disabled={busy} onClick={addLaundry}>Aggiungi</button>
+        </div>
+      </div>
+
+      {/* Nuova regola sala */}
+      <div style={{ ...S.card, padding: 18, marginBottom: 16 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Nuova regola · sala</h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
+          <select style={S.input} value={space} onChange={(e) => setSpace(e.target.value as any)}>
+            <option value="cinema">Cinema</option>
+            <option value="music">Musica</option>
+          </select>
+          <select style={S.input} value={sDay} onChange={(e) => setSDay(Number(e.target.value))}>
+            {DAYS.map((d, i) => <option key={i} value={i}>Ogni {d.toLowerCase()}</option>)}
+          </select>
+          <input style={S.input} type="time" value={sStart} onChange={(e) => setSStart(e.target.value)} />
+          <input style={S.input} type="time" value={sEnd} onChange={(e) => setSEnd(e.target.value)} />
+          <input style={S.input} placeholder="Nome" value={sName} onChange={(e) => setSName(e.target.value)} />
+          <button style={{ ...S.btn, background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
+                  disabled={busy} onClick={addSpace}>Aggiungi</button>
+        </div>
+      </div>
+
+      {/* Elenco */}
+      <div style={{ ...S.card, padding: 18 }}>
+        <div style={{ display: "flex", alignItems: "baseline", marginBottom: 12 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, flex: 1 }}>Regole attive ({items.length})</h2>
+          <button style={S.btn} disabled={busy} onClick={applyNow}>Applica ora</button>
+        </div>
+
+        {items.length === 0 && <p style={{ fontSize: 13, ...S.sub }}>Nessuna regola.</p>}
+
+        <div style={{ display: "grid", gap: 6 }}>
+          {items.map((r) => (
+            <div key={r.id} style={{
+              display: "flex", alignItems: "center", gap: 12, padding: "9px 12px",
+              borderRadius: 10, border: "1px solid var(--border)", opacity: r.active ? 1 : 0.5,
+            }}>
+              <span style={{ fontSize: 11, fontWeight: 700, minWidth: 64, ...S.sub }}>
+                {r.kind === "laundry" ? "LAVANDERIA" : "SALA"}
+              </span>
+              <span style={{ fontSize: 13, minWidth: 96 }}>ogni {DAYS[r.day].toLowerCase()}</span>
+              <span style={{ fontSize: 13, fontFamily: "monospace", flex: 1 }}>
+                {r.kind === "laundry"
+                  ? `${slotLabel(r.slot!)} · ${r.machine} · camera ${r.room}`
+                  : `${r.space} · ${timeLabel(r.start!)}–${timeLabel(r.end!)} · ${r.name}`}
+              </span>
+              <button style={S.btn} onClick={() => toggle(r)}>{r.active ? "Sospendi" : "Riattiva"}</button>
+              <button style={S.danger} onClick={() => remove(r)}>Elimina</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Manutenzione (sistemista) ───────────────────────────────────────────────
+
+const AMBITI: [string, string, string][] = [
+  ["settimana",    "Svuota la settimana corrente",  "Toglie tutte le prenotazioni di questa settimana, lavanderia e sale. Lo storico resta."],
+  ["prenotazioni", "Tutte le prenotazioni",          "Cancella anche lo storico delle settimane passate."],
+  ["segnalazioni", "Tutte le segnalazioni",          "Svuota la lista dei feedback, gestiti e non."],
+  ["notifiche",    "Tutte le iscrizioni",            "Push e Telegram. Chi li aveva attivi dovrà riattivarli."],
+  ["ricorrenti",   "Tutte le regole ricorrenti",     "Le prenotazioni già create restano."],
+  ["tutto",        "Azzera tutto",                   "Tutto quanto sopra, e rimette in servizio le macchine. La configurazione e il registro delle azioni restano."],
+];
+
+function Manutenzione() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  async function purge(scope: string, label: string) {
+    if (!confirm(`${label}\n\nL'operazione non è annullabile. Procedere?`)) return;
+    if (scope === "tutto" && !confirm("Conferma definitiva: azzerare TUTTI i dati?")) return;
+
+    setBusy(true); setMsg(null);
+    try {
+      const r = await call("purge", { scope });
+      const righe = Object.entries(r.cancellati || {})
+        .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(" · ");
+      setMsg(righe || "Nessun dato da cancellare.");
+    } catch (e: any) { setMsg(e.message); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <>
+      <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
+        Operazioni distruttive e non annullabili. Il registro delle azioni non viene mai
+        cancellato: serve proprio a sapere chi ha svuotato cosa e quando.
+      </p>
+
+      {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
+
+      <div style={{ display: "grid", gap: 10 }}>
+        {AMBITI.map(([scope, label, desc]) => (
+          <div key={scope} style={{
+            ...S.card, padding: 14, display: "flex", alignItems: "center", gap: 14,
+            borderColor: scope === "tutto" ? "var(--destructive)" : "var(--border)",
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600 }}>{label}</p>
+              <p style={{ fontSize: 12, ...S.sub }}>{desc}</p>
+            </div>
+            <button style={S.danger} disabled={busy} onClick={() => purge(scope, label)}>Esegui</button>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
 // ─── Guscio ──────────────────────────────────────────────────────────────────
 
 export default function Admin() {
   const [logged, setLogged] = useState<boolean | null>(null);
+  const [role, setRole] = useState<Role | null>(null);
+  const [user, setUser] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("macchine");
   const [laundries, setLaundries] = useState<Laundry[]>([]);
 
@@ -394,12 +635,14 @@ export default function Admin() {
     catch (e: any) { if (e.message === "SESSIONE_SCADUTA") setLogged(false); }
   }, []);
 
-  useEffect(() => {
+  const refreshSession = useCallback(() => {
     fetch("/api/admin/auth")
       .then((r) => r.json())
-      .then((d) => setLogged(Boolean(d.logged)))
+      .then((d) => { setLogged(Boolean(d.logged)); setRole(d.role || null); setUser(d.user || null); })
       .catch(() => setLogged(false));
   }, []);
+
+  useEffect(() => { refreshSession(); }, [refreshSession]);
 
   useEffect(() => { if (logged) loadOverview(); }, [logged, loadOverview]);
 
@@ -409,7 +652,7 @@ export default function Admin() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "logout" }),
     });
-    setLogged(false);
+    setLogged(false); setRole(null); setUser(null);
   }
 
   if (logged === null) {
@@ -417,13 +660,18 @@ export default function Admin() {
       <p style={S.sub}>Caricamento…</p>
     </div>;
   }
-  if (!logged) return <Login onDone={() => setLogged(true)} />;
+  if (!logged) return <Login onDone={refreshSession} />;
 
+  const sistemista = role === "sistemista";
+
+  // Le schede riservate si nascondono, ma il controllo vero sta sul server:
+  // nascondere un pulsante non è un'autorizzazione.
   const TABS: [Tab, string][] = [
     ["macchine", "Macchine"],
     ["settimana", "Prenotazioni"],
     ["segnalazioni", "Segnalazioni"],
     ["sale", "Sale"],
+    ...(sistemista ? ([["ricorrenti", "Ricorrenti"], ["manutenzione", "Manutenzione"]] as [Tab, string][]) : []),
   ];
 
   return (
@@ -433,6 +681,17 @@ export default function Admin() {
           <div>
             <p style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", ...S.sub }}>EinaudiPlus</p>
             <h1 style={{ fontSize: 24, fontWeight: 700 }}>Amministrazione</h1>
+            <p style={{ fontSize: 12, ...S.sub }}>
+              {user}
+              {sistemista && (
+                <span style={{
+                  marginLeft: 8, padding: "1px 7px", borderRadius: 99, fontSize: 10,
+                  fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase",
+                  background: "color-mix(in srgb, var(--primary) 15%, transparent)",
+                  color: "var(--primary)",
+                }}>sistemista</span>
+              )}
+            </p>
           </div>
           <div style={{ flex: 1 }} />
           <a href="/" style={{ ...S.btn, textDecoration: "none" }}>App</a>
@@ -452,6 +711,8 @@ export default function Admin() {
         {tab === "settimana" && laundries.length > 0 && <Settimana laundries={laundries} />}
         {tab === "segnalazioni" && <Segnalazioni />}
         {tab === "sale" && <Sale />}
+        {tab === "ricorrenti" && sistemista && laundries.length > 0 && <Ricorrenti laundries={laundries} />}
+        {tab === "manutenzione" && sistemista && <Manutenzione />}
       </div>
     </div>
   );

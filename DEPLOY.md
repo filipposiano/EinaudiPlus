@@ -30,9 +30,22 @@ possono contenere segreti.
 | `SUPABASE_SECRET_KEY` | chiedere a Filippo — **segreto**, bypassa la RLS |
 | `CRON_SECRET` | chiedere a Filippo — **segreto**, condiviso col job pg_cron |
 | `APP_TOKEN` | stesso valore di `VITE_SECRET_TOKEN` |
-| `ADMIN_USER` | `admin` |
+| `ADMIN_USER` | `admin` — portineria |
 | `ADMIN_PASSWORD_HASH` | chiedere a Filippo — è un hash scrypt, non la password |
+| `SYSADMIN_USER` | `sistemista` — super admin |
+| `SYSADMIN_PASSWORD_HASH` | chiedere a Filippo — hash scrypt |
 | `ADMIN_SESSION_SECRET` | chiedere a Filippo — **segreto**, firma i cookie di sessione |
+
+I due account hanno poteri diversi:
+
+| | portineria | sistemista |
+|---|---|---|
+| Macchine fuori servizio, prenotazioni, segnalazioni, sale | ✓ | ✓ |
+| Regole ricorrenti | | ✓ |
+| Pulizia dei dati | | ✓ |
+
+Il controllo è sul server, in `api/admin/data.js`: nascondere le schede nel
+pannello non sarebbe un'autorizzazione.
 
 > La password del pannello è passata da una chat durante lo sviluppo. Vale la
 > pena cambiarla: `node scripts/hash-password.cjs "nuova-password"` rigenera
@@ -217,3 +230,27 @@ di prenotazione risolto male, o zero promemoria partiti la prima mattina.
 - **La quota di 2 turni a settimana ora è applicata dal server.** Prima era solo
   lato client, quindi aggirabile.
 - **Nuovo pannello `/admin`** e **promemoria Telegram opzionali**.
+
+---
+
+## Prenotazioni ricorrenti
+
+Dal pannello, scheda **Ricorrenti** (solo sistemista): «ogni lunedì alle 09:30
+la lavatrice B è della camera 101», lo stesso per cinema e musica.
+
+Una regola non è una prenotazione: è la ricetta con cui, **ogni notte alle 02:00
+UTC**, le prenotazioni della settimana corrente vengono create. Sono
+materializzate e non calcolate al volo, così compaiono nella griglia come tutte
+le altre, i promemoria partono senza casi speciali, e in una settimana
+particolare si può cancellare la singola occorrenza senza toccare la regola.
+
+Tre comportamenti da conoscere:
+
+- **Una regola creata adesso vale già da adesso**, non dal lunedì successivo.
+- **Se il turno è già prenotato da qualcuno, la regola cede.** Non gli si toglie
+  il turno alle spalle. Il conteggio "saltate" dice quando succede.
+- **Cancellare una regola non cancella le prenotazioni già create.** Restano
+  fino a fine settimana e si tolgono dalla scheda Prenotazioni.
+
+Il job gira ogni giorno e non solo il lunedì: la funzione è idempotente, quindi
+rieseguirla non fa danni, e così si auto-ripara se una notte salta.

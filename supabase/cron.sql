@@ -44,6 +44,15 @@ select cron.schedule(
   $job$
 );
 
+-- Prenotazioni ricorrenti: scrive nella settimana corrente le prenotazioni
+-- previste dalle regole del sistemista.
+--
+-- Ogni giorno e non solo il lunedi': la funzione e' idempotente (ON CONFLICT
+-- DO NOTHING), quindi rieseguirla non fa danni, e cosi' si auto-ripara se una
+-- notte il job salta. Alle 02:00 UTC, che e' dopo la mezzanotte di Roma sia
+-- con l'ora solare sia con quella legale.
+select cron.schedule('ricorrenti', '0 2 * * *', $job$ select apply_recurring(0); $job$);
+
 -- Potatura settimanale delle settimane vecchie: le prenotazioni oltre le 8
 -- settimane non servono piu'. Il CASCADE porta via anche reminder_log.
 -- Lunedi' alle 04:00 UTC, quando non c'e' nessuno sveglio.

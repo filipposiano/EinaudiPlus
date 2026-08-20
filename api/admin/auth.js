@@ -2,7 +2,7 @@
 
 import { readBody, json, clientIp, allow, methodOk } from "../_lib/http.js";
 import {
-  verifyPassword, issueToken, setSessionCookie, clearSessionCookie,
+  authenticate, issueToken, setSessionCookie, clearSessionCookie,
   currentAdmin, adminConfigured,
 } from "../_lib/auth.js";
 import { rpc } from "../_lib/db.js";
@@ -13,7 +13,9 @@ export default async function handler(req, res) {
   // GET = "chi sono": serve al pannello per sapere se mostrare il login.
   if (req.method === "GET") {
     const me = currentAdmin(req);
-    return json(res, 200, { ok: true, logged: Boolean(me), user: me?.u || null });
+    return json(res, 200, {
+      ok: true, logged: Boolean(me), user: me?.u || null, role: me?.r || null,
+    });
   }
 
   const body = readBody(req);
@@ -37,12 +39,9 @@ export default async function handler(req, res) {
   const username = String(body.username || "");
   const password = String(body.password || "");
 
-  const userOk = username === process.env.ADMIN_USER;
-  // La password si verifica SEMPRE, anche con username sbagliato: altrimenti la
-  // risposta immediata rivelerebbe quali username esistono.
-  const passOk = verifyPassword(password, process.env.ADMIN_PASSWORD_HASH);
+  const role = authenticate(username, password);
 
-  if (!userOk || !passOk) {
+  if (!role) {
     try {
       await rpc("admin_log", {
         p_actor: username || "(vuoto)",
@@ -54,10 +53,10 @@ export default async function handler(req, res) {
     return json(res, 401, { ok: false, error: "credenziali non valide" });
   }
 
-  setSessionCookie(res, issueToken(username));
+  setSessionCookie(res, issueToken(username, role));
   try {
-    await rpc("admin_log", { p_actor: username, p_action: "login", p_detail: { ip: clientIp(req) } });
+    await rpc("admin_log", { p_actor: username, p_action: "login", p_detail: { ip: clientIp(req), role } });
   } catch { /* idem */ }
 
-  return json(res, 200, { ok: true, user: username });
+  return json(res, 200, { ok: true, user: username, role });
 }

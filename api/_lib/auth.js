@@ -52,11 +52,12 @@ function sign(payload) {
   return crypto.createHmac("sha256", secret).update(payload).digest("base64url");
 }
 
-export function issueToken(username) {
+export function issueToken(username, role) {
   const body = b64(JSON.stringify({
     u: username,
+    r: role,   // 'portineria' | 'sistemista'
     exp: Date.now() + SESSION_HOURS * 3600_000,
-    v: 1,   // alzare questo numero invalida tutte le sessioni in giro
+    v: 2,   // alzare questo numero invalida tutte le sessioni in giro
   }));
   return `${body}.${sign(body)}`;
 }
@@ -73,7 +74,8 @@ export function readToken(token) {
 
   try {
     const claims = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
-    if (claims.v !== 1 || !claims.exp || Date.now() > claims.exp) return null;
+    if (claims.v !== 2 || !claims.exp || Date.now() > claims.exp) return null;
+    if (claims.r !== "portineria" && claims.r !== "sistemista") return null;
     return claims;
   } catch {
     return null;
@@ -112,10 +114,37 @@ export function currentAdmin(req) {
   return readToken(readCookie(req, COOKIE));
 }
 
+/** Il sistemista può tutto ciò che può la portineria, più il resto. */
+export function isSysadmin(claims) {
+  return claims?.r === "sistemista";
+}
+
 export function adminConfigured() {
   return Boolean(
-    process.env.ADMIN_USER &&
-    process.env.ADMIN_PASSWORD_HASH &&
-    process.env.ADMIN_SESSION_SECRET
+    process.env.ADMIN_SESSION_SECRET &&
+    ((process.env.ADMIN_USER && process.env.ADMIN_PASSWORD_HASH) ||
+     (process.env.SYSADMIN_USER && process.env.SYSADMIN_PASSWORD_HASH))
   );
+}
+
+/**
+ * Riconosce l'utente e ne restituisce il ruolo.
+ *
+ * Le password si verificano SEMPRE entrambe, anche quando l'username non
+ * corrisponde a nessuna: uscire prima renderebbe il tempo di risposta un
+ * indizio su quali account esistono.
+ */
+export function authenticate(username, password) {
+  const accounts = [
+    { user: process.env.ADMIN_USER, hash: process.env.ADMIN_PASSWORD_HASH, role: "portineria" },
+    { user: process.env.SYSADMIN_USER, hash: process.env.SYSADMIN_PASSWORD_HASH, role: "sistemista" },
+  ];
+
+  let matched = null;
+  for (const a of accounts) {
+    if (!a.user || !a.hash) continue;
+    const ok = verifyPassword(password, a.hash);
+    if (ok && a.user === username) matched = a.role;
+  }
+  return matched;
 }

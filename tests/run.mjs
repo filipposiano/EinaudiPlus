@@ -222,6 +222,92 @@ section("Operazioni admin");
   }
 }
 
+// ─── Sistemista ──────────────────────────────────────────────────────────────
+
+section("Separazione dei ruoli");
+{
+  // Il controllo che conta: la portineria non deve poter toccare le funzioni
+  // del sistemista, indipendentemente da cosa mostra il pannello.
+  if (!cookie) {
+    console.log("  salto  (nessuna sessione di portineria)");
+  } else {
+    for (const action of ["recurringList", "purge", "applyRecurring"]) {
+      const r = await call(adminData, { body: { action, scope: "settimana" }, cookie });
+      check(`portineria non puo' '${action}' -> 403`, r.status === 403, `ricevuto ${r.status}`);
+    }
+  }
+}
+
+section("Sistemista");
+let sysCookie = null;
+{
+  const pw = process.env.SYSADMIN_TEST_PASSWORD;
+  if (!pw) {
+    console.log("  salto  (serve SYSADMIN_TEST_PASSWORD nell'ambiente)");
+  } else {
+    const login = await call(adminAuth, { body: { action: "login", username: process.env.SYSADMIN_USER, password: pw } });
+    check("login sistemista", login.status === 200 && login.body?.role === "sistemista", JSON.stringify(login.body));
+    const raw = login.headers["Set-Cookie"];
+    sysCookie = (Array.isArray(raw) ? raw.join("; ") : String(raw || "")).split(";")[0];
+
+    check("puo' leggere le regole",
+      (await call(adminData, { body: { action: "recurringList" }, cookie: sysCookie })).body?.ok === true);
+
+    // Regola lavanderia: ogni mercoledì, slot fisso, camera fissa.
+    const add = await call(adminData, {
+      body: { action: "recurringAddLaundry", laundry_id: 1, day: 2, slot: SLOT, machine: "W-B", room: ROOM },
+      cookie: sysCookie,
+    });
+    check("crea una regola ricorrente", add.body?.ok === true, JSON.stringify(add.body));
+
+    const dup = await call(adminData, {
+      body: { action: "recurringAddLaundry", laundry_id: 1, day: 2, slot: SLOT, machine: "W-B", room: "999" },
+      cookie: sysCookie,
+    });
+    check("due regole sullo stesso turno respinte", dup.body?.ok === false, JSON.stringify(dup.body));
+
+    // La regola dev'essere già diventata una prenotazione vera.
+    const snap = await call(laundry, { method: "GET", query: { token: TOKEN, room: ROOM } });
+    check("la regola è già una prenotazione in griglia",
+      snap.body?.week?.["2"]?.[String(SLOT)]?.["W-B"] === ROOM,
+      JSON.stringify(snap.body?.week?.["2"]?.[String(SLOT)]));
+
+    // Idempotenza: riapplicare non deve duplicare né fallire.
+    const again = await call(adminData, { body: { action: "applyRecurring", offset: 0 }, cookie: sysCookie });
+    check("riapplicare è idempotente", again.body?.ok === true && again.body?.saltate >= 1,
+      JSON.stringify(again.body));
+
+    const list = await call(adminData, { body: { action: "recurringList" }, cookie: sysCookie });
+    const mine = (list.body?.items || []).find((x) => x.room === ROOM && x.kind === "laundry");
+    check("la regola compare nell'elenco", Boolean(mine));
+
+    if (mine) {
+      check("sospensione",
+        (await call(adminData, { body: { action: "recurringSetActive", id: mine.id, active: false }, cookie: sysCookie })).body?.ok === true);
+      check("eliminazione",
+        (await call(adminData, { body: { action: "recurringDelete", id: mine.id }, cookie: sysCookie })).body?.ok === true);
+    }
+
+    // Regola sala
+    const sp = await call(adminData, {
+      body: { action: "recurringAddSpace", space_id: 2, day: 3, start: 900 + SLOT, end: 960 + SLOT, name: "Prova ricorrente" },
+      cookie: sysCookie,
+    });
+    check("regola ricorrente per la sala", sp.body?.ok === true, JSON.stringify(sp.body));
+
+    const spaces = await call(adminData, { body: { action: "spaces" }, cookie: sysCookie });
+    check("la regola sala è già prenotata",
+      (spaces.body?.items || []).some((x) => x.name === "Prova ricorrente"));
+
+    const spList = await call(adminData, { body: { action: "recurringList" }, cookie: sysCookie });
+    const spRule = (spList.body?.items || []).find((x) => x.name === "Prova ricorrente");
+    if (spRule) await call(adminData, { body: { action: "recurringDelete", id: spRule.id }, cookie: sysCookie });
+
+    check("ambito di pulizia inventato respinto",
+      (await call(adminData, { body: { action: "purge", scope: "qualsiasi" }, cookie: sysCookie })).body?.ok === false);
+  }
+}
+
 // ─── Telegram ────────────────────────────────────────────────────────────────
 
 section("Telegram");
