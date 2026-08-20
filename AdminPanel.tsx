@@ -1,10 +1,17 @@
 // Pannello amministrativo — /admin
 //
-// Sostituisce la modifica a mano dei fogli Google. Fa solo le quattro cose per
-// cui quei fogli si aprivano davvero: mettere una macchina fuori servizio,
-// togliere una prenotazione, leggere le segnalazioni, sistemare le sale.
+// Tiene solo cio' che nell'app normale non esiste: lo stato delle macchine, le
+// segnalazioni dei residenti e, per il sistemista, regole ricorrenti e pulizia.
+//
+// Prenotare e cancellare NON si fa da qui: si fa nell'app principale, dove chi
+// ha una sessione admin puo' agire a nome della DIREZIONE su qualsiasi turno.
+// Le vecchie schede "Prenotazioni" e "Sale" erano copie peggiori di schermate
+// che gia' esistevano.
 //
 // Caricato in lazy da main.tsx: non pesa sul bundle dei residenti.
+//
+// Il file si chiama AdminPanel e non Admin perche' su filesystem insensibili
+// alle maiuscole Vite risolveva la rotta /admin come questo file.
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -18,9 +25,7 @@ type Laundry = {
   quota: number; reminders: string; week_start: string;
   bookings: number; machines: Machine[];
 };
-type Booking = { id: number; day: number; slot: number; machine: string; room: string; by: string };
 type Feedback = { id: number; room: string | null; body: string; laundry: string | null; created_at: string; handled: boolean };
-type SpaceBooking = { id: number; space: string; day: number; start: number; end: number; name: string; type: string | null };
 
 type Recurring = {
   id: number; kind: "laundry" | "space"; day: number; active: boolean; note?: string;
@@ -29,7 +34,7 @@ type Recurring = {
 };
 
 type Role = "portineria" | "sistemista";
-type Tab = "macchine" | "settimana" | "segnalazioni" | "sale" | "ricorrenti" | "manutenzione";
+type Tab = "macchine" | "segnalazioni" | "ricorrenti" | "manutenzione";
 
 // ─── Chiamate ────────────────────────────────────────────────────────────────
 
@@ -131,6 +136,105 @@ function Login({ onDone }: { onDone: () => void }) {
   );
 }
 
+// ─── Scheda macchina ─────────────────────────────────────────────────────────
+//
+// Prima era una riga con scritto "W-A", che non dice niente a chi la legge.
+// Qui si vede una lavatrice o un'asciugatrice, con il cestello che gira quando
+// è in servizio e si ferma quando non lo è: lo stato si capisce a colpo
+// d'occhio, senza leggere.
+//
+// L'interruttore è la metafora giusta perché è quello che si fa davvero con
+// una macchina rotta: la si spegne.
+
+function Oblo({ kind, acceso }: { kind: "washer" | "dryer"; acceso: boolean }) {
+  const colore = acceso ? "var(--status-free, #15803d)" : "var(--destructive)";
+  return (
+    <svg viewBox="0 0 64 72" width="72" height="81" aria-hidden="true"
+         style={{ display: "block", margin: "0 auto" }}>
+      {/* Corpo */}
+      <rect x="4" y="4" width="56" height="64" rx="7"
+            fill="var(--card)" stroke="var(--border)" strokeWidth="2" />
+      {/* Pannello comandi */}
+      <path d="M4 20 H60" stroke="var(--border)" strokeWidth="2" />
+      <circle cx="13" cy="12" r="2.5" fill={colore} opacity={acceso ? 1 : 0.35} />
+      <rect x="22" y="10" width="30" height="4" rx="2" fill="var(--border)" />
+
+      {/* Oblò */}
+      <circle cx="32" cy="44" r="18" fill="var(--background)"
+              stroke="var(--border)" strokeWidth="2" />
+      <circle cx="32" cy="44" r="13.5" fill="none" stroke={colore}
+              strokeWidth="2" opacity={acceso ? 0.5 : 0.3} />
+
+      {/* Cestello: gira solo se la macchina è in servizio.
+          L'asciugatrice gira più lenta, come quella vera. */}
+      <g style={acceso ? {
+        transformOrigin: "32px 44px",
+        animation: `adminDrum ${kind === "dryer" ? "3.2s" : "1.9s"} linear infinite`,
+      } : undefined}>
+        <path d="M32 33 A11 11 0 0 1 43 44" fill="none" stroke={colore}
+              strokeWidth="3.5" strokeLinecap="round" opacity={acceso ? 0.9 : 0.35} />
+        <path d="M32 55 A11 11 0 0 1 21 44" fill="none" stroke={colore}
+              strokeWidth="3.5" strokeLinecap="round" opacity={acceso ? 0.9 : 0.35} />
+      </g>
+
+      {/* Croce quando è fuori servizio */}
+      {!acceso && (
+        <g stroke="var(--destructive)" strokeWidth="3.5" strokeLinecap="round">
+          <path d="M24 36 L40 52" />
+          <path d="M40 36 L24 52" />
+        </g>
+      )}
+    </svg>
+  );
+}
+
+function MacchinaCard({ machine, busy, onToggle }: {
+  machine: Machine; busy: boolean; onToggle: () => void;
+}) {
+  const acceso = !machine.oos;
+  const nome = (machine.kind === "washer" ? "Lavatrice " : "Asciugatrice ") + machine.code.slice(-1);
+
+  return (
+    <div style={{
+      border: `1px solid ${acceso ? "var(--border)" : "var(--destructive)"}`,
+      borderRadius: 16,
+      padding: "16px 12px 12px",
+      textAlign: "center",
+      background: acceso ? "transparent" : "color-mix(in srgb, var(--destructive) 7%, transparent)",
+      transition: "border-color .2s, background .2s",
+      opacity: busy ? 0.55 : 1,
+    }}>
+      <Oblo kind={machine.kind} acceso={acceso} />
+
+      <p style={{ fontSize: 14, fontWeight: 700, marginTop: 10 }}>{nome}</p>
+      <p style={{ fontSize: 12, marginBottom: 12, color: acceso ? "var(--status-free, #15803d)" : "var(--destructive)" }}>
+        {acceso ? "In servizio" : "Fuori servizio"}
+      </p>
+
+      {/* Interruttore */}
+      <button
+        onClick={onToggle}
+        disabled={busy}
+        role="switch"
+        aria-checked={acceso}
+        aria-label={`${nome}: ${acceso ? "spegni, segna fuori servizio" : "riaccendi, rimetti in servizio"}`}
+        title={acceso ? "Spegni — segna fuori servizio" : "Riaccendi — rimetti in servizio"}
+        style={{
+          width: 52, height: 30, borderRadius: 99, border: "none", padding: 3,
+          cursor: busy ? "default" : "pointer",
+          background: acceso ? "var(--status-free, #15803d)" : "var(--destructive)",
+          display: "flex", justifyContent: acceso ? "flex-end" : "flex-start",
+          transition: "background .2s",
+        }}>
+        <span style={{
+          width: 24, height: 24, borderRadius: 99, background: "#fff",
+          boxShadow: "0 1px 3px rgba(0,0,0,.3)", transition: "all .2s",
+        }} />
+      </button>
+    </div>
+  );
+}
+
 // ─── Macchine ────────────────────────────────────────────────────────────────
 
 function Macchine({ laundries, reload }: { laundries: Laundry[]; reload: () => void }) {
@@ -152,8 +256,8 @@ function Macchine({ laundries, reload }: { laundries: Laundry[]; reload: () => v
   return (
     <>
       <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
-        Segnare una macchina fuori servizio la mostra come guasta a tutti, ma <strong>non impedisce di prenotarla</strong>:
-        chi prenota vede un avviso. Le macchine che non esistono fisicamente non sono modificabili.
+        L'interruttore spegne la macchina e la segna fuori servizio. Chi prenota vede un avviso,
+        ma <strong>può prenotarla lo stesso</strong>: lo stato informa, non blocca.
       </p>
 
       {laundries.map((l) => (
@@ -170,101 +274,21 @@ function Macchine({ laundries, reload }: { laundries: Laundry[]; reload: () => v
               perché il client le indicizza per posizione, ma alla Manica solo
               W-A e D-A sono reali: mostrare le altre come "non presente" era
               rumore, e per l'amministratore non c'è nulla da farci. */}
-          <div style={{ display: "grid", gap: 8 }}>
+          <div style={{
+            display: "grid", gap: 14,
+            gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+          }}>
             {l.machines.filter((m) => m.bookable).map((m) => (
-              <div key={m.code} style={{
-                display: "flex", alignItems: "center", gap: 12, padding: "10px 12px",
-                borderRadius: 12, border: "1px solid var(--border)",
-                background: m.oos ? "color-mix(in srgb, var(--destructive) 8%, transparent)" : "transparent",
-              }}>
-                <span style={{
-                  width: 8, height: 8, borderRadius: 99,
-                  background: m.oos ? "var(--destructive)" : "var(--status-free, #16a34a)",
-                }} />
-                <span style={{ fontFamily: "monospace", fontWeight: 700, minWidth: 44 }}>{m.code}</span>
-                <span style={{ fontSize: 13, ...S.sub, flex: 1 }}>
-                  {m.kind === "washer" ? "Lavatrice" : "Asciugatrice"}
-                </span>
-                <button style={S.danger} disabled={busy === `${l.id}-${m.code}`} onClick={() => toggle(l, m)}>
-                  {m.oos ? "Rimetti in servizio" : "Segna fuori servizio"}
-                </button>
-              </div>
+              <MacchinaCard
+                key={m.code}
+                machine={m}
+                busy={busy === `${l.id}-${m.code}`}
+                onToggle={() => toggle(l, m)}
+              />
             ))}
           </div>
         </div>
       ))}
-    </>
-  );
-}
-
-// ─── Settimana ───────────────────────────────────────────────────────────────
-
-// Solo la settimana corrente.
-//
-// La navigazione fra settimane è stata tolta di proposito: la ritenzione è di
-// una settimana, quindi "successiva" sarebbe sempre vuota e "precedente" quasi
-// sempre. Mostrare comandi che non portano da nessuna parte confonde e basta.
-// L'endpoint accetta ancora un offset, se un domani servisse.
-function Settimana({ laundries }: { laundries: Laundry[] }) {
-  const [id, setId] = useState(laundries[0]?.id ?? 0);
-  const [data, setData] = useState<{ week_start: string; bookings: Booking[] } | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const load = useCallback(async () => {
-    setBusy(true);
-    try { setData(await call("week", { laundry_id: id, offset: 0 })); }
-    catch (e: any) { alert(e.message); }
-    finally { setBusy(false); }
-  }, [id]);
-
-  useEffect(() => { load(); }, [load]);
-
-  async function remove(b: Booking) {
-    if (!confirm(`Cancellare la prenotazione della camera ${b.room}?\n${DAYS[b.day]} ${slotLabel(b.slot)} · ${b.machine}`)) return;
-    try { await call("deleteBooking", { id: b.id }); load(); }
-    catch (e: any) { alert(e.message); }
-  }
-
-  return (
-    <>
-      <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        {laundries.map((l) => (
-          <button key={l.id} onClick={() => setId(l.id)}
-            style={{ ...S.btn, ...(l.id === id ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" } : {}) }}>
-            {l.name}
-          </button>
-        ))}
-      </div>
-
-      <div style={{ ...S.card, padding: 18 }}>
-        <p style={{ fontSize: 12, ...S.sub, marginBottom: 14 }}>
-          Settimana corrente, dal {data?.week_start ?? "…"} · {data?.bookings.length ?? 0} prenotazioni
-        </p>
-
-        {busy && <p style={{ fontSize: 13, ...S.sub }}>Caricamento…</p>}
-
-        {!busy && data?.bookings.length === 0 && (
-          <p style={{ fontSize: 13, ...S.sub }}>Nessuna prenotazione in questa settimana.</p>
-        )}
-
-        <div style={{ display: "grid", gap: 6 }}>
-          {data?.bookings.map((b) => (
-            <div key={b.id} style={{
-              display: "flex", alignItems: "center", gap: 12, padding: "9px 12px",
-              borderRadius: 10, border: "1px solid var(--border)",
-            }}>
-              <span style={{ fontSize: 13, minWidth: 40, fontWeight: 600 }}>{DAYS[b.day]}</span>
-              <span style={{ fontSize: 13, fontFamily: "monospace", minWidth: 48 }}>{slotLabel(b.slot)}</span>
-              <span style={{ fontSize: 13, fontFamily: "monospace", minWidth: 44 }}>{b.machine}</span>
-              <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>
-                camera {b.room}
-                {b.by === "admin" && <span style={{ fontSize: 11, ...S.sub, marginLeft: 8 }}>(inserita da admin)</span>}
-              </span>
-              <button style={S.danger} onClick={() => remove(b)}>Cancella</button>
-            </div>
-          ))}
-        </div>
-      </div>
     </>
   );
 }
@@ -338,58 +362,6 @@ function Segnalazioni() {
         })}
       </div>
     </>
-  );
-}
-
-// ─── Sale ────────────────────────────────────────────────────────────────────
-
-function Sale() {
-  const [items, setItems] = useState<SpaceBooking[]>([]);
-  const [busy, setBusy] = useState(false);
-
-  const load = useCallback(async () => {
-    setBusy(true);
-    try { setItems((await call("spaces")).items); }
-    catch (e: any) { alert(e.message); }
-    finally { setBusy(false); }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  async function remove(b: SpaceBooking) {
-    if (!confirm(`Cancellare la prenotazione di ${b.name}?`)) return;
-    try { await call("deleteSpaceBooking", { id: b.id }); load(); }
-    catch (e: any) { alert(e.message); }
-  }
-
-  return (
-    <div style={{ ...S.card, padding: 18 }}>
-      <p style={{ fontSize: 12, ...S.sub, marginBottom: 14 }}>
-        Settimana corrente · {items.length} prenotazioni
-      </p>
-      {busy && <p style={{ fontSize: 13, ...S.sub }}>Caricamento…</p>}
-      {!busy && items.length === 0 && <p style={{ fontSize: 13, ...S.sub }}>Nessuna prenotazione.</p>}
-
-      <div style={{ display: "grid", gap: 6 }}>
-        {items.map((b) => (
-          <div key={b.id} style={{
-            display: "flex", alignItems: "center", gap: 12, padding: "9px 12px",
-            borderRadius: 10, border: "1px solid var(--border)",
-          }}>
-            <span style={{ fontSize: 12, fontWeight: 700, minWidth: 56, textTransform: "capitalize" }}>{b.space}</span>
-            <span style={{ fontSize: 13, minWidth: 40 }}>{DAYS[b.day]}</span>
-            <span style={{ fontSize: 13, fontFamily: "monospace", minWidth: 96 }}>
-              {timeLabel(b.start)}–{timeLabel(b.end)}
-            </span>
-            <span style={{ fontSize: 14, fontWeight: 600, flex: 1 }}>
-              {b.name}
-              {b.type && <span style={{ fontSize: 11, ...S.sub, marginLeft: 8 }}>{b.type}</span>}
-            </span>
-            <button style={S.danger} onClick={() => remove(b)}>Cancella</button>
-          </div>
-        ))}
-      </div>
-    </div>
   );
 }
 
@@ -733,11 +705,13 @@ export default function Admin() {
 
   // Le schede riservate si nascondono, ma il controllo vero sta sul server:
   // nascondere un pulsante non è un'autorizzazione.
+  // "Prenotazioni" e "Sale" non ci sono piu': erano solo elenchi di cio' che
+  // l'app principale gia' mostra, in una veste peggiore. Da amministratore si
+  // apre l'app normale, dove ora si puo' prenotare e cancellare a nome della
+  // DIREZIONE su qualsiasi turno e qualsiasi sala.
   const TABS: [Tab, string][] = [
     ["macchine", "Macchine"],
-    ["settimana", "Prenotazioni"],
     ["segnalazioni", "Segnalazioni"],
-    ["sale", "Sale"],
     ...(sistemista ? ([["ricorrenti", "Ricorrenti"], ["manutenzione", "Manutenzione"]] as [Tab, string][]) : []),
   ];
 
@@ -777,9 +751,7 @@ export default function Admin() {
         </nav>
 
         {tab === "macchine" && <Macchine laundries={laundries} reload={loadOverview} />}
-        {tab === "settimana" && laundries.length > 0 && <Settimana laundries={laundries} />}
         {tab === "segnalazioni" && <Segnalazioni />}
-        {tab === "sale" && <Sale />}
         {tab === "ricorrenti" && sistemista && laundries.length > 0 && <Ricorrenti laundries={laundries} />}
         {tab === "manutenzione" && sistemista && <Manutenzione />}
       </div>

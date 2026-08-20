@@ -549,6 +549,17 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, onConfirm, onC
                 <span>{t.forOther}</span>
                 <span style={{ color:sub }}>→</span>
               </button>
+              {/* Visibile solo con una sessione amministrativa. Nasconderlo non
+                  e' un'autorizzazione: il server rifiuta comunque senza cookie. */}
+              {isAdmin && (
+                <button
+                  onClick={()=>{ setRoom(api.DIREZIONE); setStep("confirm"); }}
+                  className="w-full py-4 rounded-2xl text-sm font-semibold flex items-center justify-between px-5 transition-all active:scale-[0.98] border"
+                  style={{ background:"transparent", borderColor:RED, color:RED }}>
+                  <span>{t.forDirezione}</span>
+                  <span style={{ opacity:0.7 }}>→</span>
+                </button>
+              )}
             </div>
           </>
         )}
@@ -2048,11 +2059,33 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
   const on = state === "on";
   const bot = import.meta.env.VITE_TELEGRAM_BOT as string | undefined;
 
+  /**
+   * Collega Telegram in un tocco solo.
+   *
+   * Il codice si genera e si passa al bot dentro il link `?start=<codice>`:
+   * Telegram lo invia da solo quando l'utente tocca AVVIA, quindi non c'è
+   * niente da copiare a mano. Il codice resta visibile solo come riserva, per
+   * il caso in cui l'apertura non funzioni.
+   *
+   * La finestra si apre PRIMA della chiamata di rete, non dopo: se aspettassimo
+   * l'await il browser avrebbe già considerato concluso il tocco dell'utente e
+   * bloccherebbe l'apertura come popup indesiderato.
+   */
   async function linkTelegram() {
     setTgBusy(true); setTgErr(false);
-    try { setCode(await api.telegramCode()); }
-    catch { setTgErr(true); }
-    finally { setTgBusy(false); }
+    const w = bot ? window.open("", "_blank") : null;
+    try {
+      const c = await api.telegramCode();
+      setCode(c);
+      if (bot) {
+        const link = `https://t.me/${bot}?start=${c}`;
+        if (w && !w.closed) w.location.href = link;
+        else window.location.href = link;   // popup bloccato: si va diretti
+      }
+    } catch {
+      setTgErr(true);
+      if (w && !w.closed) w.close();
+    } finally { setTgBusy(false); }
   }
 
   return (
@@ -2112,13 +2145,11 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
                   {it ? "Utile su iPhone, dove le notifiche sono capricciose" : "Handy on iPhone, where push is unreliable"}
                 </p>
               </div>
-              {!code && (
-                <button onClick={linkTelegram} disabled={tgBusy || !room}
-                  className="rounded-xl px-3 py-2 text-xs font-semibold shrink-0"
-                  style={{ background:"var(--secondary)", color:"var(--foreground)" }}>
-                  {tgBusy ? "…" : (it ? "Collega" : "Link")}
-                </button>
-              )}
+              <button onClick={linkTelegram} disabled={tgBusy || !room}
+                className="rounded-xl px-3 py-2 text-xs font-semibold shrink-0"
+                style={{ background:`color-mix(in srgb, ${RED} 12%, transparent)`, color:RED }}>
+                {tgBusy ? "…" : code ? (it ? "Riapri" : "Reopen") : (it ? "Collega" : "Link")}
+              </button>
             </div>
 
             {tgErr && (
@@ -2129,21 +2160,20 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
 
             {code && (
               <div className="mt-3 pt-3" style={{ borderTop:"1px solid var(--border)" }}>
-                <p className="text-xs mb-2" style={{ color:"var(--muted-foreground)" }}>
-                  {it ? "Apri il bot e incolla questo codice:" : "Open the bot and paste this code:"}
+                <p className="text-xs" style={{ color:"var(--foreground)" }}>
+                  {it
+                    ? "Ho aperto Telegram: tocca AVVIA nel bot e sei collegato."
+                    : "Telegram is open: tap START in the bot and you're linked."}
                 </p>
-                <p className="text-xl font-mono font-bold tracking-widest text-center py-2 rounded-xl"
-                   style={{ background:"var(--secondary)", color:"var(--foreground)" }}>
-                  {code}
+                {/* Riserva, non il percorso principale: serve solo se
+                    l'apertura automatica non è andata a buon fine. */}
+                <p className="text-[11px] mt-2" style={{ color:"var(--muted-foreground)" }}>
+                  {it ? "Non si è aperto? Scrivi al bot " : "Didn't open? Message "}
+                  {bot && <span className="font-mono font-semibold">@{bot}</span>}
+                  {it ? " questo codice: " : " this code: "}
+                  <span className="font-mono font-bold tracking-wider" style={{ color:"var(--foreground)" }}>{code}</span>
                 </p>
-                {bot && (
-                  <a href={`https://t.me/${bot}?start=${code}`} target="_blank" rel="noopener noreferrer"
-                     className="block text-center text-xs font-semibold mt-2 py-2 rounded-xl"
-                     style={{ background:`color-mix(in srgb, ${RED} 12%, transparent)`, color:RED }}>
-                    {it ? "Apri Telegram" : "Open Telegram"}
-                  </a>
-                )}
-                <p className="text-[11px] mt-2 text-center" style={{ color:"var(--muted-foreground)" }}>
+                <p className="text-[11px] mt-1" style={{ color:"var(--muted-foreground)" }}>
                   {it ? "Vale una volta sola e scade in 24 ore." : "Single use, expires in 24 hours."}
                 </p>
               </div>

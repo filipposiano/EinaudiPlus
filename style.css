@@ -155,3 +155,23 @@
     color: var(--foreground);
   }
 }
+
+/* Cestello che gira nelle schede macchina del pannello amministrativo.
+   Serve a far capire lo stato senza leggere: se gira è in servizio. */
+@keyframes adminDrum {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Chi ha chiesto al sistema di ridurre le animazioni non deve vedere niente
+   ruotare: lo stato resta comunque leggibile dal colore, dalla croce e
+   dall'interruttore. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

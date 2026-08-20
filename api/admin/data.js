@@ -14,6 +14,7 @@ const MUTATIONS = new Set([
   "markFeedback", "deleteSpaceBooking",
   "recurringAddLaundry", "recurringAddSpace", "recurringSetActive",
   "recurringDelete", "applyRecurring", "purge",
+  "bookDirezione", "clearAny", "bookSpaceDirezione",
 ]);
 
 // Riservate al sistemista. La portineria non le vede nel pannello, ma il
@@ -97,6 +98,35 @@ export default async function handler(req, res) {
 
       case "deleteSpaceBooking":
         result = await rpc("admin_delete_space_booking", { p_id: Number(body.id) });
+        break;
+
+      // ── Azioni a nome della DIREZIONE, usate dall'app principale ─────────
+      case "bookDirezione":
+        result = await rpc("book_as_direzione", {
+          p_laundry_id: Number(body.laundry_id),
+          p_day: Number(body.day),
+          p_slot: Number(body.slot),
+          p_machine: String(body.machine || ""),
+        });
+        break;
+
+      case "clearAny":
+        result = await rpc("admin_clear_any", {
+          p_laundry_id: Number(body.laundry_id),
+          p_day: Number(body.day),
+          p_slot: Number(body.slot),
+          p_machine: String(body.machine || ""),
+        });
+        break;
+
+      case "bookSpaceDirezione":
+        result = await rpc("book_space_as_direzione", {
+          p_slug: String(body.space || ""),
+          p_day: Number(body.day),
+          p_start: Number(body.start),
+          p_end: Number(body.end),
+          p_type: body.type ? String(body.type) : null,
+        });
         break;
 
       // ── Sistemista: regole ricorrenti ────────────────────────────────────

@@ -127,3 +127,60 @@ export async function telegramCode(): Promise<string> {
   const res = await postAction("telegramCode", { room: currentRoom() });
   return res.code as string;
 }
+
+// ─── Modalità direzione ──────────────────────────────────────────────────────
+//
+// Se il dispositivo ha una sessione amministrativa valida, l'app principale
+// offre qualche potere in più: prenotare a nome della DIREZIONE e cancellare
+// qualunque turno. Il pannello /admin resta per le cose che qui non esistono
+// (stato macchine, segnalazioni), non per duplicare queste schermate.
+//
+// Il controllo vero è sul cookie, lato server: qui si decide solo cosa mostrare.
+
+export const DIREZIONE = "DIREZIONE";
+
+/** Il ruolo della sessione admin su questo dispositivo, se c'è. */
+export async function adminRole(): Promise<string | null> {
+  try {
+    const res = await fetch("/api/admin/auth");
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.logged ? (data.role as string) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function adminAction(action: string, payload: Record<string, unknown>) {
+  const res = await fetch("/api/admin/data", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-requested-with": "admin" },
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const data = await res.json();
+  if (!data.ok) {
+    const err = new Error(data.error || "Errore durante l'operazione") as Error & { by?: string };
+    err.by = data.by;
+    throw err;
+  }
+  return data;
+}
+
+/** La lavanderia di una camera, come la calcola il server. 1-99 = Manica. */
+function laundryIdFor(room: string): number {
+  const n = parseInt(room.match(/^(\d+)/)?.[1] || "0", 10);
+  return n > 0 && n < 100 ? 2 : 1;
+}
+
+export async function bookAsDirezione(day: number, slot: number, machine: string) {
+  return adminAction("bookDirezione", {
+    laundry_id: laundryIdFor(currentRoom()), day, slot, machine,
+  });
+}
+
+/** Cancella qualunque turno, non solo il proprio. */
+export async function clearAsAdmin(day: number, slot: number, machine: string) {
+  return adminAction("clearAny", {
+    laundry_id: laundryIdFor(currentRoom()), day, slot, machine,
+  });
+}

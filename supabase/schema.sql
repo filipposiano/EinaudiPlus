@@ -81,7 +81,10 @@ create table laundry_booking (
   day          smallint not null check (day between 0 and 6),   -- 0 = lunedì
   slot         smallint not null check (slot between 0 and 18),
   machine_code text     not null,
-  room         text     not null check (room ~ '^[0-9]{1,4}(-?[abAB])?$'),
+  -- 'DIREZIONE' e' l'unica eccezione al formato camera: serve all'admin per
+  -- riservare turni che non appartengono a nessuno (manutenzione, lavaggi di
+  -- servizio). In maiuscolo, cosi' non collide con un numero di camera.
+  room         text     not null check (room = 'DIREZIONE' or room ~ '^[0-9]{1,4}(-?[abAB])?$'),
   created_at   timestamptz not null default now(),
   created_by   text not null default 'user' check (created_by in ('user','admin')),
   foreign key (laundry_id, machine_code) references machine(laundry_id, code),

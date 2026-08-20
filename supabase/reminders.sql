@@ -39,38 +39,52 @@ returns table (
   ),
   t as (
     select b.*,
-           to_char(b.ss at time zone b.tz, 'HH24:MI') as h_start,
-           to_char((b.ss + make_interval(mins => b.slot_len_min)) at time zone b.tz, 'HH24:MI') as h_end
+           -- Orario della LAVATRICE: dall'inizio del turno alla sua fine.
+           to_char(b.ss at time zone b.tz, 'HH24:MI') as h_lav_da,
+           to_char((b.ss + make_interval(mins => b.slot_len_min)) at time zone b.tz, 'HH24:MI') as h_lav_a,
+           -- Orario dell'ASCIUGATRICE: il turno successivo, riservato in automatico.
+           to_char((b.ss + make_interval(mins => b.slot_len_min)) at time zone b.tz, 'HH24:MI') as h_asc_da,
+           to_char((b.ss + make_interval(mins => 2 * b.slot_len_min)) at time zone b.tz, 'HH24:MI') as h_asc_a,
+           -- 'W-A' -> 'Lavatrice A' / 'Asciugatrice A'
+           'Lavatrice '    || right(b.machine_code, 1) as nome_lav,
+           'Asciugatrice ' || right(b.machine_code, 1) as nome_asc
     from b
   )
-  -- Inizio turno: unico promemoria in 'single', il primo dei tre in 'triple'.
+  -- Il `tag` è lo stesso per tutti e tre, di proposito: i servizi push
+  -- sostituiscono la notifica precedente con lo stesso tag invece di
+  -- accumularle. I tre messaggi sono passi successivi dello stesso bucato,
+  -- quindi conta solo l'ultimo — e chi guarda il telefono a fine ciclo trova
+  -- "Ritira i tuoi vestiti", non tre avvisi sovrapposti.
+
+  -- 1. Inizio turno: unico promemoria in 'single', il primo dei tre in 'triple'.
   select 'pre',
          t.ss,
          t.ss - interval '16 minutes',
-         'Lavanderia · turno tra poco',
-         'St. ' || t.room || ' · ' || t.machine_code || ' · ' || t.h_start || '–' || t.h_end,
-         'laundry-' || t.day || '-' || t.slot || '-' ||
-           case when t.reminder_mode = 'triple' then 'pre' else t.machine_code end
+         'Il tuo turno inizia tra poco!',
+         t.nome_lav || ' · ' || t.h_lav_da || '–' || t.h_lav_a,
+         'laundry-' || t.day || '-' || t.slot || '-' || t.machine_code
   from t
 
   union all
 
+  -- 2. La lavatrice ha finito: il bucato va spostato.
   select 'washerend',
          t.ss + make_interval(mins => t.slot_len_min),
          t.ss + make_interval(mins => t.slot_len_min),
-         'Lavanderia · lavatrice terminata',
-         'St. ' || t.room || ' · sposta il bucato in asciugatrice',
-         'laundry-' || t.day || '-' || t.slot || '-washerend'
+         'Sposta i vestiti in asciugatrice!',
+         t.nome_asc || ' · ' || t.h_asc_da || '–' || t.h_asc_a,
+         'laundry-' || t.day || '-' || t.slot || '-' || t.machine_code
   from t where t.reminder_mode = 'triple'
 
   union all
 
+  -- 3. Anche l'asciugatrice ha finito.
   select 'dryerend',
          t.ss + make_interval(mins => 2 * t.slot_len_min),
          t.ss + make_interval(mins => 2 * t.slot_len_min),
-         'Lavanderia · asciugatura terminata',
-         'St. ' || t.room || ' · ritira il bucato',
-         'laundry-' || t.day || '-' || t.slot || '-dryerend'
+         'Ritira i tuoi vestiti!',
+         t.nome_asc || ' · ' || t.h_asc_da || '–' || t.h_asc_a,
+         'laundry-' || t.day || '-' || t.slot || '-' || t.machine_code
   from t where t.reminder_mode = 'triple';
 $$;
 

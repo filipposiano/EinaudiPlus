@@ -6,7 +6,11 @@ import './style.css'
 // Il pannello admin sta su /admin ed è caricato in lazy: chi usa l'app non ne
 // scarica una riga. Non serve un router per due sole rotte.
 const isAdmin = window.location.pathname.replace(/\/+$/, '') === '/admin'
-const Admin = React.lazy(() => import('./Admin.tsx'))
+// Il file si chiama AdminPanel e non Admin di proposito: su filesystem
+// insensibili alle maiuscole (Windows, macOS) Vite in sviluppo risolveva la
+// rotta /admin come il file Admin.tsx e ne serviva il sorgente, rendendo il
+// pannello irraggiungibile con `npm run dev`.
+const Admin = React.lazy(() => import('./AdminPanel.tsx'))
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

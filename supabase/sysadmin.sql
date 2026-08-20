@@ -29,7 +29,7 @@ create table if not exists recurring_booking (
   laundry_id   smallint references laundry(id) on delete cascade,
   slot         smallint check (slot between 0 and 18),
   machine_code text,
-  room         text check (room ~ '^[0-9]{1,4}(-?[abAB])?$'),
+  room         text check (room is null or room = 'DIREZIONE' or room ~ '^[0-9]{1,4}(-?[abAB])?$'),
 
   -- Sale
   space_id   smallint references room_space(id) on delete cascade,
