@@ -693,26 +693,67 @@ function Manutenzione() {
   );
 }
 
-// ─── Guscio ──────────────────────────────────────────────────────────────────
-//
-// Non e' piu' una pagina a se': e' una schermata che si apre sopra l'app
-// normale, dal menu Impostazioni. Un amministratore usa esattamente la stessa
-// app di tutti gli altri — stessa dashboard, stesse prenotazioni — e in piu'
-// trova nel menu le voci che qui dentro vivono. Il login sta nello stesso
-// posto, perche' e' li' che uno va a cercarlo.
-//
-// La pagina /admin separata voleva dire due interfacce da mantenere e un
-// amministratore che, per prenotare a nome della DIREZIONE, doveva comunque
-// tornare sull'app: la separazione non pagava niente.
+// ─── Sessione ────────────────────────────────────────────────────────────────
 
-export function AdminSheet({ tab, onClose, onSession }: {
-  tab: Tab | null;                     // null = si apre sul login
+/** Chiude la sessione amministrativa. */
+export async function adminLogout() {
+  await fetch("/api/admin/auth", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "logout" }),
+  });
+}
+
+// Il login sta in una scheda a se' perche' e' l'unico punto d'ingresso: le
+// sezioni amministrative vere e proprie vivono nella navigazione, accanto a
+// Lavanderia / Cinema / Musica, e compaiono li' solo dopo l'accesso.
+export function AdminLoginSheet({ onClose, onSession }: {
   onClose: () => void;
-  onSession: (role: Role | null) => void;   // per riallineare l'app dopo login/logout
+  onSession: (role: Role | null) => void;
+}) {
+  function done() {
+    fetch("/api/admin/auth")
+      .then((r) => r.json())
+      .then((d) => { onSession(d.logged ? (d.role as Role) : null); onClose(); })
+      .catch(() => onSession(null));
+  }
+
+  return (
+    <div style={{
+      position: "absolute", inset: 0, zIndex: 50, background: "rgba(0,0,0,0.6)",
+      display: "flex", alignItems: "flex-end",
+    }} onClick={onClose}>
+      <div style={{
+        width: "100%", background: "var(--background)", color: "var(--foreground)",
+        borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: "20px 20px 32px",
+      }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 14 }}>
+          <h2 style={{ fontSize: 17, fontWeight: 700, flex: 1 }}>Accesso amministratore</h2>
+          <button style={S.btn} onClick={onClose}>Chiudi</button>
+        </div>
+        <Login onDone={done} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Sezione amministrativa ──────────────────────────────────────────────────
+//
+// Non e' piu' una pagina a se' ne' un pannello sovrapposto: e' una destinazione
+// della navigazione, allo stesso livello di Lavanderia, Cinema e Musica. Un
+// amministratore usa esattamente la stessa app di tutti gli altri e trova
+// qualche voce in piu' nella lista di sinistra.
+//
+// La barra del ruolo con "Esci" sta qui dentro, su ogni sezione: chi deve
+// passare da FDO a sistemista lo fa da dove sta gia' lavorando, senza andare a
+// cercare il menu.
+
+export function AdminScreens({ tab, onSession }: {
+  tab: Tab;
+  onSession: (role: Role | null) => void;   // per riallineare l'app dopo logout o scadenza
 }) {
   const [logged, setLogged] = useState<boolean | null>(null);
   const [role, setRole] = useState<Role | null>(null);
-  const [current, setCurrent] = useState<Tab>(tab ?? "macchine");
   const [laundries, setLaundries] = useState<Laundry[]>([]);
 
   const loadOverview = useCallback(async () => {
@@ -735,79 +776,63 @@ export function AdminSheet({ tab, onClose, onSession }: {
   useEffect(() => { if (logged) loadOverview(); }, [logged, loadOverview]);
 
   async function logout() {
-    await fetch("/api/admin/auth", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "logout" }),
-    });
+    await adminLogout();
     setLogged(false); setRole(null);
     onSession(null);
-    onClose();
   }
 
   const sistemista = role === "sistemista";
 
-  // Le schede riservate si nascondono, ma il controllo vero sta sul server:
-  // nascondere un pulsante non e' un'autorizzazione.
-  const TABS: [Tab, string][] = [
-    ["macchine", "Macchine"],
-    ["segnalazioni", "Segnalazioni"],
-    ...(sistemista ? ([["ricorrenti", "Ricorrenti"], ["manutenzione", "Manutenzione"]] as [Tab, string][]) : []),
-  ];
+  if (logged === null) {
+    return <p style={{ fontSize: 13, ...S.sub, padding: "20px 4px" }}>Caricamento…</p>;
+  }
+
+  // Sessione assente o scaduta mentre si stava lavorando: il login compare qui,
+  // dove si era, invece di rimbalzare l'utente altrove senza spiegazioni.
+  if (!logged) {
+    return (
+      <div style={{ padding: "20px 0 40px" }}>
+        <p style={{ fontSize: 13, ...S.sub, marginBottom: 14, textAlign: "center" }}>
+          La sessione amministrativa non è attiva.
+        </p>
+        <Login onDone={refreshSession} />
+      </div>
+    );
+  }
 
   return (
-    <div style={{
-      position: "absolute", inset: 0, zIndex: 50,
-      background: "var(--background)", display: "flex", flexDirection: "column",
-    }}>
-      <header style={{
-        display: "flex", alignItems: "center", gap: 12, flexShrink: 0,
-        padding: "16px 20px", borderBottom: "1px solid var(--border)",
+    <div style={{ paddingBottom: 40, color: "var(--foreground)" }}>
+      {/* Barra del ruolo: dice con quale account si sta agendo e permette di
+          uscire senza lasciare la sezione. Solo il ruolo, non anche il nome
+          utente: c'e' un account per ruolo e i due valori coincidono ("fdo"
+          col badge FDO), quindi stamparli entrambi dava "sistemistaSISTEMISTA". */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 10, marginBottom: 16,
+        padding: "10px 14px", borderRadius: 14, border: "1px solid var(--border)",
       }}>
-        <div style={{ minWidth: 0 }}>
-          <h1 style={{ fontSize: 17, fontWeight: 700 }}>Amministrazione</h1>
-          {/* Solo il ruolo, non anche il nome utente: c'e' un account per
-              ruolo e i due valori coincidono ("fdo" col badge FDO), quindi
-              stamparli entrambi dava "sistemistaSISTEMISTA". */}
-          {logged && (
-            <p style={{ fontSize: 11, ...S.sub }}>
-              <span style={{
-                padding: "1px 7px", borderRadius: 99, fontSize: 10,
-                fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase",
-                background: "color-mix(in srgb, var(--primary) 15%, transparent)",
-                color: "var(--primary)",
-              }}>{sistemista ? "sistemista" : "FDO"}</span>
-            </p>
-          )}
-        </div>
-        <div style={{ flex: 1 }} />
-        {logged && <button style={S.btn} onClick={logout}>Esci</button>}
-        <button style={S.btn} onClick={onClose} aria-label="Chiudi">Chiudi</button>
-      </header>
-
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "18px 20px 40px" }}>
-        {logged === null && <p style={{ fontSize: 13, ...S.sub }}>Caricamento…</p>}
-
-        {logged === false && <Login onDone={refreshSession} />}
-
-        {logged === true && (
-          <>
-            <nav style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
-              {TABS.map(([k, label]) => (
-                <button key={k} onClick={() => setCurrent(k)}
-                  style={{ ...S.btn, ...(current === k ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" } : {}) }}>
-                  {label}
-                </button>
-              ))}
-            </nav>
-
-            {current === "macchine" && <Macchine laundries={laundries} reload={loadOverview} />}
-            {current === "segnalazioni" && <Segnalazioni />}
-            {current === "ricorrenti" && sistemista && laundries.length > 0 && <Ricorrenti laundries={laundries} />}
-            {current === "manutenzione" && sistemista && <Manutenzione />}
-          </>
-        )}
+        <span style={{
+          padding: "2px 8px", borderRadius: 99, fontSize: 10,
+          fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase",
+          background: "color-mix(in srgb, var(--primary) 15%, transparent)",
+          color: "var(--primary)",
+        }}>{sistemista ? "sistemista" : "FDO"}</span>
+        <span style={{ fontSize: 12, flex: 1, ...S.sub }}>
+          {sistemista ? "Accesso completo." : "Macchine e segnalazioni."}
+        </span>
+        <button style={S.btn} onClick={logout}>Esci</button>
       </div>
+
+      {/* Le sezioni riservate al sistemista non compaiono nemmeno nella
+          navigazione, ma se ci si arriva lo stesso il controllo vero resta sul
+          server: nascondere una voce non e' un'autorizzazione. */}
+      {tab === "macchine" && <Macchine laundries={laundries} reload={loadOverview} />}
+      {tab === "segnalazioni" && <Segnalazioni />}
+      {tab === "ricorrenti" && (sistemista
+        ? laundries.length > 0 && <Ricorrenti laundries={laundries} />
+        : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata al sistemista.</p>)}
+      {tab === "manutenzione" && (sistemista
+        ? <Manutenzione />
+        : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata al sistemista.</p>)}
     </div>
   );
 }

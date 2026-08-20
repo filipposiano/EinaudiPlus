@@ -7,7 +7,7 @@ import {
   Bell, BellRing, Download, Share, Menu,
   MessageSquare, Send, Eye, LogOut,
   Settings, ChevronRight, Globe,
-  ShieldCheck, Repeat, Eraser, KeyRound,
+  ShieldCheck, Repeat, Eraser,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -19,9 +19,16 @@ import type { Role as AdminRole, Tab as AdminTab } from "./AdminPanel";
 // Le schermate amministrative vivono dentro questa stessa app, aperte dal menu
 // Impostazioni. In lazy perché la stragrande maggioranza di chi apre l'app non
 // ha una sessione admin e non deve scaricarne il codice.
-const AdminSheet = lazy(() => import("./AdminPanel").then((m) => ({ default: m.AdminSheet })));
+const AdminScreens   = lazy(() => import("./AdminPanel").then((m) => ({ default: m.AdminScreens })));
+const AdminLoginSheet = lazy(() => import("./AdminPanel").then((m) => ({ default: m.AdminLoginSheet })));
 
-type Facility = "laundry" | "cinema" | "music";
+// Le sezioni amministrative sono destinazioni di navigazione come le altre,
+// non un pannello a parte: chi ha la sessione le trova nella stessa lista di
+// Lavanderia, Cinema e Musica.
+type Facility = "laundry" | "cinema" | "music" | AdminTab;
+
+const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "ricorrenti", "manutenzione"];
+const isAdminFacility = (f: Facility): f is AdminTab => (ADMIN_TABS as string[]).includes(f);
 
 // Preferenze accessibilità a livello di modulo — lette da tutti i componenti,
 // aggiornate da App.handleAccessibilityChange. Evita il prop-drilling profondo.
@@ -1775,7 +1782,15 @@ function SegnalaGuastoRow({ machine, lang, isLast, divColor, onToggle }: {
 
 // ─── Login screen ─────────────────────────────────────────────────────────────
 
-function LoginScreen({ lang, onLogin }: { theme?: Theme; lang: Lang; onLogin: (room: string) => void }) {
+// Il numero che apre l'accesso amministratore invece di entrare in una camera.
+// Non è una password — chi lo conosce vede solo il form di login — ma tiene la
+// voce fuori dal menu dei residenti, dove non serviva a nessuno di loro.
+// 1935: l'anno di fondazione del collegio.
+const ROOM_ADMIN = "1935";
+
+function LoginScreen({ lang, onLogin, onAdmin }: {
+  theme?: Theme; lang: Lang; onLogin: (room: string) => void; onAdmin: () => void;
+}) {
   const t = T[lang];
   const [room, setRoom] = useState("");
   const fg   = "var(--foreground)";
@@ -1816,6 +1831,7 @@ function LoginScreen({ lang, onLogin }: { theme?: Theme; lang: Lang; onLogin: (r
           style={{ background:chip, color:fg }}>0</button>
         <button onClick={()=>{
           if (room.length > 0) {
+            if (room === ROOM_ADMIN) { setRoom(""); onAdmin(); return; }
             const regexCamera = /^\d+(?:-?[a-bA-B])?$/;
             if (!regexCamera.test(room)) {
               alert("Formato non valido. Esempi validi: 112, 21-b, 112A");
@@ -1877,10 +1893,11 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
-function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility, onFacility, onChangeRoom, onOpenSettings }: {
+function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility, onFacility, adminRole, onChangeRoom, onOpenSettings }: {
   active: number; onChange: (i: number) => void; lang: Lang;
   roomNumber: string | null; showNav: boolean;
   facility: Facility; onFacility: (f: Facility) => void;
+  adminRole: AdminRole | null;
   onChangeRoom: () => void; onOpenSettings: () => void;
 }) {
   const t   = T[lang];
@@ -1933,6 +1950,28 @@ function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility,
             })}
           </>
         )}
+
+        {/* Sezioni amministrative: stesso livello delle strutture, in coda e
+            separate perché sono di natura diversa. Compaiono solo con una
+            sessione attiva; l'uscita sta dentro la sezione stessa. */}
+        {showNav && adminSectionsFor(adminRole).length > 0 && (
+          <>
+            <div className="h-px my-2 mx-2" style={{ background:div }}/>
+            <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest" style={{ color:sub }}>
+              {lang === "it" ? "Amministrazione" : "Administration"}
+            </p>
+            {adminSectionsFor(adminRole).map(({ id, icon: Icon, label }) => {
+              const isActive = facility === id;
+              return (
+                <button key={id} onClick={()=>onFacility(id)}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors text-left ${isActive ? "" : "desk-nav"}`}
+                  style={isActive ? { background:RED, color:RED_FG } : { color:sub }}>
+                  <Icon size={18}/>{label[lang]}
+                </button>
+              );
+            })}
+          </>
+        )}
       </nav>
 
       {/* Controlli */}
@@ -1978,21 +2017,58 @@ const FACILITIES: { id: Facility; icon: any; label: { it: string; en: string } }
   { id: "music",   icon: Music,          label: { it: "Musica",     en: "Music" } },
 ];
 
-function FacilitySwitcher({ facility, onChange, lang }: { facility: Facility; onChange: (f: Facility)=>void; lang: Lang }) {
+// Le voci riservate al sistemista non compaiono con la sessione FDO, ma il
+// controllo vero resta sul server: nascondere una voce non è un'autorizzazione.
+const ADMIN_SECTIONS: {
+  id: AdminTab; icon: any; label: { it: string; en: string }; sistemistaOnly?: boolean;
+}[] = [
+  { id: "macchine",     icon: Wrench,        label: { it: "Macchine",     en: "Machines" } },
+  { id: "segnalazioni", icon: MessageSquare, label: { it: "Segnalazioni", en: "Reports" } },
+  { id: "ricorrenti",   icon: Repeat,        label: { it: "Ricorrenti",   en: "Recurring" },   sistemistaOnly: true },
+  { id: "manutenzione", icon: Eraser,        label: { it: "Manutenzione", en: "Maintenance" }, sistemistaOnly: true },
+];
+
+const adminSectionsFor = (role: AdminRole | null) =>
+  role === null ? [] : ADMIN_SECTIONS.filter((s) => !s.sistemistaOnly || role === "sistemista");
+
+function FacilitySwitcher({ facility, onChange, lang, adminRole }: {
+  facility: Facility; onChange: (f: Facility)=>void; lang: Lang; adminRole: AdminRole | null;
+}) {
+  const sections = adminSectionsFor(adminRole);
+
+  const Chip = ({ id, icon: Icon, label }: { id: Facility; icon: any; label: string }) => {
+    const active = facility === id;
+    return (
+      <button onClick={()=>onChange(id)}
+        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 border"
+        style={active
+          ? { background:RED, color:RED_FG, borderColor:RED }
+          : { background:"var(--secondary)", color:"var(--gray-accessible-text)", borderColor:"var(--border)" }}>
+        <Icon size={14}/>{label}
+      </button>
+    );
+  };
+
   return (
-    <div className="flex gap-1.5 px-5 pt-3 pb-1 shrink-0">
-      {FACILITIES.map(({ id, icon: Icon, label }) => {
-        const active = facility === id;
-        return (
-          <button key={id} onClick={()=>onChange(id)}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 border"
-            style={active
-              ? { background:RED, color:RED_FG, borderColor:RED }
-              : { background:"var(--secondary)", color:"var(--gray-accessible-text)", borderColor:"var(--border)" }}>
-            <Icon size={14}/>{label[lang]}
-          </button>
-        );
-      })}
+    <div className="shrink-0">
+      <div className="flex gap-1.5 px-5 pt-3 pb-1">
+        {FACILITIES.map(({ id, icon, label }) => (
+          <Chip key={id} id={id} icon={icon} label={label[lang]}/>
+        ))}
+      </div>
+
+      {/* Sotto, non mescolate alle prime tre: sono destinazioni dello stesso
+          livello ma di natura diversa, e affiancarle a Lavanderia le avrebbe
+          compresse tutte e sei fino a renderle illeggibili.
+          Due per riga e non quattro: in fila su 375px "Manutenzione" finiva
+          oltre il bordo dello schermo e veniva tagliata. */}
+      {sections.length > 0 && (
+        <div className="grid grid-cols-2 gap-1.5 px-5 pt-1.5">
+          {sections.map(({ id, icon, label }) => (
+            <Chip key={id} id={id} icon={icon} label={label[lang]}/>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -2004,10 +2080,9 @@ function FacilitySwitcher({ facility, onChange, lang }: { facility: Facility; on
 // tutto (riaprire l'app ricarica già i dati da sola) e così il selettore
 // manuale del tema, che ora segue sempre quello del telefono — vedi l'effetto
 // che ascolta prefers-color-scheme in cima al componente App.
-function SettingsSheet({ lang, room, adminRole, onAdmin, onToggleLang, onAccessibility, onClose }: {
+function SettingsSheet({ lang, room, adminRole, onToggleLang, onAccessibility, onClose }: {
   lang: Lang; room: string | null;
   adminRole: AdminRole | null;
-  onAdmin: (tab: AdminTab | null) => void;   // null = apri sul login
   onToggleLang: () => void; onAccessibility: () => void; onClose: () => void;
 }) {
   const it = lang === "it";
@@ -2084,58 +2159,17 @@ function SettingsSheet({ lang, room, adminRole, onAdmin, onToggleLang, onAccessi
             onClick={() => { onAccessibility(); onClose(); }}/>
         </div>
 
-        {/* Amministrazione.
-            Non è una pagina a parte: un amministratore usa la stessa app di
-            tutti — stessa dashboard, stesse prenotazioni — e qui trova in più
-            le cose che nell'app normale non esistono. Anche l'accesso sta qui,
-            perché è dove uno va a cercarlo.
-            Le voci riservate al sistemista si vedono solo con quel ruolo, ma
-            il controllo vero è sul cookie lato server: nascondere una riga non
-            è un'autorizzazione. */}
-        <div className="rounded-2xl overflow-hidden border mx-5 mt-4" style={{ borderColor:div }}>
-          <div className="px-4 pt-3 pb-1">
-            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color:sub }}>
-              {it ? "Amministrazione" : "Administration"}
-            </p>
-          </div>
-
-          {adminRole === null ? (
-            <Row icon={<KeyRound size={18}/>} label={it ? "Accesso amministratore" : "Administrator sign-in"}
-              onClick={() => onAdmin(null)}/>
-          ) : (
-            <>
-              <div style={{ borderBottom:`1px solid ${div}` }}>
-                <Row icon={<WashingMachine size={18}/>} label={it ? "Macchine" : "Machines"}
-                  sub={it ? "Segna fuori servizio" : "Mark out of service"}
-                  onClick={() => onAdmin("macchine")}/>
-              </div>
-              <div style={{ borderBottom: adminRole === "sistemista" ? `1px solid ${div}` : undefined }}>
-                <Row icon={<MessageSquare size={18}/>} label={it ? "Segnalazioni" : "Reports"}
-                  sub={it ? "Guasti e feedback dei residenti" : "Faults and resident feedback"}
-                  onClick={() => onAdmin("segnalazioni")}/>
-              </div>
-              {adminRole === "sistemista" && (
-                <>
-                  <div style={{ borderBottom:`1px solid ${div}` }}>
-                    <Row icon={<Repeat size={18}/>} label={it ? "Ricorrenti" : "Recurring"}
-                      sub={it ? "Turni fissi ogni settimana" : "Fixed weekly slots"}
-                      onClick={() => onAdmin("ricorrenti")}/>
-                  </div>
-                  <Row icon={<Eraser size={18}/>} label={it ? "Manutenzione" : "Maintenance"}
-                    sub={it ? "Pulizia dei dati" : "Data cleanup"}
-                    onClick={() => onAdmin("manutenzione")}/>
-                </>
-              )}
-            </>
-          )}
-        </div>
-
+        {/* L'accesso amministratore non sta qui: si apre digitando 1935 al
+            posto della camera. Le sezioni riservate compaiono poi nella
+            navigazione, accanto a Lavanderia / Cinema / Musica, e l'uscita sta
+            sulla barra del ruolo dentro quelle sezioni. Un menu con una voce
+            che il 99% di chi lo apre non può usare era solo rumore. */}
         {adminRole !== null && (
           <p className="text-[11px] mx-5 mt-3 flex items-center gap-1.5" style={{ color:sub }}>
             <ShieldCheck size={13}/>
             {it
-              ? `Sessione attiva: ${adminRole === "sistemista" ? "sistemista" : "FDO"}. Puoi prenotare a nome della Direzione.`
-              : `Signed in as ${adminRole === "sistemista" ? "sysadmin" : "FDO"}. You can book on behalf of Direzione.`}
+              ? `Sessione ${adminRole === "sistemista" ? "sistemista" : "FDO"} attiva: puoi prenotare a nome della Direzione.`
+              : `${adminRole === "sistemista" ? "Sysadmin" : "FDO"} session active: you can book on behalf of Direzione.`}
           </p>
         )}
       </div>
@@ -2497,14 +2531,20 @@ export default function App() {
   // comunque sul cookie lato server: nascondere un pulsante non è
   // un'autorizzazione.
   const [adminRole, setAdminRole] = useState<AdminRole | null>(null);
-  const [adminTab, setAdminTab] = useState<AdminTab | null>(null);
-  const [adminOpen, setAdminOpen] = useState(false);
+  const [adminLoginOpen, setAdminLoginOpen] = useState(false);
   const isAdmin = adminRole !== null;
   useEffect(() => { api.adminRole().then((r) => setAdminRole((r as AdminRole) ?? null)); }, []);
 
-  const openAdmin = useCallback((tab: AdminTab | null) => {
-    setAdminTab(tab); setAdminOpen(true); setSettingsOpen(false);
-  }, []);
+  // Chi esce (o la cui sessione scade) mentre sta guardando una sezione
+  // riservata non deve restare su una schermata che non gli appartiene più:
+  // lo si riporta in lavanderia. Vale anche per il passaggio sistemista→FDO,
+  // che perde Ricorrenti e Manutenzione.
+  useEffect(() => {
+    if (isAdminFacility(facility) &&
+        !adminSectionsFor(adminRole).some((s) => s.id === facility)) {
+      setFacility("laundry");
+    }
+  }, [adminRole, facility]);
 
   // Riallinea in silenzio la subscription push col server.
   //
@@ -2580,7 +2620,7 @@ export default function App() {
       </button>
     </CenterState>
   ) : roomNumber === null ? (
-    <LoginScreen lang={lang} onLogin={chooseRoom}/>
+    <LoginScreen lang={lang} onLogin={chooseRoom} onAdmin={() => setAdminLoginOpen(true)}/>
   ) : (
     <>
       {screen===0 && <Dashboard   theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} onStatus={handleStatus} isAdmin={isAdmin}/>}
@@ -2589,9 +2629,14 @@ export default function App() {
     </>
   );
 
-  // Lavanderia → schermate laundry; Cinema/Musica → sala a fasce libere
-  const isRoom = facility !== "laundry";
-  const bodyContent = isRoom ? <RoomView room={facility as "cinema" | "music"} lang={lang} roomNumber={roomNumber}/> : mainContent;
+  // Lavanderia → schermate laundry; Cinema/Musica → sala a fasce libere;
+  // sezioni riservate → pannello amministrativo, nello stesso corpo pagina.
+  const isRoom = facility === "cinema" || facility === "music";
+  const bodyContent = isAdminFacility(facility)
+    ? <Suspense fallback={null}><AdminScreens tab={facility} onSession={setAdminRole}/></Suspense>
+    : isRoom
+      ? <RoomView room={facility} lang={lang} roomNumber={roomNumber}/>
+      : mainContent;
 
   // Pannello accessibilità (modale, condiviso tra mobile e desktop)
   const accessibilityModal = accessibilityOpen && (
@@ -2607,15 +2652,23 @@ export default function App() {
   // volta sola invece che copiati in entrambi i rami.
   const settingsSheet = settingsOpen && (
     <SettingsSheet lang={lang} room={roomNumber}
-      adminRole={adminRole} onAdmin={openAdmin}
+      adminRole={adminRole}
       onToggleLang={()=>setLang(l=>l==="it"?"en":"it")}
       onAccessibility={() => setAccessibilityOpen(true)}
       onClose={() => setSettingsOpen(false)} />
   );
 
-  const adminSheet = adminOpen && (
+  // Login amministratore: si apre digitando 1935 al posto della camera.
+  // Entrati, si prosegue senza camera — chi amministra prenota per la
+  // DIREZIONE, non per sé — e le sezioni riservate compaiono nella navigazione.
+  const adminLoginSheet = adminLoginOpen && (
     <Suspense fallback={null}>
-      <AdminSheet tab={adminTab} onClose={() => setAdminOpen(false)} onSession={setAdminRole} />
+      <AdminLoginSheet
+        onClose={() => setAdminLoginOpen(false)}
+        onSession={(r) => {
+          setAdminRole(r);
+          if (r && roomNumber === null) chooseRoom("");
+        }} />
     </Suspense>
   );
 
@@ -2627,11 +2680,12 @@ export default function App() {
         {showChrome && <InstallPrompt lang={lang}/>}
         {accessibilityModal}
         {settingsSheet}
-        {adminSheet}
+        {adminLoginSheet}
         <DesktopSidebar
           active={screen} onChange={setScreen} lang={lang}
           roomNumber={roomNumber} showNav={showChrome}
           facility={facility} onFacility={setFacility}
+          adminRole={adminRole}
           onChangeRoom={changeRoom}
           onOpenSettings={() => setSettingsOpen(true)}
         />
@@ -2658,7 +2712,7 @@ export default function App() {
         {showChrome && <InstallPrompt lang={lang}/>}
         {accessibilityModal}
         {settingsSheet}
-        {adminSheet}
+        {adminLoginSheet}
 
         <div className="flex items-center justify-between px-7 pt-3 pb-0 shrink-0 mt-2 md:mt-0">
           {/* Prima di scegliere una camera qui c'era un orologio finto (9:41,
@@ -2684,13 +2738,13 @@ export default function App() {
           </button>
         </div>
 
-        {showChrome && <FacilitySwitcher facility={facility} onChange={setFacility} lang={lang}/>}
+        {showChrome && <FacilitySwitcher facility={facility} onChange={setFacility} lang={lang} adminRole={adminRole}/>}
 
         <div className="flex-1 overflow-y-auto overscroll-contain min-h-0 flex flex-col mt-2">
           {bodyContent}
         </div>
 
-        {showChrome && !isRoom && <BottomNav active={screen} onChange={setScreen} theme={theme} lang={lang}/>}
+        {showChrome && !isRoom && !isAdminFacility(facility) && <BottomNav active={screen} onChange={setScreen} theme={theme} lang={lang}/>}
         <div className="pb-2 hidden md:flex justify-center shrink-0">
           <div className="w-28 h-1 rounded-full" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
         </div>

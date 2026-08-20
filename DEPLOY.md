@@ -170,10 +170,10 @@ Sul preview, con un telefono vero.
    ereditato dal vecchio Apps Script) e sembrava che le notifiche di
    asciugatrice e ritiro fossero rotte. Se dovessero servire di nuovo:
    `update laundry set reminder_mode = 'single' where slug = 'valentino';`
-5. Apri Impostazioni → Accesso amministratore, entra, metti una macchina
-   fuori servizio e verifica che
+5. Digita **1935** al posto della camera: si apre l'accesso amministratore.
+   Entra, metti una macchina fuori servizio e verifica che
    nell'app compaia come guasta **ma resti prenotabile con un avviso**
-6. Segnala un guasto e controlla che compaia in Impostazioni → Segnalazioni
+6. Segnala un guasto e controlla che compaia nella sezione Segnalazioni
 
 ---
 
@@ -240,7 +240,7 @@ di prenotazione risolto male, o zero promemoria partiti la prima mattina.
 ## Cosa cambia per chi usa l'app
 
 - **Il pulsante "fuori servizio" diventa una segnalazione.** Il residente
-  segnala, un amministratore verifica e decide dal menu Impostazioni. Prima quel pulsante
+  segnala, un amministratore verifica e decide dalla sezione Macchine. Prima quel pulsante
   non funzionava affatto: il client mandava l'azione `status`, il backend si
   aspettava `setStatus`, nessun ramo combaciava.
 - **Segnare una macchina guasta non impedisce di prenotarla**, mostra un avviso.
@@ -248,10 +248,16 @@ di prenotazione risolto male, o zero promemoria partiti la prima mattina.
   avvio. Chi non apre l'app per due settimane, per due settimane non riceve.
 - **La quota di 2 turni a settimana ora è applicata dal server.** Prima era solo
   lato client, quindi aggirabile.
-- **Schermate di amministrazione dentro l'app** (Impostazioni → Amministrazione:
-  macchine, segnalazioni, e per il sistemista ricorrenti e manutenzione) e
-  **promemoria Telegram opzionali**. Non c'è una pagina `/admin` separata: un
-  amministratore usa la stessa app di tutti, con qualche voce in più nel menu.
+- **Amministrazione dentro l'app** e **promemoria Telegram opzionali**. Non c'è
+  una pagina `/admin` separata: un amministratore usa la stessa app di tutti e
+  trova Macchine, Segnalazioni — e da sistemista Ricorrenti e Manutenzione —
+  nella stessa lista di Lavanderia, Cinema e Musica.
+
+  **Si entra digitando `1935` al posto del numero di camera.** Non è una
+  password: chi lo digita vede solo il form di login, che resta l'unica cosa
+  che conta. Tenerlo lì invece che nel menu evita a ogni residente una voce che
+  non potrebbe comunque usare. L'uscita sta sulla barra del ruolo, dentro le
+  sezioni stesse, così si passa da FDO a sistemista senza cercarla altrove.
 
 ---
 
