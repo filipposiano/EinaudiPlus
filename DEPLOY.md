@@ -51,24 +51,20 @@ pannello non sarebbe un'autorizzazione.
 > pena cambiarla: `node scripts/hash-password.cjs "nuova-password"` rigenera
 > l'hash, che poi va incollato in `ADMIN_PASSWORD_HASH`.
 
-### Chiavi VAPID — da rigenerare
+### Chiavi VAPID — non toccare
 
-Le notifiche push cambiano chiave, perché la privata attuale è accessibile solo
-da questo account.
+`VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT` sono configurate da
+tempo e funzionano. **Lasciarle così.**
 
-```bash
-npx web-push generate-vapid-keys
-```
+L'unico vincolo: `VAPID_PUBLIC_KEY` deve essere identica alla costante
+`VAPID_PUBLIC_KEY` in [push.ts](push.ts). Se divergono, le notifiche partono e
+nessun servizio push le accetta — senza errori visibili, e l'utente continua a
+vedere i promemoria come "attivi".
 
-| Nome | Dove |
-|---|---|
-| `VAPID_PUBLIC_KEY` | env var Vercel |
-| `VAPID_PRIVATE_KEY` | env var Vercel — **segreto** |
-| `VAPID_SUBJECT` | env var Vercel, es. `mailto:...` |
-
-**La stessa chiave pubblica va anche incollata in [push.ts](push.ts)**, nella
-costante `VAPID_PUBLIC_KEY` (circa riga 17). Se le due divergono le notifiche
-partono e nessun browser le accetta.
+> Rigenerarle è possibile ma costoso: **tutte le iscrizioni esistenti muoiono**,
+> e ogni residente smette di ricevere promemoria finché non riapre l'app.
+> `sameKey()` in `push.ts` se ne accorge e le rifà, ma solo al primo avvio.
+> Farlo solo se c'è un motivo di sicurezza reale.
 
 Le variabili `RELAY_SECRET` e `VAPID_*` già presenti servono a
 [api/push.js](api/push.js), che resta in piedi per la finestra di rollback:
