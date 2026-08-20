@@ -1,11 +1,18 @@
-import React from 'react'
+import React, { Suspense } from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './style.css'
 
+// Il pannello admin sta su /admin ed è caricato in lazy: chi usa l'app non ne
+// scarica una riga. Non serve un router per due sole rotte.
+const isAdmin = window.location.pathname.replace(/\/+$/, '') === '/admin'
+const Admin = React.lazy(() => import('./Admin.tsx'))
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <App />
+    {isAdmin
+      ? <Suspense fallback={null}><Admin /></Suspense>
+      : <App />}
   </React.StrictMode>,
 )
 

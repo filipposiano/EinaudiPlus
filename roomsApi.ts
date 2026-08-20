@@ -22,16 +22,30 @@ export interface RoomBooking {
   type?: CinemaType;  // solo Cinema
 }
 
-// URL /exec delle Web App Apps Script (una per sala).
 const TOKEN = import.meta.env.VITE_SECRET_TOKEN;
 
+// VITE_API_BASE="legacy" riporta tutto agli Apps Script: e' il rollback del
+// cutover, si cambia una variabile d'ambiente senza toccare il codice.
+const LEGACY = import.meta.env.VITE_API_BASE === "legacy";
+
+// I due /exec erano lo STESSO Code.gs deployato due volte, su due spreadsheet
+// distinti. Nel nuovo backend sono un endpoint solo: la sala arriva come ?space=.
 const ENDPOINTS: Record<RoomKind, { url: string; token: string }> = {
   cinema: { url: "https://script.google.com/macros/s/AKfycbzxr9JEZ5jPAhL0sfPYHwQ61KtpkROZJOSBhF7pn-k2b9Bc5-B4yQf5JBgw_Pox1fSY/exec", token: TOKEN},
   music:  { url: "https://script.google.com/macros/s/AKfycbxOh1IuTjGDmrQaJfQ-65G2dk7ie3ouwdbF6-GhiRXvem4m0_3K8XPBhOiB-aI_KNXJCw/exec",  token: TOKEN },
 };
 
+/** URL + query comuni a ogni chiamata, con l'eventuale azione. */
+function url(room: RoomKind, action?: string): string {
+  const base = LEGACY ? ENDPOINTS[room].url : "/api/rooms";
+  const qs = LEGACY
+    ? `?token=${TOKEN}`
+    : `?token=${TOKEN}&space=${room}`;
+  return base + qs + (action ? `&action=${action}` : "");
+}
+
 const isPlaceholder = (u: string) => u.startsWith("PLACEHOLDER");
-export const isMock = (room: RoomKind) => isPlaceholder(ENDPOINTS[room].url);
+export const isMock = (room: RoomKind) => LEGACY && isPlaceholder(ENDPOINTS[room].url);
 
 // ─── Store MOCK (in memoria) ────────────────────────────────────────────────
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -52,9 +66,8 @@ const overlaps = (list: RoomBooking[], b: { day: number; start: number; end: num
 // ─── API ─────────────────────────────────────────────────────────────────────
 
 export async function getRoomBookings(room: RoomKind): Promise<RoomBooking[]> {
-  const ep = ENDPOINTS[room];
-  if (isPlaceholder(ep.url)) return JSON.parse(JSON.stringify(mockStore[room]));
-  const res = await fetch(`${ep.url}?token=${ep.token}`);
+  if (isMock(room)) return JSON.parse(JSON.stringify(mockStore[room]));
+  const res = await fetch(url(room));
   if (!res.ok) throw new Error("network");
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || "error");
@@ -62,13 +75,12 @@ export async function getRoomBookings(room: RoomKind): Promise<RoomBooking[]> {
 }
 
 export async function bookRoom(room: RoomKind, b: Omit<RoomBooking, "id">): Promise<RoomBooking[]> {
-  const ep = ENDPOINTS[room];
-  if (isPlaceholder(ep.url)) {
+  if (isMock(room)) {
     if (overlaps(mockStore[room], b)) throw new Error("overlap");
     mockStore[room] = [...mockStore[room], { ...b, id: uid() }];
     return JSON.parse(JSON.stringify(mockStore[room]));
   }
-  const res = await fetch(`${ep.url}?token=${ep.token}&action=book`, {
+  const res = await fetch(url(room, "book"), {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify(b),
@@ -79,12 +91,11 @@ export async function bookRoom(room: RoomKind, b: Omit<RoomBooking, "id">): Prom
 }
 
 export async function clearRoomBooking(room: RoomKind, id: string): Promise<RoomBooking[]> {
-  const ep = ENDPOINTS[room];
-  if (isPlaceholder(ep.url)) {
+  if (isMock(room)) {
     mockStore[room] = mockStore[room].filter((x) => x.id !== id);
     return JSON.parse(JSON.stringify(mockStore[room]));
   }
-  const res = await fetch(`${ep.url}?token=${ep.token}&action=clear`, {
+  const res = await fetch(url(room, "clear"), {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify({ id }),

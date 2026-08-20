@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Wind, Clock, CalendarDays,
   Sun, Moon, Plus, CheckCircle2, AlertTriangle,
-  LayoutGrid, Delete, X, Wrench, RotateCcw, Loader2, Star,
+  LayoutGrid, Delete, X, Wrench, Loader2, Star,
   History, Timer, Trash2, Film, Music,
   Bell, BellRing, Download, Share, Menu,
   RefreshCw, MessageSquare, Send, Eye, LogOut,
@@ -169,12 +169,15 @@ const T = {
     wantModify:     "Vuoi modificare questa prenotazione?",
     bookedBy:       (r: string) => `Prenotata dalla stanza ${r}`,
     machineMgmt:    "Gestione macchine",
-    reportOos:      "Segnala macchina fuori servizio",
+    reportOos:      "Segnala un guasto",
     restore:        "Ripristina",
-    oosDesc:        "Segnala una macchina non disponibile o ripristinala.",
+    oosDesc:        "Segnala una macchina che non funziona: un amministratore verifica e la mette fuori servizio.",
     reminderSent:   (r: string) => `Reminder inviato · Stanza ${r}`,
     oosSet:         (lbl: string) => `${lbl} segnalata fuori servizio`,
     oosCleared:     (lbl: string) => `${lbl} ripristinata`,
+    reportAction:   "Segnala",
+    alreadyOos:     "Già segnalata",
+    reportSent:     (lbl: string) => `Guasto segnalato per ${lbl}. Un amministratore verificherà.`,
     booked:         (lbl: string) => `Lavatrice ${lbl} prenotata!`,
     prevHad:        (r: string) => `La stanza ${r} aveva questo turno prima di te — ha già ritirato il bucato?`,
     legendFree:     "Verde — Libera", legendFreeDesc: "Puoi prenotarla subito.",
@@ -254,9 +257,12 @@ const T = {
     wantModify:     "Do you want to edit this booking?",
     bookedBy:       (r: string) => `Booked by room ${r}`,
     machineMgmt:    "Machine management",
-    reportOos:      "Report machine out of order",
+    reportOos:      "Report a fault",
     restore:        "Restore",
-    oosDesc:        "Mark a machine as unavailable or restore it.",
+    oosDesc:        "Report a machine that isn't working: an admin will check and mark it out of order.",
+    reportAction:   "Report",
+    alreadyOos:     "Already reported",
+    reportSent:     (lbl: string) => `Fault reported for ${lbl}. An admin will check it.`,
     reminderSent:   (r: string) => `Reminder sent · Room ${r}`,
     oosSet:         (lbl: string) => `${lbl} marked out of order`,
     oosCleared:     (lbl: string) => `${lbl} restored`,
@@ -1539,8 +1545,8 @@ function AdminSheet({ lang, status, onStatus, onClose, roomNumber }: {
   const dryers:  Machine[] = (isSecond ? [] : ["D-A","D-B","D-C"]).map((id)=>mk(id,"dryer"));
 
   async function toggle(m: Machine) {
-    const goingOos = m.status !== "out-of-order";
-    try { await onStatus(m.id, goingOos); setToast(goingOos ? t.oosSet(m.label) : t.oosCleared(m.label)); }
+    if (m.status === "out-of-order") return;   // gia' segnalata, niente da fare
+    try { await onStatus(m.id, true); setToast(t.reportSent(m.label)); }
     catch (e) { setToast(errMsg(e, lang)); }
   }
 
@@ -1604,12 +1610,16 @@ function AdminRow({ machine, lang, isLast, divColor, onToggle }: {
           {isOOO ? t.oos : t.operative}
         </span>
       </div>
-      <button onClick={onToggle}
-        className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold shrink-0 transition-all active:scale-95"
+      {/* Il residente segnala, non decide: mettere e togliere il fuori servizio
+          e' passato agli amministratori. Se e' gia' segnalata non c'e' niente
+          da fare, quindi il pulsante e' disattivato invece che nascosto —
+          cosi' si capisce che la segnalazione e' gia' arrivata. */}
+      <button onClick={onToggle} disabled={isOOO}
+        className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold shrink-0 transition-all active:scale-95 disabled:active:scale-100"
         style={isOOO
-          ? { background:`color-mix(in srgb, ${GREEN} 12%, transparent)`, color:GREEN }
+          ? { background:"var(--secondary)", color:"var(--muted-foreground)", cursor:"default" }
           : { background:`color-mix(in srgb, var(--destructive) 12%, transparent)`, color:OOS_C }}>
-        {isOOO ? <><RotateCcw size={12}/>{t.restore}</> : <><Wrench size={12}/>{t.oos}</>}
+        {isOOO ? <><AlertTriangle size={12}/>{t.alreadyOos}</> : <><Wrench size={12}/>{t.reportAction}</>}
       </button>
     </div>
   );
@@ -1859,10 +1869,13 @@ function FacilitySwitcher({ facility, onChange, lang }: { facility: Facility; on
 function ReminderBell({ room, lang }: { room: string | null; lang: Lang }) {
   const [state, setState] = useState<push.ReminderState>("unknown");
   const [busy, setBusy]   = useState(false);
+  const [sheet, setSheet] = useState(false);
 
   useEffect(() => { push.getReminderState().then(setState); }, []);
 
-  if (!push.pushSupported() || !room) return null;
+  // Si mostra anche senza supporto push: è proprio lì che Telegram serve.
+  // Dentro al pannello la riga delle notifiche del telefono si adatta da sola.
+  if (!room) return null;
 
   const on = state === "on";
   const label = lang === "it"
@@ -1885,11 +1898,141 @@ function ReminderBell({ room, lang }: { room: string | null; lang: Lang }) {
   }
 
   return (
-    <button onClick={toggle} disabled={busy} title={label} aria-label={label}
-      className="p-1.5 rounded-lg transition-colors"
-      style={{ color: on ? RED : "var(--muted-foreground)", opacity: busy ? 0.5 : 1 }}>
-      {on ? <BellRing size={13}/> : <Bell size={13}/>}
-    </button>
+    <>
+      <button onClick={() => setSheet(true)} title={label} aria-label={label}
+        className="p-1.5 rounded-lg transition-colors"
+        style={{ color: on ? RED : "var(--muted-foreground)", opacity: busy ? 0.5 : 1 }}>
+        {on ? <BellRing size={13}/> : <Bell size={13}/>}
+      </button>
+      {sheet && (
+        <RemindersSheet lang={lang} room={room} state={state} busy={busy}
+          onToggle={toggle} onClose={() => setSheet(false)} />
+      )}
+    </>
+  );
+}
+
+// ─── Pannello promemoria: push + Telegram ──────────────────────────────────────
+//
+// Telegram è l'alternativa che conta su iPhone, dove le notifiche push delle
+// web app funzionano solo se l'app è stata installata dalla schermata Home e
+// restano capricciose. Il collegamento passa da un codice usa-e-getta: senza,
+// chiunque potrebbe scrivere al bot "sono la 112" e ricevere i promemoria altrui.
+function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
+  lang: Lang; room: string | null; state: push.ReminderState;
+  busy: boolean; onToggle: () => void; onClose: () => void;
+}) {
+  const it = lang === "it";
+  const [code, setCode] = useState<string | null>(null);
+  const [tgBusy, setTgBusy] = useState(false);
+  const [tgErr, setTgErr] = useState(false);
+  const on = state === "on";
+  const bot = import.meta.env.VITE_TELEGRAM_BOT as string | undefined;
+
+  async function linkTelegram() {
+    setTgBusy(true); setTgErr(false);
+    try { setCode(await api.telegramCode()); }
+    catch { setTgErr(true); }
+    finally { setTgBusy(false); }
+  }
+
+  return (
+    <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
+      <div className="w-full rounded-t-3xl pb-8" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
+        <div className="px-6 pt-5 pb-4">
+          <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background:"color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-lg font-bold" style={{ color:"var(--foreground)" }}>
+              {it ? "Promemoria turni" : "Shift reminders"}
+            </p>
+            <button onClick={onClose} className="p-2 rounded-xl" style={{ color:"var(--muted-foreground)", background:"var(--secondary)" }}>
+              <X size={16}/>
+            </button>
+          </div>
+          <p className="text-xs" style={{ color:"var(--muted-foreground)" }}>
+            {it ? "Ti avvisiamo poco prima che inizi il tuo turno." : "We'll ping you shortly before your shift starts."}
+          </p>
+        </div>
+
+        <div className="px-5 space-y-3">
+          {/* Notifiche del browser */}
+          <div className="rounded-2xl border p-4" style={{ background:"var(--card)", borderColor:"var(--border)" }}>
+            <div className="flex items-center gap-3">
+              <BellRing size={18} style={{ color: on ? RED : "var(--muted-foreground)" }}/>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold" style={{ color:"var(--foreground)" }}>
+                  {it ? "Notifiche del telefono" : "Phone notifications"}
+                </p>
+                <p className="text-xs" style={{ color:"var(--muted-foreground)" }}>
+                  {state === "unsupported"
+                    ? (it ? "Non disponibili su questo dispositivo" : "Not available on this device")
+                    : state === "denied"
+                    ? (it ? "Bloccate nelle impostazioni del browser" : "Blocked in browser settings")
+                    : on ? (it ? "Attive" : "On") : (it ? "Non attive" : "Off")}
+                </p>
+              </div>
+              {state !== "denied" && state !== "unsupported" && (
+                <button onClick={onToggle} disabled={busy}
+                  className="rounded-xl px-3 py-2 text-xs font-semibold shrink-0"
+                  style={on
+                    ? { background:"var(--secondary)", color:"var(--muted-foreground)" }
+                    : { background:`color-mix(in srgb, ${RED} 12%, transparent)`, color:RED }}>
+                  {busy ? "…" : on ? (it ? "Disattiva" : "Turn off") : (it ? "Attiva" : "Turn on")}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Telegram */}
+          <div className="rounded-2xl border p-4" style={{ background:"var(--card)", borderColor:"var(--border)" }}>
+            <div className="flex items-center gap-3">
+              <Send size={18} style={{ color:"var(--muted-foreground)" }}/>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold" style={{ color:"var(--foreground)" }}>Telegram</p>
+                <p className="text-xs" style={{ color:"var(--muted-foreground)" }}>
+                  {it ? "Utile su iPhone, dove le notifiche sono capricciose" : "Handy on iPhone, where push is unreliable"}
+                </p>
+              </div>
+              {!code && (
+                <button onClick={linkTelegram} disabled={tgBusy || !room}
+                  className="rounded-xl px-3 py-2 text-xs font-semibold shrink-0"
+                  style={{ background:"var(--secondary)", color:"var(--foreground)" }}>
+                  {tgBusy ? "…" : (it ? "Collega" : "Link")}
+                </button>
+              )}
+            </div>
+
+            {tgErr && (
+              <p className="text-xs mt-3" style={{ color:RED }}>
+                {it ? "Non è riuscito. Riprova." : "Didn't work. Try again."}
+              </p>
+            )}
+
+            {code && (
+              <div className="mt-3 pt-3" style={{ borderTop:"1px solid var(--border)" }}>
+                <p className="text-xs mb-2" style={{ color:"var(--muted-foreground)" }}>
+                  {it ? "Apri il bot e incolla questo codice:" : "Open the bot and paste this code:"}
+                </p>
+                <p className="text-xl font-mono font-bold tracking-widest text-center py-2 rounded-xl"
+                   style={{ background:"var(--secondary)", color:"var(--foreground)" }}>
+                  {code}
+                </p>
+                {bot && (
+                  <a href={`https://t.me/${bot}?start=${code}`} target="_blank" rel="noopener noreferrer"
+                     className="block text-center text-xs font-semibold mt-2 py-2 rounded-xl"
+                     style={{ background:`color-mix(in srgb, ${RED} 12%, transparent)`, color:RED }}>
+                    {it ? "Apri Telegram" : "Open Telegram"}
+                  </a>
+                )}
+                <p className="text-[11px] mt-2 text-center" style={{ color:"var(--muted-foreground)" }}>
+                  {it ? "Vale una volta sola e scade in 24 ore." : "Single use, expires in 24 hours."}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -2077,6 +2220,18 @@ export default function App() {
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  // Riallinea in silenzio la subscription push col server.
+  //
+  // Due motivi: il nuovo database parte senza le subscription vecchie, e la
+  // chiave VAPID è cambiata — in entrambi i casi chi aveva i promemoria attivi
+  // smetterebbe di riceverli senza alcun segnale, perché il browser continua a
+  // mostrarli come attivi. Girando a ogni avvio, ogni dispositivo si ripara da
+  // solo la prima volta che qualcuno apre l'app.
+  useEffect(() => {
+    if (!roomNumber) return;
+    push.refreshSubscription(roomNumber);
+  }, [roomNumber]);
+
   function chooseRoom(room: string) {
     try { localStorage.setItem("laundryhub.room", room); } catch {}
     window.location.reload();
@@ -2092,8 +2247,11 @@ export default function App() {
   const handleClear = useCallback(async (day:number, slot:number, machine:string) => {
     const s = await api.clearBooking(day, slot, machine); setWeek(s.week); setStatus(s.status);
   }, []);
-  const handleStatus = useCallback(async (machine:string, oos:boolean) => {
-    const st = await api.setStatus(machine, oos); setStatus(st);
+  // Il residente segnala il guasto, non cambia lo stato: la segnalazione finisce
+  // fra i feedback e un amministratore decide. Lo stato mostrato non cambia
+  // subito, ed e' corretto cosi' — cambiera' quando l'admin l'avra' verificato.
+  const handleStatus = useCallback(async (machine:string, _oos:boolean) => {
+    await api.reportBroken(machine);
   }, []);
 
   const showChrome = roomNumber !== null && !loading && !error;
