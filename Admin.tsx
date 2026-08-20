@@ -165,13 +165,17 @@ function Macchine({ laundries, reload }: { laundries: Laundry[]; reload: () => v
             </span>
           </div>
 
+          {/* Solo le macchine che esistono davvero.
+              Nel database ci sono tutte e sei le sigle per ogni lavanderia,
+              perché il client le indicizza per posizione, ma alla Manica solo
+              W-A e D-A sono reali: mostrare le altre come "non presente" era
+              rumore, e per l'amministratore non c'è nulla da farci. */}
           <div style={{ display: "grid", gap: 8 }}>
-            {l.machines.map((m) => (
+            {l.machines.filter((m) => m.bookable).map((m) => (
               <div key={m.code} style={{
                 display: "flex", alignItems: "center", gap: 12, padding: "10px 12px",
                 borderRadius: 12, border: "1px solid var(--border)",
-                opacity: m.bookable ? 1 : 0.45,
-                background: m.oos && m.bookable ? "color-mix(in srgb, var(--destructive) 8%, transparent)" : "transparent",
+                background: m.oos ? "color-mix(in srgb, var(--destructive) 8%, transparent)" : "transparent",
               }}>
                 <span style={{
                   width: 8, height: 8, borderRadius: 99,
@@ -180,13 +184,10 @@ function Macchine({ laundries, reload }: { laundries: Laundry[]; reload: () => v
                 <span style={{ fontFamily: "monospace", fontWeight: 700, minWidth: 44 }}>{m.code}</span>
                 <span style={{ fontSize: 13, ...S.sub, flex: 1 }}>
                   {m.kind === "washer" ? "Lavatrice" : "Asciugatrice"}
-                  {!m.bookable && " · non presente"}
                 </span>
-                {m.bookable && (
-                  <button style={S.danger} disabled={busy === `${l.id}-${m.code}`} onClick={() => toggle(l, m)}>
-                    {m.oos ? "Rimetti in servizio" : "Segna fuori servizio"}
-                  </button>
-                )}
+                <button style={S.danger} disabled={busy === `${l.id}-${m.code}`} onClick={() => toggle(l, m)}>
+                  {m.oos ? "Rimetti in servizio" : "Segna fuori servizio"}
+                </button>
               </div>
             ))}
           </div>
@@ -198,18 +199,23 @@ function Macchine({ laundries, reload }: { laundries: Laundry[]; reload: () => v
 
 // ─── Settimana ───────────────────────────────────────────────────────────────
 
+// Solo la settimana corrente.
+//
+// La navigazione fra settimane è stata tolta di proposito: la ritenzione è di
+// una settimana, quindi "successiva" sarebbe sempre vuota e "precedente" quasi
+// sempre. Mostrare comandi che non portano da nessuna parte confonde e basta.
+// L'endpoint accetta ancora un offset, se un domani servisse.
 function Settimana({ laundries }: { laundries: Laundry[] }) {
   const [id, setId] = useState(laundries[0]?.id ?? 0);
-  const [offset, setOffset] = useState(0);
   const [data, setData] = useState<{ week_start: string; bookings: Booking[] } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     setBusy(true);
-    try { setData(await call("week", { laundry_id: id, offset })); }
+    try { setData(await call("week", { laundry_id: id, offset: 0 })); }
     catch (e: any) { alert(e.message); }
     finally { setBusy(false); }
-  }, [id, offset]);
+  }, [id]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -228,15 +234,11 @@ function Settimana({ laundries }: { laundries: Laundry[] }) {
             {l.name}
           </button>
         ))}
-        <div style={{ flex: 1 }} />
-        <button style={S.btn} onClick={() => setOffset((o) => o - 1)}>← precedente</button>
-        <button style={S.btn} onClick={() => setOffset(0)} disabled={offset === 0}>corrente</button>
-        <button style={S.btn} onClick={() => setOffset((o) => o + 1)}>successiva →</button>
       </div>
 
       <div style={{ ...S.card, padding: 18 }}>
         <p style={{ fontSize: 12, ...S.sub, marginBottom: 14 }}>
-          Settimana dal {data?.week_start ?? "…"} · {data?.bookings.length ?? 0} prenotazioni
+          Settimana corrente, dal {data?.week_start ?? "…"} · {data?.bookings.length ?? 0} prenotazioni
         </p>
 
         {busy && <p style={{ fontSize: 13, ...S.sub }}>Caricamento…</p>}
@@ -741,7 +743,9 @@ export default function Admin() {
 
   return (
     <div style={S.page}>
-      <div style={{ maxWidth: 860, margin: "0 auto", padding: "28px 20px 60px" }}>
+      {/* Era 860px: le righe delle prenotazioni sono lunghe (giorno, ora,
+          macchina, camera, pulsante) e si comprimevano senza motivo. */}
+      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 24px 60px" }}>
         <header style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 24 }}>
           <div>
             <p style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", ...S.sub }}>EinaudiPlus</p>

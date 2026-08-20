@@ -137,10 +137,13 @@ const T = {
     free:     "Libera", inUse: "In uso", oos: "Fuori servizio", operative: "Operativa",
     book:     "Prenota", reminder: "Reminder", sendReminder: "Manda reminder", sent: "Inviato ✓",
     bookAnyway:   "Prenota comunque",
-    oosWarnTitle: "Macchina segnalata guasta",
-    oosWarnBody:  "Qualcuno ha segnalato un guasto e un amministratore non l'ha ancora verificato. Puoi prenotarla lo stesso, ma potrebbe non funzionare.",
-    oosDryerWarn: (m: string) => `L'asciugatrice ${m} è segnalata guasta: potresti dover stendere il bucato.`,
-    oosWasherWarn:(m: string) => `La lavatrice ${m} è segnalata guasta: potrebbe non partire.`,
+    // Attenzione al significato: `is_oos` viene messo dall'amministratore DOPO
+    // aver verificato una segnalazione, non dal residente che segnala. Quindi
+    // qui il guasto è confermato, non in attesa di conferma.
+    oosWarnTitle: "Macchina fuori servizio",
+    oosWarnBody:  "L'amministrazione l'ha verificata e segnata come guasta. Puoi prenotarla lo stesso, ma è probabile che non funzioni.",
+    oosDryerWarn: (m: string) => `L'asciugatrice ${m} è fuori servizio: potresti dover stendere il bucato.`,
+    oosWasherWarn:(m: string) => `La lavatrice ${m} è fuori servizio: potrebbe non partire.`,
     currentSlot: "Turno corrente", prevSlot: "Turno precedente", now: "ora", prev: "prec.",
     yourBookings: "Le tue prenotazioni",
     inProgressNow: "In corso ora",
@@ -193,7 +196,7 @@ const T = {
     lgFree: "Libera", lgInUse: "In uso", lgOos: "Fuori servizio", lgPrev: "Turno precedente",
     lgFreeD: "Puoi prenotarla subito.",
     lgInUseD: (t: string) => `Turno in corso, fine alle ${t}.`,
-    lgOosD: "Segnalata come guasta. Puoi prenotarla comunque, a tuo rischio.",
+    lgOosD: "Guasto confermato dall'amministrazione. Puoi prenotarla comunque, a tuo rischio.",
     lgPrevD: "La camera che aveva lo slot prima di te.",
     insertRoom:     "Numero di stanza",
     back:           "← Indietro",
@@ -230,10 +233,10 @@ const T = {
     free:     "Free", inUse: "In use", oos: "Out of service", operative: "Operational",
     book:     "Book", reminder: "Remind", sendReminder: "Send reminder", sent: "Sent ✓",
     bookAnyway:   "Book anyway",
-    oosWarnTitle: "Machine reported broken",
-    oosWarnBody:  "Someone reported a fault and an admin hasn't checked it yet. You can still book it, but it may not work.",
-    oosDryerWarn: (m: string) => `Dryer ${m} is reported broken: you may have to hang your laundry.`,
-    oosWasherWarn:(m: string) => `Washer ${m} is reported broken: it may not start.`,
+    oosWarnTitle: "Machine out of service",
+    oosWarnBody:  "An admin has checked it and marked it broken. You can still book it, but it probably won't work.",
+    oosDryerWarn: (m: string) => `Dryer ${m} is out of service: you may have to hang your laundry.`,
+    oosWasherWarn:(m: string) => `Washer ${m} is out of service: it may not start.`,
     currentSlot: "Current slot", prevSlot: "Previous slot", now: "now", prev: "prev.",
     yourBookings: "Your bookings",
     inProgressNow: "In progress now",
@@ -286,7 +289,7 @@ const T = {
     lgFree: "Free", lgInUse: "In use", lgOos: "Out of service", lgPrev: "Previous slot",
     lgFreeD: "Book it now.",
     lgInUseD: (t: string) => `In progress, ends at ${t}.`,
-    lgOosD: "Reported as broken. You can still book it, at your own risk.",
+    lgOosD: "Fault confirmed by an admin. You can still book it, at your own risk.",
     lgPrevD: "The room that had the slot before you.",
     insertRoom:     "Room number",
     back:           "← Back",
@@ -1164,14 +1167,23 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
   const fg  = "var(--foreground)";
 
   const isFree  = machine.status === "available";
-  const isInUse = machine.status === "in-use";
   const isOOO   = machine.status === "out-of-order";
 
   const dotColor = isOOO ? OOS_C : isFree ? GREEN : YELLOW;
   const rowBg = isFree ? `color-mix(in srgb, ${GREEN} 6%, transparent)` : "transparent";
 
-  const statusText = isFree ? t.free : isInUse ? `${t.room} ${machine.room}` : t.oos;
+  // Fuori servizio e occupata sono due fatti indipendenti, e prima il primo
+  // nascondeva il secondo: una macchina guasta ma gia' prenotata risultava
+  // solo "Fuori servizio", senza pulsante, e sembrava libera con un comando
+  // mancante. Ora si dicono entrambi.
+  const statusText = isOOO
+    ? (machine.room ? `${t.oos} · ${t.room} ${machine.room}` : t.oos)
+    : isFree ? t.free : `${t.room} ${machine.room}`;
   const statusColor = isFree ? GREEN : isOOO ? OOS_C : fg;
+
+  // Prenotabile: e' una lavatrice e nessuno l'ha ancora presa. Che sia guasta
+  // non toglie il diritto di prenotarla, cambia solo il colore del pulsante.
+  const canBook = machine.type === "washer" && !machine.room;
 
   return (
     <div style={{ borderBottom:isLast?"none":`1px solid ${divColor}`, background:rowBg }}>
@@ -1206,27 +1218,23 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
               <span className="text-[11px] font-mono font-semibold">{machine.prevRoom}</span>
             </span>
           )}
-          {isFree && machine.type==="washer" && (
+          {/* Il pulsante resta anche quando la macchina è guasta: cambia solo
+              colore ed etichetta. Rosso perché non è l'azione consigliata, ma
+              la scelta spetta a chi prenota — a volte la macchina funziona
+              lo stesso, o si preferisce tenere il turno. */}
+          {canBook && (
             <button onClick={onBook}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all active:scale-95"
-              style={{ background:`color-mix(in srgb, ${GREEN} 18%, transparent)`, color:GREEN }}>
-              <Plus size={12}/>{t.book}
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold shrink-0 transition-all active:scale-95"
+              style={isOOO
+                ? { background:OOS_C, color:"var(--destructive-foreground)" }
+                : { background:`color-mix(in srgb, ${GREEN} 18%, transparent)`, color:GREEN }}>
+              {isOOO ? <AlertTriangle size={12}/> : <Plus size={12}/>}
+              {isOOO ? t.bookAnyway : t.book}
             </button>
           )}
-          {/* Guasta ma libera: si può prenotare lo stesso. Il pulsante è rosso
-              apposta — non è l'azione consigliata, ma a volte la macchina
-              funziona e la segnalazione era di qualcun altro. Se è già
-              prenotata da qualcuno non lo mostriamo: il server rifiuterebbe. */}
-          {isOOO && machine.type==="washer" && !machine.room && (
-            <button onClick={onBook}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all active:scale-95"
-              style={{ background:OOS_C, color:"var(--destructive-foreground)" }}>
-              <AlertTriangle size={12}/>{t.bookAnyway}
-            </button>
-          )}
-          {isOOO && !(machine.type==="washer" && !machine.room) && (
-            <AlertTriangle size={15} style={{ color:OOS_C }}/>
-          )}
+          {/* Guasta e non prenotabile (asciugatrice, o gia' occupata):
+              resta il triangolo come promemoria visivo. */}
+          {isOOO && !canBook && <AlertTriangle size={15} style={{ color:OOS_C }}/>}
         </div>
       </div>
     </div>
@@ -1274,8 +1282,10 @@ function DaySchedule({ lang, week, status, roomNumber: sessionRoom, favs, onTogg
     catch (e) { setToast(errMsg(e, lang)); }
   }
 
+  // Piu' largo di prima (era 3xl, 768px) ma non a tutta pagina: qui le colonne
+  // sono solo le lavatrici, e oltre un certo punto diventano bande vuote.
   return (
-    <div className="flex flex-col h-full lg:max-w-3xl lg:mx-auto lg:w-full">
+    <div className="flex flex-col h-full lg:max-w-5xl lg:mx-auto lg:w-full">
       {toast     && <Toast msg={toast} onClose={()=>setToast(null)}/>}
       {target    && <BookModal target={{...target,dayIdx:selDay}} bookings={week} status={status} isDark={false} lang={lang} myRoom={sessionRoom} onConfirm={confirmBooking} onClose={()=>setTarget(null)}/>}
       {modTarget && (
@@ -1528,8 +1538,11 @@ function WeekOverview({ lang, week, status, roomNumber: sessionRoom, onBook, onC
     catch (e) { setToast(errMsg(e, lang)); }
   }
 
+  // Nessun tetto di larghezza: la griglia ha sette colonne e piu' spazio ha,
+  // piu' e' leggibile. Limitandola qui, il contenitore esterno resterebbe
+  // vuoto ai lati — che era esattamente il problema.
   return (
-    <div className="flex flex-col h-full lg:max-w-4xl lg:mx-auto lg:w-full">
+    <div className="flex flex-col h-full w-full">
       {toast      && <Toast msg={toast} onClose={()=>setToast(null)}/>}
       {target     && <BookModal target={target} bookings={week} status={status} isDark={false} lang={lang} myRoom={sessionRoom} onConfirm={confirmBooking} onClose={()=>setTarget(null)}/>}
       {modTarget  && (
@@ -2432,7 +2445,12 @@ export default function App() {
           onAccessibility={() => setAccessibilityOpen(true)}
         />
         <main className="flex-1 h-dvh min-h-0 flex flex-col overflow-y-auto overscroll-contain">
-          <div className="mx-auto w-full max-w-6xl flex-1 min-h-0 flex flex-col px-4 lg:px-6">
+          {/* Era max-w-6xl (1152px): su uno schermo grande restavano centinaia
+              di pixel vuoti ai lati mentre la griglia settimanale stava
+              stretta. 1600px sfrutta lo spazio senza arrivare al bordo su
+              monitor molto larghi, dove le righe diventerebbero illeggibili
+              da seguire con l'occhio. */}
+          <div className="mx-auto w-full max-w-[1600px] flex-1 min-h-0 flex flex-col px-4 lg:px-8">
             {bodyContent}
           </div>
         </main>
