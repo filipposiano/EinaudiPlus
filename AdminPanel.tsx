@@ -111,7 +111,8 @@ function Login({ onDone }: { onDone: () => void }) {
     <div style={{ display: "grid", placeItems: "center" }}>
       <form onSubmit={submit} style={{ ...S.card, padding: 24, width: "100%", maxWidth: 360 }}>
         <p style={{ fontSize: 13, ...S.sub, marginBottom: 18 }}>
-          Le voci di amministrazione compaiono in questo menu dopo l'accesso.
+          Dopo l'accesso le sezioni riservate compaiono accanto a Lavanderia,
+          Cinema e Musica, e prenoti come Direzione.
         </p>
 
         <label style={{ fontSize: 12, ...S.sub }}>Utente</label>
@@ -143,8 +144,20 @@ function Login({ onDone }: { onDone: () => void }) {
 // L'interruttore è la metafora giusta perché è quello che si fa davvero con
 // una macchina rotta: la si spegne.
 
+// Lavatrice e asciugatrice hanno colori diversi perché stanno affiancate e si
+// somigliano: a colpo d'occhio la coppia si distingue dal colore, non dalla
+// scritta. Il rosso del fuori servizio vince su entrambi — è quella
+// l'informazione che conta.
+const TINTA = {
+  washer: "var(--tinta-lavatrice)",
+  dryer:  "var(--tinta-asciugatrice)",
+} as const;
+
+const coloreDi = (kind: "washer" | "dryer", acceso: boolean) =>
+  acceso ? TINTA[kind] : "var(--destructive-text)";
+
 function Oblo({ kind, acceso }: { kind: "washer" | "dryer"; acceso: boolean }) {
-  const colore = acceso ? "var(--status-free-text)" : "var(--destructive-text)";
+  const colore = coloreDi(kind, acceso);
   return (
     <svg viewBox="0 0 64 72" width="72" height="81" aria-hidden="true"
          style={{ display: "block", margin: "0 auto" }}>
@@ -189,22 +202,29 @@ function MacchinaCard({ machine, busy, onToggle }: {
   machine: Machine; busy: boolean; onToggle: () => void;
 }) {
   const acceso = !machine.oos;
-  const nome = (machine.kind === "washer" ? "Lavatrice " : "Asciugatrice ") + machine.code.slice(-1);
+  const colore = coloreDi(machine.kind, acceso);
+  const tipo = machine.kind === "washer" ? "Lavatrice" : "Asciugatrice";
+  const nome = `${tipo} ${machine.code.slice(-1)}`;
 
   return (
     <div style={{
-      border: `1px solid ${acceso ? "var(--border)" : "var(--destructive-text)"}`,
+      border: `1px solid ${acceso ? `color-mix(in srgb, ${colore} 35%, transparent)` : "var(--destructive-text)"}`,
       borderRadius: 16,
-      padding: "16px 12px 12px",
+      padding: "14px 10px 12px",
       textAlign: "center",
-      background: acceso ? "transparent" : "color-mix(in srgb, var(--destructive-text) 7%, transparent)",
+      background: `color-mix(in srgb, ${colore} ${acceso ? "6%" : "9%"}, transparent)`,
       transition: "border-color .2s, background .2s",
       opacity: busy ? 0.55 : 1,
+      minWidth: 0,
     }}>
       <Oblo kind={machine.kind} acceso={acceso} />
 
-      <p style={{ fontSize: 14, fontWeight: 700, marginTop: 10 }}>{nome}</p>
-      <p style={{ fontSize: 12, marginBottom: 12, color: acceso ? "var(--status-free-text)" : "var(--destructive-text)" }}>
+      {/* Il tipo va a capo da solo: "Asciugatrice" su una scheda stretta
+          rientrava a metà parola. */}
+      <p style={{ fontSize: 13, fontWeight: 700, marginTop: 8, lineHeight: 1.25, color: colore }}>
+        {tipo}
+      </p>
+      <p style={{ fontSize: 11, marginBottom: 10, ...S.sub }}>
         {acceso ? "In servizio" : "Fuori servizio"}
       </p>
 
@@ -217,14 +237,14 @@ function MacchinaCard({ machine, busy, onToggle }: {
         aria-label={`${nome}: ${acceso ? "spegni, segna fuori servizio" : "riaccendi, rimetti in servizio"}`}
         title={acceso ? "Spegni — segna fuori servizio" : "Riaccendi — rimetti in servizio"}
         style={{
-          width: 52, height: 30, borderRadius: 99, border: "none", padding: 3,
-          cursor: busy ? "default" : "pointer",
-          background: acceso ? "var(--status-free-text)" : "var(--destructive-text)",
+          width: 48, height: 28, borderRadius: 99, border: "none", padding: 3,
+          cursor: busy ? "default" : "pointer", margin: "0 auto",
+          background: colore,
           display: "flex", justifyContent: acceso ? "flex-end" : "flex-start",
           transition: "background .2s",
         }}>
         <span style={{
-          width: 24, height: 24, borderRadius: 99, background: "#fff",
+          width: 22, height: 22, borderRadius: 99, background: "#fff",
           boxShadow: "0 1px 3px rgba(0,0,0,.3)", transition: "all .2s",
         }} />
       </button>
@@ -234,20 +254,50 @@ function MacchinaCard({ machine, busy, onToggle }: {
 
 // ─── Macchine ────────────────────────────────────────────────────────────────
 
-/** Le macchine reali raggruppate per lettera, lavatrice prima dell'asciugatrice. */
-function gruppiPerLettera(machines: Machine[]): [string, Machine[]][] {
-  const per = new Map<string, Machine[]>();
-  for (const m of machines) {
-    if (!m.bookable) continue;
-    const lettera = m.code.slice(-1);
-    (per.get(lettera) ?? per.set(lettera, []).get(lettera)!).push(m);
+type Gruppo = { chiave: string; titolo: string; sotto: string; laundry: Laundry; machines: Machine[] };
+
+/**
+ * Un solo elenco di gruppi: A, B, C e Manica.
+ *
+ * Prima erano due schede separate, una per lavanderia, e la Manica ne occupava
+ * una intera per mostrare un unico "Gruppo A" — che per giunta si chiamava
+ * come il gruppo A del Valentino. Qui il gruppo e' l'unita' di lettura (la
+ * coppia lavatrice+asciugatrice che il residente usa di fila) e la lavanderia
+ * e' solo un'etichetta sopra. Le lettere si ricavano dai dati: nel database
+ * ci sono tutte e sei le sigle per ogni lavanderia perche' il client le
+ * indicizza per posizione, ma solo le `bookable` esistono davvero.
+ *
+ * La Manica prende il nome della lavanderia invece della lettera: la sua unica
+ * macchina e' "la lavatrice della Manica" per chiunque ci lavori, non "la A".
+ */
+function gruppiDiTutte(laundries: Laundry[]): Gruppo[] {
+  const out: Gruppo[] = [];
+
+  for (const l of laundries) {
+    const per = new Map<string, Machine[]>();
+    for (const m of l.machines) {
+      if (!m.bookable) continue;
+      const lettera = m.code.slice(-1);
+      (per.get(lettera) ?? per.set(lettera, []).get(lettera)!).push(m);
+    }
+
+    const lettere = [...per.keys()].sort((a, b) => a.localeCompare(b));
+    const unicoGruppo = lettere.length === 1;
+
+    for (const lettera of lettere) {
+      out.push({
+        chiave: `${l.id}-${lettera}`,
+        titolo: unicoGruppo ? l.name.replace(/^Lavanderia\s+/i, "") : lettera,
+        sotto: `${l.name} · ${l.bookings} prenotazioni`,
+        laundry: l,
+        machines: per.get(lettera)!.sort(
+          (a, b) => (a.kind === b.kind ? 0 : a.kind === "washer" ? -1 : 1)
+        ),
+      });
+    }
   }
-  return [...per.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([lettera, ms]) => [
-      lettera,
-      ms.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "washer" ? -1 : 1)),
-    ]);
+
+  return out;
 }
 
 function Macchine({ laundries, reload }: { laundries: Laundry[]; reload: () => void }) {
@@ -273,55 +323,37 @@ function Macchine({ laundries, reload }: { laundries: Laundry[]; reload: () => v
         ma <strong>può prenotarla lo stesso</strong>: lo stato informa, non blocca.
       </p>
 
-      {laundries.map((l) => (
-        <div key={l.id} style={{ ...S.card, padding: 18, marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 12 }}>
-            <h2 style={{ fontSize: 16, fontWeight: 700 }}>{l.name}</h2>
-            <span style={{ fontSize: 12, ...S.sub }}>
-              camere {l.rooms} · {l.bookings} prenotazioni questa settimana
-            </span>
+      {/* auto-fit e non auto-fill: con poche colonne auto-fill lascerebbe
+          piste vuote a destra invece di allargare i gruppi esistenti.
+          230px e' la larghezza sotto cui due schede affiancate iniziano a
+          spezzare "Asciugatrice" a meta'. */}
+      <div style={{
+        display: "grid", gap: 12,
+        gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 230px), 1fr))",
+      }}>
+        {gruppiDiTutte(laundries).map((g) => (
+          <div key={g.chiave} style={{ ...S.card, padding: "12px 10px 14px", minWidth: 0 }}>
+            <p style={{
+              fontSize: 13, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase",
+              textAlign: "center", lineHeight: 1.2,
+            }}>{g.titolo}</p>
+            <p style={{
+              fontSize: 10, textAlign: "center", marginBottom: 10, ...S.sub,
+            }}>{g.sotto}</p>
+
+            <div style={{ display: "grid", gap: 8, gridTemplateColumns: `repeat(${g.machines.length}, minmax(0, 1fr))` }}>
+              {g.machines.map((m) => (
+                <MacchinaCard
+                  key={m.code}
+                  machine={m}
+                  busy={busy === `${g.laundry.id}-${m.code}`}
+                  onToggle={() => toggle(g.laundry, m)}
+                />
+              ))}
+            </div>
           </div>
-
-          {/* Raggruppate per lettera, non in un elenco piatto: lavatrice e
-              asciugatrice della stessa lettera sono la coppia che il residente
-              usa di fila (lava in A, asciuga in A), quindi è quella la coppia
-              che l'amministratore guarda insieme quando qualcosa non va.
-
-              Le lettere si ricavano dai dati e non sono fisse A/B/C: alla
-              Manica esiste solo la A, e una colonna vuota per B e C sarebbe
-              rumore senza niente da farci.
-
-              Solo le macchine che esistono davvero: nel database ci sono tutte
-              e sei le sigle per ogni lavanderia perché il client le indicizza
-              per posizione. */}
-          <div style={{
-            display: "grid", gap: 14,
-            gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))",
-          }}>
-            {gruppiPerLettera(l.machines).map(([lettera, gruppo]) => (
-              <div key={lettera} style={{
-                border: "1px solid var(--border)", borderRadius: 14, padding: "10px 10px 12px",
-              }}>
-                <p style={{
-                  fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase",
-                  textAlign: "center", marginBottom: 8, ...S.sub,
-                }}>Gruppo {lettera}</p>
-
-                <div style={{ display: "grid", gap: 10, gridTemplateColumns: `repeat(${gruppo.length}, 1fr)` }}>
-                  {gruppo.map((m) => (
-                    <MacchinaCard
-                      key={m.code}
-                      machine={m}
-                      busy={busy === `${l.id}-${m.code}`}
-                      onToggle={() => toggle(l, m)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </>
   );
 }
@@ -375,18 +407,19 @@ function Segnalazioni() {
               borderColor: guasto && !f.handled ? "var(--destructive-text)" : "var(--border)",
               opacity: f.handled ? 0.6 : 1,
             }}>
-              <div style={{ display: "flex", gap: 10, alignItems: "baseline", marginBottom: 6 }}>
+              <div className="adm-feed-head">
                 <span style={{ fontSize: 13, fontWeight: 700 }}>
                   {f.room ? `Camera ${f.room}` : "Anonimo"}
                 </span>
                 {f.laundry && <span style={{ fontSize: 11, ...S.sub }}>{f.laundry}</span>}
                 {guasto && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--destructive-text)" }}>GUASTO</span>}
-                <div style={{ flex: 1 }} />
-                <span style={{ fontSize: 11, ...S.sub }}>
+                <span className="adm-feed-head__when" style={{ fontSize: 11, ...S.sub }}>
                   {new Date(f.created_at).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}
                 </span>
               </div>
-              <p style={{ fontSize: 14, marginBottom: 10, whiteSpace: "pre-wrap" }}>{f.body}</p>
+              {/* Il testo arriva da chi segnala: senza questo una parola
+                  lunghissima senza spazi allargherebbe la scheda oltre lo schermo. */}
+              <p style={{ fontSize: 14, marginBottom: 10, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{f.body}</p>
               <button style={S.btn} onClick={() => mark(f)}>
                 {f.handled ? "Riapri" : "Segna come gestita"}
               </button>
@@ -502,7 +535,7 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
       {/* Nuova regola lavanderia */}
       <div style={{ ...S.card, padding: 18, marginBottom: 16 }}>
         <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Nuova regola · lavanderia</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
+        <div className="adm-form">
           <select style={S.input} value={lid} onChange={(e) => setLid(Number(e.target.value))}>
             {laundries.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
           </select>
@@ -524,7 +557,7 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
       {/* Nuova regola sala */}
       <div style={{ ...S.card, padding: 18, marginBottom: 16 }}>
         <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Nuova regola · sala</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
+        <div className="adm-form">
           <select style={S.input} value={space} onChange={(e) => setSpace(e.target.value as any)}>
             <option value="cinema">Cinema</option>
             <option value="music">Musica</option>
@@ -551,21 +584,20 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
 
         <div style={{ display: "grid", gap: 6 }}>
           {items.map((r) => (
-            <div key={r.id} style={{
-              display: "flex", alignItems: "center", gap: 12, padding: "9px 12px",
-              borderRadius: 10, border: "1px solid var(--border)", opacity: r.active ? 1 : 0.5,
-            }}>
-              <span style={{ fontSize: 11, fontWeight: 700, minWidth: 64, ...S.sub }}>
+            <div key={r.id} className="adm-rule" style={{ opacity: r.active ? 1 : 0.5 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, ...S.sub }}>
                 {r.kind === "laundry" ? "LAVANDERIA" : "SALA"}
               </span>
-              <span style={{ fontSize: 13, minWidth: 96 }}>ogni {DAYS[r.day].toLowerCase()}</span>
-              <span style={{ fontSize: 13, fontFamily: "monospace", flex: 1 }}>
+              <span style={{ fontSize: 13 }}>ogni {DAYS[r.day].toLowerCase()}</span>
+              <span className="adm-rule__what">
                 {r.kind === "laundry"
                   ? `${slotLabel(r.slot!)} · ${r.machine} · camera ${r.room}`
                   : `${r.space} · ${timeLabel(r.start!)}–${timeLabel(r.end!)} · ${r.name}`}
               </span>
-              <button style={S.btn} onClick={() => toggle(r)}>{r.active ? "Sospendi" : "Riattiva"}</button>
-              <button style={S.danger} onClick={() => remove(r)}>Elimina</button>
+              <span className="adm-rule__act">
+                <button style={S.btn} onClick={() => toggle(r)}>{r.active ? "Sospendi" : "Riattiva"}</button>
+                <button style={S.danger} onClick={() => remove(r)}>Elimina</button>
+              </span>
             </div>
           ))}
         </div>

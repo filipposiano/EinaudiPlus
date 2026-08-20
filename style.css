@@ -73,6 +73,15 @@
   --status-oos-text:      #d11a28;   /* 5,40:1 */
   --status-prev-text:     #b45309;   /* 5,02:1 */
   --destructive-text:     #d11a28;   /* 5,40:1 */
+
+  /* ── Lavatrice / asciugatrice ──────────────────────────────────────────
+     Distinguono i due tipi di macchina nel pannello amministrativo, dove
+     stanno affiancate e si somigliano. Non sono stati: lo stato resta verde
+     o rosso. Blu = acqua, arancio = calore; sono i due versi in cui la gente
+     pensa gia' alle due macchine, quindi non c'e' una legenda da imparare.
+     Verificati contro #ffffff, sopra il minimo AA per il testo. */
+  --tinta-lavatrice:    #1d5fa8;   /* 6,03:1 */
+  --tinta-asciugatrice: #a1520a;   /* 5,25:1 */
 }
 
 .dark {
@@ -127,6 +136,11 @@
   --status-oos-text:      #ff4757;   /* 5,85:1 */
   --status-prev-text:     #f59e0b;   /* margine ampio, stessa famiglia dell'oos */
   --destructive-text:     #ff4757;   /* 5,85:1 */
+
+  /* Le due tinte del tema chiaro sono scure per reggere il bianco: sul nero
+     sparirebbero. Stessa idea (acqua/calore), luminosità ribaltata. */
+  --tinta-lavatrice:    #5ba8f5;   /* 7,72:1 */
+  --tinta-asciugatrice: #f0a04b;   /* 9,45:1 */
 }
 
 @theme inline {
@@ -186,6 +200,57 @@
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
 }
+
+/* ── Pannello amministrativo: impaginazione ────────────────────────────────
+   Le sezioni amministrative erano nate per una pagina desktop a sé. Ora
+   vivono dentro l'app, quindi anche dentro una colonna da 375px, dove i
+   moduli a colonne fisse e le righe a larghezza minima uscivano dal bordo.
+   Stanno qui e non fra gli stili inline perché servono media query. */
+
+/* Moduli: le colonne si contano da sole e non scendono mai sotto la
+   larghezza della colonna disponibile — con `minmax(150px, …)` secco, su
+   schermi molto stretti la griglia sforava invece di passare a una colonna. */
+.adm-form {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+}
+.adm-form > * { min-width: 0; }
+
+/* Riga di una regola ricorrente. Su schermo stretto va su più righe: la
+   descrizione prende una riga tutta sua e i comandi si allineano a destra.
+   Da 720px in su torna una riga sola, che è come si legge meglio un elenco. */
+.adm-rule {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.adm-rule__what {
+  flex: 1 1 100%;
+  min-width: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.adm-rule__act { display: flex; gap: 8px; margin-left: auto; }
+@media (min-width: 720px) {
+  .adm-rule__what { flex: 1 1 auto; }
+}
+
+/* Intestazione di una segnalazione: camera, lavanderia, etichetta GUASTO e
+   data. Su schermo stretto la data andava a sbattere contro il resto. */
+.adm-feed-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-bottom: 6px;
+}
+.adm-feed-head__when { margin-left: auto; }
 
 /* Chi ha chiesto al sistema di ridurre le animazioni non deve vedere niente
    ruotare: lo stato resta comunque leggibile dal colore, dalla croce e

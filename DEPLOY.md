@@ -256,8 +256,18 @@ di prenotazione risolto male, o zero promemoria partiti la prima mattina.
   **Si entra digitando `1935` al posto del numero di camera.** Non è una
   password: chi lo digita vede solo il form di login, che resta l'unica cosa
   che conta. Tenerlo lì invece che nel menu evita a ogni residente una voce che
-  non potrebbe comunque usare. L'uscita sta sulla barra del ruolo, dentro le
-  sezioni stesse, così si passa da FDO a sistemista senza cercarla altrove.
+  non potrebbe comunque usare.
+
+  **Chi entra diventa la DIREZIONE**, non una camera: prenota turni di
+  lavanderia e sale a quel nome, e la quota di 2 turni non gli si applica —
+  è un limite per camera, e `book_as_direzione` non lo controlla di proposito.
+
+  **Per uscire** ci sono due strade, entrambe valide per FDO e sistemista: la
+  barra del ruolo in cima a ogni sezione riservata, e Impostazioni → «Esci da
+  amministratore» per quando si sta sulla dashboard normale. In entrambi i casi
+  l'identità DIREZIONE viene lasciata e si torna a scegliere una camera:
+  restarci senza sessione significherebbe vedere prenotazioni rifiutate dal
+  server senza capire perché.
 
 ---
 

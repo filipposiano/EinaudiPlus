@@ -30,6 +30,10 @@ type Facility = "laundry" | "cinema" | "music" | AdminTab;
 const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "ricorrenti", "manutenzione"];
 const isAdminFacility = (f: Facility): f is AdminTab => (ADMIN_TABS as string[]).includes(f);
 
+/** Etichetta della camera nell'intestazione. Chi amministra è la Direzione. */
+const roomLabel = (room: string | null, t: { changeRoom: string }) =>
+  room === api.DIREZIONE ? "DIREZIONE" : room ? `St. ${room}` : t.changeRoom;
+
 // Preferenze accessibilità a livello di modulo — lette da tutti i componenti,
 // aggiornate da App.handleAccessibilityChange. Evita il prop-drilling profondo.
 let accessibilityPrefs: AccessibilityPrefs = loadPrefs();
@@ -178,6 +182,8 @@ const T = {
       : n === 0
       ? `Hai usato entrambi i turni di questa settimana (max ${WEEKLY_QUOTA} a camera).`
       : `Hai superato il limite settimanale di ${WEEKLY_QUOTA} turni (${-n} in più).`,
+    noQuota: "senza limite",
+    noQuotaMsg: `Il limite di ${WEEKLY_QUOTA} turni vale per camera: alla Direzione non si applica.`,
     howItWorks: "Come funziona",
     autoWash: (_end: string) => `Lavatrice corrispondente prenotata automaticamente per il turno successivo.`,
     daily:    "Giornaliero", weekly: "Settimana", overview: "Panoramica",
@@ -272,6 +278,8 @@ const T = {
       : n === 0
       ? `You've used both your slots this week (max ${WEEKLY_QUOTA} per room).`
       : `You're over the weekly limit of ${WEEKLY_QUOTA} slots (${-n} extra).`,
+    noQuota: "no limit",
+    noQuotaMsg: `The ${WEEKLY_QUOTA}-slot limit is per room: it doesn't apply to Direzione.`,
     howItWorks: "How it works",
     autoWash: (_end: string) => `Corresponding dryer auto-reserved for the next slot.`,
     daily:    "Daily", weekly: "Week", overview: "Overview",
@@ -479,6 +487,8 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
   const sub  = "var(--gray-accessible-text)";
   const chip = "var(--secondary)";
   const machLabel = selMachine?.split("-")[1] ?? "";
+  // Chi risulta intestatario del turno: una camera, o la Direzione.
+  const intestatario = room === api.DIREZIONE ? "Direzione" : `${t.room} ${room}`;
 
   // Prenotando una lavatrice si riserva anche l'asciugatrice con la stessa
   // lettera per il turno successivo: se una delle due è segnalata guasta, chi
@@ -560,7 +570,9 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
                 onClick={()=>{ setRoom(myRoom); setStep("confirm"); }}
                 className="w-full py-4 rounded-2xl text-sm font-semibold flex items-center justify-between px-5 transition-all active:scale-[0.98]"
                 style={{ background:RED, color:RED_FG }}>
-                <span>{t.forMe(myRoom)}</span>
+                {/* La Direzione non è una camera: "Per me — Camera DIREZIONE"
+                    non vorrebbe dire niente. */}
+                <span>{myRoom === api.DIREZIONE ? t.forDirezione : t.forMe(myRoom)}</span>
                 <span style={{ opacity:0.7 }}>→</span>
               </button>
               <button
@@ -570,9 +582,11 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
                 <span>{t.forOther}</span>
                 <span style={{ color:sub }}>→</span>
               </button>
-              {/* Visibile solo con una sessione amministrativa. Nasconderlo non
-                  e' un'autorizzazione: il server rifiuta comunque senza cookie. */}
-              {isAdmin && (
+              {/* Visibile solo con una sessione amministrativa, e solo se
+                  l'identità corrente non è già la Direzione: altrimenti sarebbe
+                  un doppione del pulsante qui sopra. Nasconderlo non e'
+                  un'autorizzazione: il server rifiuta comunque senza cookie. */}
+              {isAdmin && myRoom !== api.DIREZIONE && (
                 <button
                   onClick={()=>{ setRoom(api.DIREZIONE); setStep("confirm"); }}
                   className="w-full py-4 rounded-2xl text-sm font-semibold flex items-center justify-between px-5 transition-all active:scale-[0.98] border"
@@ -593,15 +607,17 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
               <span className="text-3xl font-mono font-bold tabular-nums" style={{ color:room?fg:sub }}>{room||"—"}</span>
             </div>
             <div className="grid grid-cols-3 gap-2 mb-4">
+              {/* Forma funzionale: due tocchi ravvicinati leggerebbero
+                  entrambi lo stesso valore e perderebbero una cifra. */}
               {["1","2","3","4","5","6","7","8","9"].map((k)=>(
-                <button key={k} onClick={()=>room.length<4&&setRoom(room+k)}
+                <button key={k} onClick={()=>setRoom(r=>r.length<4?r+k:r)}
                   className="rounded-2xl h-12 text-lg font-bold transition-all active:scale-95"
                   style={{ background:chip, color:fg }}>{k}</button>
               ))}
-              <button onClick={()=>setRoom(room.slice(0,-1))}
+              <button onClick={()=>setRoom(r=>r.slice(0,-1))}
                 className="rounded-2xl h-12 flex items-center justify-center transition-all active:scale-95"
                 style={{ background:chip, color:sub }}><Delete size={18}/></button>
-              <button onClick={()=>room.length<4&&setRoom(room+"0")}
+              <button onClick={()=>setRoom(r=>r.length<4?r+"0":r)}
                 className="rounded-2xl h-12 text-lg font-bold transition-all active:scale-95"
                 style={{ background:chip, color:fg }}>0</button>
               <button onClick={()=>room.length>0&&setStep("confirm")}
@@ -617,12 +633,14 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
         {step === "confirm" && (
           <>
             <p className="text-sm font-semibold mb-1" style={{ color:fg }}>{t.confirmBooking}</p>
-            <p className="text-xs mb-4" style={{ color:sub }}>{t.room} {room} · Lavatrice {machLabel}</p>
+            {/* "Camera DIREZIONE" non esiste: la Direzione prenota per la
+                struttura, non per una stanza. */}
+            <p className="text-xs mb-4" style={{ color:sub }}>{intestatario} · Lavatrice {machLabel}</p>
             <div className="rounded-2xl overflow-hidden mb-5 border" style={{ borderColor: "var(--border)" }}>
               <div className="p-4 flex items-center gap-3" style={{ background: "color-mix(in srgb, var(--primary) 12%, transparent)" }}>
                 <div className="p-2.5 rounded-xl" style={{ background:RED, color:RED_FG }}><WashingMachine size={18}/></div>
                 <div>
-                  <p className="text-xs font-mono mb-0.5" style={{ color:sub }}>Lavatrice {machLabel} · {t.room} {room}</p>
+                  <p className="text-xs font-mono mb-0.5" style={{ color:sub }}>Lavatrice {machLabel} · {intestatario}</p>
                   <p className="text-base font-mono font-bold" style={{ color:fg }}>{slot.start} – {slot.end}</p>
                 </div>
               </div>
@@ -901,7 +919,12 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
   const slotEndsMs = slotEndDate(CUR_SLOT).getTime() - now.getTime();
   
   const myBookings     = myWeekBookings(week, roomNumber);
-  const remaining      = WEEKLY_QUOTA - myBookings.length;
+  // La quota è "per camera": la Direzione non è una camera e il server non
+  // gliela applica (book_as_direzione non la controlla, di proposito). Senza
+  // questa eccezione il conteggio lato client avrebbe detto "0 rimaste" alla
+  // terza prenotazione della portineria, che invece sarebbe passata.
+  const senzaQuota     = roomNumber === api.DIREZIONE;
+  const remaining      = senzaQuota ? Infinity : WEEKLY_QUOTA - myBookings.length;
   const activeBookings = myBookings.filter((b) => !isPastBooking(b));
 
   // Prima lavatrice libera in un dato (giorno, slot)
@@ -963,7 +986,12 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
           <p className="text-[11px] font-mono tracking-widest uppercase mb-1.5" style={{ color:sub }}>{fmtDay(now, lang)}</p>
           <p className="text-4xl font-bold tabular-nums font-mono leading-none mb-1.5" style={{ color:fg }}>{fmtTime(now, lang)}</p>
           <p className="text-sm" style={{ color:sub }}>
-            {t.greeting(now.getHours())}{roomNumber ? <>, {t.camera} <span style={{ color:fg, fontWeight:600 }}>{roomNumber}</span></> : ""}
+            {/* "camera DIREZIONE" non vuol dire niente: la direzione non è una
+                camera, è chi prenota per conto della struttura. */}
+            {t.greeting(now.getHours())}
+            {roomNumber === api.DIREZIONE
+              ? <>, <span style={{ color:fg, fontWeight:600 }}>Direzione</span></>
+              : roomNumber ? <>, {t.camera} <span style={{ color:fg, fontWeight:600 }}>{roomNumber}</span></> : ""}
           </p>
         </div>
 
@@ -996,12 +1024,12 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
             <p className="text-[11px] font-mono tracking-widest uppercase" style={{ color:sub }}>{t.yourBookings}</p>
             <span className="text-[10px] font-mono font-bold px-2.5 py-1 rounded-full"
               style={{
-                background: remaining > 0 ? `color-mix(in srgb, ${GREEN} 15%, transparent)`
+                background: senzaQuota || remaining > 0 ? `color-mix(in srgb, ${GREEN} 15%, transparent)`
                           : remaining === 0 ? "var(--secondary)"
                           : `color-mix(in srgb, ${ORANGE} 18%, transparent)`,
-                color: remaining > 0 ? GREEN : remaining === 0 ? sub : ORANGE,
+                color: senzaQuota || remaining > 0 ? GREEN : remaining === 0 ? sub : ORANGE,
               }}>
-              {t.remainingChip(remaining)}
+              {senzaQuota ? t.noQuota : t.remainingChip(remaining)}
             </span>
           </div>
           <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
@@ -1039,8 +1067,10 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
             )}
             <div className="flex items-center gap-2 px-4 py-2.5 border-t"
               style={{ borderColor:div, background: `color-mix(in srgb, var(--primary) 4%, transparent)` }}>
-              <CalendarDays size={12} style={{ color: remaining >= 0 ? sub : ORANGE, flexShrink:0 }}/>
-              <p className="text-[11px]" style={{ color: remaining >= 0 ? sub : ORANGE }}>{t.remainingMsg(remaining)}</p>
+              <CalendarDays size={12} style={{ color: senzaQuota || remaining >= 0 ? sub : ORANGE, flexShrink:0 }}/>
+              <p className="text-[11px]" style={{ color: senzaQuota || remaining >= 0 ? sub : ORANGE }}>
+                {senzaQuota ? t.noQuotaMsg : t.remainingMsg(remaining)}
+              </p>
             </div>
           </div>
         </section>
@@ -1818,15 +1848,18 @@ function LoginScreen({ lang, onLogin, onAdmin }: {
       </div>
 
       <div className="grid grid-cols-4 gap-2.5 w-full mb-4">
+        {/* setRoom(r => …) e non setRoom(room + k): due tocchi nello stesso
+            istante leggerebbero entrambi lo stesso valore vecchio e la prima
+            cifra andrebbe persa. Con la forma funzionale si accodano. */}
         {["1","2","3","A", "4","5","6","B", "7","8","9","-"].map((k)=>(
-          <button key={k} onClick={()=>room.length<6&&setRoom(room+k)}
+          <button key={k} onClick={()=>setRoom(r=>r.length<6?r+k:r)}
             className="rounded-2xl h-14 text-xl font-bold transition-all active:scale-95"
             style={{ background:chip, color:fg }}>{k}</button>
         ))}
-        <button onClick={()=>setRoom(room.slice(0,-1))}
+        <button onClick={()=>setRoom(r=>r.slice(0,-1))}
           className="rounded-2xl h-14 flex items-center justify-center transition-all active:scale-95 col-span-1"
           style={{ background:chip, color:sub }}><Delete size={20}/></button>
-        <button onClick={()=>room.length<6&&setRoom(room+"0")}
+        <button onClick={()=>setRoom(r=>r.length<6?r+"0":r)}
           className="rounded-2xl h-14 text-xl font-bold transition-all active:scale-95 col-span-1"
           style={{ background:chip, color:fg }}>0</button>
         <button onClick={()=>{
@@ -1980,7 +2013,7 @@ function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility,
           <button onClick={onChangeRoom}
             className="flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-medium transition-colors desk-nav"
             style={{ color:fg }}>
-            <span className="font-mono">{roomNumber ? `St. ${roomNumber}` : t.changeRoom}</span>
+            <span className="font-mono">{roomLabel(roomNumber, t)}</span>
             <LogOut size={13} style={{ color:sub }}/>
           </button>
         )}
@@ -2080,9 +2113,9 @@ function FacilitySwitcher({ facility, onChange, lang, adminRole }: {
 // tutto (riaprire l'app ricarica già i dati da sola) e così il selettore
 // manuale del tema, che ora segue sempre quello del telefono — vedi l'effetto
 // che ascolta prefers-color-scheme in cima al componente App.
-function SettingsSheet({ lang, room, adminRole, onToggleLang, onAccessibility, onClose }: {
+function SettingsSheet({ lang, room, adminRole, onLogoutAdmin, onToggleLang, onAccessibility, onClose }: {
   lang: Lang; room: string | null;
-  adminRole: AdminRole | null;
+  adminRole: AdminRole | null; onLogoutAdmin: () => void;
   onToggleLang: () => void; onAccessibility: () => void; onClose: () => void;
 }) {
   const it = lang === "it";
@@ -2160,17 +2193,28 @@ function SettingsSheet({ lang, room, adminRole, onToggleLang, onAccessibility, o
         </div>
 
         {/* L'accesso amministratore non sta qui: si apre digitando 1935 al
-            posto della camera. Le sezioni riservate compaiono poi nella
-            navigazione, accanto a Lavanderia / Cinema / Musica, e l'uscita sta
-            sulla barra del ruolo dentro quelle sezioni. Un menu con una voce
-            che il 99% di chi lo apre non può usare era solo rumore. */}
+            posto della camera. Un menu con una voce che il 99% di chi lo apre
+            non può usare sarebbe solo rumore.
+            L'uscita invece sì: dentro le sezioni riservate c'è già, ma un
+            amministratore passa la maggior parte del tempo sulla dashboard
+            normale, e da lì non aveva alcun modo di chiudere la sessione. */}
         {adminRole !== null && (
-          <p className="text-[11px] mx-5 mt-3 flex items-center gap-1.5" style={{ color:sub }}>
-            <ShieldCheck size={13}/>
-            {it
-              ? `Sessione ${adminRole === "sistemista" ? "sistemista" : "FDO"} attiva: puoi prenotare a nome della Direzione.`
-              : `${adminRole === "sistemista" ? "Sysadmin" : "FDO"} session active: you can book on behalf of Direzione.`}
-          </p>
+          <div className="rounded-2xl overflow-hidden border mx-5 mt-4" style={{ borderColor:div }}>
+            <div className="px-4 pt-3 pb-2 flex items-start gap-2">
+              <ShieldCheck size={14} style={{ color:sub, marginTop:2 }}/>
+              <p className="text-[11px] leading-snug" style={{ color:sub }}>
+                {it
+                  ? `Sessione ${adminRole === "sistemista" ? "sistemista" : "FDO"} attiva. Prenoti come Direzione, non come camera.`
+                  : `${adminRole === "sistemista" ? "Sysadmin" : "FDO"} session active. You book as Direzione, not as a room.`}
+              </p>
+            </div>
+            <div style={{ borderTop:`1px solid ${div}` }}>
+              <Row icon={<LogOut size={18}/>}
+                label={it ? "Esci da amministratore" : "Sign out of administration"}
+                sub={it ? "Torni a scegliere una camera" : "Back to picking a room"}
+                onClick={() => { onClose(); onLogoutAdmin(); }}/>
+            </div>
+          </div>
         )}
       </div>
 
@@ -2546,6 +2590,25 @@ export default function App() {
     }
   }, [adminRole, facility]);
 
+  // Un solo punto in cui la sessione amministrativa cambia, da qualunque parte
+  // arrivi (login, uscita, scadenza rilevata da una sezione). Chi smette di
+  // essere amministratore smette anche di essere la DIREZIONE: senza questo
+  // resterebbe con un'identità che non può più usare, e ogni prenotazione
+  // fallirebbe lato server senza che si capisca perché.
+  const handleAdminSession = useCallback((r: AdminRole | null) => {
+    setAdminRole(r);
+    if (r === null && localStorage.getItem("laundryhub.room") === api.DIREZIONE) {
+      try { localStorage.removeItem("laundryhub.room"); } catch {}
+      window.location.reload();
+    }
+  }, []);
+
+  const logoutAdmin = useCallback(async () => {
+    const { adminLogout } = await import("./AdminPanel");
+    await adminLogout();
+    handleAdminSession(null);
+  }, [handleAdminSession]);
+
   // Riallinea in silenzio la subscription push col server.
   //
   // Due motivi: il nuovo database parte senza le subscription vecchie, e la
@@ -2633,7 +2696,7 @@ export default function App() {
   // sezioni riservate → pannello amministrativo, nello stesso corpo pagina.
   const isRoom = facility === "cinema" || facility === "music";
   const bodyContent = isAdminFacility(facility)
-    ? <Suspense fallback={null}><AdminScreens tab={facility} onSession={setAdminRole}/></Suspense>
+    ? <Suspense fallback={null}><AdminScreens tab={facility} onSession={handleAdminSession}/></Suspense>
     : isRoom
       ? <RoomView room={facility} lang={lang} roomNumber={roomNumber}/>
       : mainContent;
@@ -2652,22 +2715,23 @@ export default function App() {
   // volta sola invece che copiati in entrambi i rami.
   const settingsSheet = settingsOpen && (
     <SettingsSheet lang={lang} room={roomNumber}
-      adminRole={adminRole}
+      adminRole={adminRole} onLogoutAdmin={logoutAdmin}
       onToggleLang={()=>setLang(l=>l==="it"?"en":"it")}
       onAccessibility={() => setAccessibilityOpen(true)}
       onClose={() => setSettingsOpen(false)} />
   );
 
   // Login amministratore: si apre digitando 1935 al posto della camera.
-  // Entrati, si prosegue senza camera — chi amministra prenota per la
-  // DIREZIONE, non per sé — e le sezioni riservate compaiono nella navigazione.
+  // Chi amministra non ha una camera propria: la sua identità è DIREZIONE, e
+  // con quella prenota — turni di lavanderia e sale — senza dover scegliere
+  // ogni volta per conto di chi sta agendo.
   const adminLoginSheet = adminLoginOpen && (
     <Suspense fallback={null}>
       <AdminLoginSheet
         onClose={() => setAdminLoginOpen(false)}
         onSession={(r) => {
-          setAdminRole(r);
-          if (r && roomNumber === null) chooseRoom("");
+          handleAdminSession(r);
+          if (r && roomNumber !== api.DIREZIONE) chooseRoom(api.DIREZIONE);
         }} />
     </Suspense>
   );
@@ -2722,7 +2786,7 @@ export default function App() {
             <button onClick={changeRoom}
               className="text-[11px] font-mono px-2 py-1 rounded-lg transition-colors"
               style={{ background:"var(--secondary)", color:"var(--gray-accessible-text)" }}>
-              {roomNumber ? `St. ${roomNumber}` : t.changeRoom}
+              {roomLabel(roomNumber, t)}
             </button>
           ) : <span/>}
           <div className="w-24 h-6 rounded-full hidden md:flex items-center justify-center" style={{ background:"var(--secondary)" }}>
