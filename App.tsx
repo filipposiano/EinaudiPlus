@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import {
   Wind, Clock, CalendarDays,
   Plus, CheckCircle2, AlertTriangle,
@@ -7,12 +7,19 @@ import {
   Bell, BellRing, Download, Share, Menu,
   MessageSquare, Send, Eye, LogOut,
   Settings, ChevronRight, Globe,
+  ShieldCheck, Repeat, Eraser, KeyRound,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
 import RoomView from "./Rooms";
 import AccessibilityPanel from "./AccessibilityPanel";
 import { loadPrefs, savePrefs, applyToDOM, type AccessibilityPrefs } from "./statusConfig";
+import type { Role as AdminRole, Tab as AdminTab } from "./AdminPanel";
+
+// Le schermate amministrative vivono dentro questa stessa app, aperte dal menu
+// Impostazioni. In lazy perché la stragrande maggioranza di chi apre l'app non
+// ha una sessione admin e non deve scaricarne il codice.
+const AdminSheet = lazy(() => import("./AdminPanel").then((m) => ({ default: m.AdminSheet })));
 
 type Facility = "laundry" | "cinema" | "music";
 
@@ -855,7 +862,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
   const [now, setNow]           = useState(new Date());
   const [toast, setToast]       = useState<string | null>(null);
   const [booking, setBooking]   = useState<Machine | null>(null);
-  const [adminOpen, setAdminOpen] = useState(false);
+  const [segnalaOpen, setSegnalaOpen] = useState(false);
   const [favPicker, setFavPicker] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [quickTarget, setQuickTarget] = useState<{ day:number; slot:number } | null>(null);
@@ -918,7 +925,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
   return (
     <div className="flex flex-col pb-6">
       {toast     && <Toast msg={toast} onClose={()=>setToast(null)}/>}
-      {adminOpen && <AdminSheet lang={lang} status={status} onStatus={onStatus} onClose={()=>setAdminOpen(false)} roomNumber={roomNumber}/>}
+      {segnalaOpen && <SegnalaGuastoSheet lang={lang} status={status} onStatus={onStatus} onClose={()=>setSegnalaOpen(false)} roomNumber={roomNumber}/>}
       {booking && (
         <BookModal
           target={{ slotIdx:CUR_SLOT, machineId:booking.id }}
@@ -1156,7 +1163,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
       {/* Admin + Feedback */}
       <div className="px-5 pt-3 pb-1 flex flex-col gap-2">
         <button
-          onClick={() => setAdminOpen(true)}
+          onClick={() => setSegnalaOpen(true)}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] border"
           style={{ background: "var(--secondary)", color:sub, borderColor: "var(--border)" }}>
           <Wrench size={14}/>
@@ -1665,7 +1672,7 @@ function WeekOverview({ lang, week, status, roomNumber: sessionRoom, onBook, onC
 
 // ─── Admin sheet (bottom sheet dalla dashboard) ───────────────────────────────
 
-function AdminSheet({ lang, status, onStatus, onClose, roomNumber }: {
+function SegnalaGuastoSheet({ lang, status, onStatus, onClose, roomNumber }: {
   theme?: Theme; lang: Lang; status: StatusData; roomNumber: string | null;
   onStatus: (machine:string, oos:boolean)=>Promise<void>; onClose: () => void;
 }) {
@@ -1713,7 +1720,7 @@ function AdminSheet({ lang, status, onStatus, onClose, roomNumber }: {
           <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.washers}</p>
           <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
             {washers.map((m, i) => (
-              <AdminRow key={m.id} machine={m} lang={lang} isLast={i===washers.length-1} divColor={div} onToggle={()=>toggle(m)} />
+              <SegnalaGuastoRow key={m.id} machine={m} lang={lang} isLast={i===washers.length-1} divColor={div} onToggle={()=>toggle(m)} />
             ))}
           </div>
         </div>
@@ -1722,7 +1729,7 @@ function AdminSheet({ lang, status, onStatus, onClose, roomNumber }: {
           <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.dryers}</p>
           <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
             {dryers.map((m, i) => (
-              <AdminRow key={m.id} machine={m} lang={lang} isLast={i===dryers.length-1} divColor={div} onToggle={()=>toggle(m)} />
+              <SegnalaGuastoRow key={m.id} machine={m} lang={lang} isLast={i===dryers.length-1} divColor={div} onToggle={()=>toggle(m)} />
             ))}
           </div>
         </div>
@@ -1731,7 +1738,7 @@ function AdminSheet({ lang, status, onStatus, onClose, roomNumber }: {
   );
 }
 
-function AdminRow({ machine, lang, isLast, divColor, onToggle }: {
+function SegnalaGuastoRow({ machine, lang, isLast, divColor, onToggle }: {
   machine: Machine; lang: Lang; isLast: boolean; divColor: string; onToggle: () => void;
 }) {
   const t   = T[lang];
@@ -1997,8 +2004,10 @@ function FacilitySwitcher({ facility, onChange, lang }: { facility: Facility; on
 // tutto (riaprire l'app ricarica già i dati da sola) e così il selettore
 // manuale del tema, che ora segue sempre quello del telefono — vedi l'effetto
 // che ascolta prefers-color-scheme in cima al componente App.
-function SettingsSheet({ lang, room, onToggleLang, onAccessibility, onClose }: {
+function SettingsSheet({ lang, room, adminRole, onAdmin, onToggleLang, onAccessibility, onClose }: {
   lang: Lang; room: string | null;
+  adminRole: AdminRole | null;
+  onAdmin: (tab: AdminTab | null) => void;   // null = apri sul login
   onToggleLang: () => void; onAccessibility: () => void; onClose: () => void;
 }) {
   const it = lang === "it";
@@ -2074,6 +2083,61 @@ function SettingsSheet({ lang, room, onToggleLang, onAccessibility, onClose }: {
           <Row icon={<Eye size={18}/>} label={it ? "Accessibilità" : "Accessibility"}
             onClick={() => { onAccessibility(); onClose(); }}/>
         </div>
+
+        {/* Amministrazione.
+            Non è una pagina a parte: un amministratore usa la stessa app di
+            tutti — stessa dashboard, stesse prenotazioni — e qui trova in più
+            le cose che nell'app normale non esistono. Anche l'accesso sta qui,
+            perché è dove uno va a cercarlo.
+            Le voci riservate al sistemista si vedono solo con quel ruolo, ma
+            il controllo vero è sul cookie lato server: nascondere una riga non
+            è un'autorizzazione. */}
+        <div className="rounded-2xl overflow-hidden border mx-5 mt-4" style={{ borderColor:div }}>
+          <div className="px-4 pt-3 pb-1">
+            <p className="text-[10px] font-bold uppercase tracking-widest" style={{ color:sub }}>
+              {it ? "Amministrazione" : "Administration"}
+            </p>
+          </div>
+
+          {adminRole === null ? (
+            <Row icon={<KeyRound size={18}/>} label={it ? "Accesso amministratore" : "Administrator sign-in"}
+              onClick={() => onAdmin(null)}/>
+          ) : (
+            <>
+              <div style={{ borderBottom:`1px solid ${div}` }}>
+                <Row icon={<WashingMachine size={18}/>} label={it ? "Macchine" : "Machines"}
+                  sub={it ? "Segna fuori servizio" : "Mark out of service"}
+                  onClick={() => onAdmin("macchine")}/>
+              </div>
+              <div style={{ borderBottom: adminRole === "sistemista" ? `1px solid ${div}` : undefined }}>
+                <Row icon={<MessageSquare size={18}/>} label={it ? "Segnalazioni" : "Reports"}
+                  sub={it ? "Guasti e feedback dei residenti" : "Faults and resident feedback"}
+                  onClick={() => onAdmin("segnalazioni")}/>
+              </div>
+              {adminRole === "sistemista" && (
+                <>
+                  <div style={{ borderBottom:`1px solid ${div}` }}>
+                    <Row icon={<Repeat size={18}/>} label={it ? "Ricorrenti" : "Recurring"}
+                      sub={it ? "Turni fissi ogni settimana" : "Fixed weekly slots"}
+                      onClick={() => onAdmin("ricorrenti")}/>
+                  </div>
+                  <Row icon={<Eraser size={18}/>} label={it ? "Manutenzione" : "Maintenance"}
+                    sub={it ? "Pulizia dei dati" : "Data cleanup"}
+                    onClick={() => onAdmin("manutenzione")}/>
+                </>
+              )}
+            </>
+          )}
+        </div>
+
+        {adminRole !== null && (
+          <p className="text-[11px] mx-5 mt-3 flex items-center gap-1.5" style={{ color:sub }}>
+            <ShieldCheck size={13}/>
+            {it
+              ? `Sessione attiva: ${adminRole === "sistemista" ? "sistemista" : "FDO"}. Puoi prenotare a nome della Direzione.`
+              : `Signed in as ${adminRole === "sistemista" ? "sysadmin" : "FDO"}. You can book on behalf of Direzione.`}
+          </p>
+        )}
       </div>
 
       {remindersOpen && (
@@ -2427,12 +2491,20 @@ export default function App() {
     return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
 
-  // Se questo dispositivo ha una sessione /admin valida, l'app principale
-  // offre in più la prenotazione a nome DIREZIONE. Un solo controllo qui,
-  // propagato a chi ne ha bisogno — il vero controllo resta comunque sul
-  // cookie lato server: nascondere il pulsante non è un'autorizzazione.
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => { api.adminRole().then((r) => setIsAdmin(r !== null)); }, []);
+  // Se questo dispositivo ha una sessione admin valida, l'app offre in più la
+  // prenotazione a nome DIREZIONE e le voci riservate nel menu. Un solo
+  // controllo qui, propagato a chi ne ha bisogno — il vero controllo resta
+  // comunque sul cookie lato server: nascondere un pulsante non è
+  // un'autorizzazione.
+  const [adminRole, setAdminRole] = useState<AdminRole | null>(null);
+  const [adminTab, setAdminTab] = useState<AdminTab | null>(null);
+  const [adminOpen, setAdminOpen] = useState(false);
+  const isAdmin = adminRole !== null;
+  useEffect(() => { api.adminRole().then((r) => setAdminRole((r as AdminRole) ?? null)); }, []);
+
+  const openAdmin = useCallback((tab: AdminTab | null) => {
+    setAdminTab(tab); setAdminOpen(true); setSettingsOpen(false);
+  }, []);
 
   // Riallinea in silenzio la subscription push col server.
   //
@@ -2531,6 +2603,22 @@ export default function App() {
     />
   );
 
+  // Menu e schermate amministrative: identici nei due layout, definiti una
+  // volta sola invece che copiati in entrambi i rami.
+  const settingsSheet = settingsOpen && (
+    <SettingsSheet lang={lang} room={roomNumber}
+      adminRole={adminRole} onAdmin={openAdmin}
+      onToggleLang={()=>setLang(l=>l==="it"?"en":"it")}
+      onAccessibility={() => setAccessibilityOpen(true)}
+      onClose={() => setSettingsOpen(false)} />
+  );
+
+  const adminSheet = adminOpen && (
+    <Suspense fallback={null}>
+      <AdminSheet tab={adminTab} onClose={() => setAdminOpen(false)} onSession={setAdminRole} />
+    </Suspense>
+  );
+
   if (isDesktop) {
     return (
       <div className="relative h-dvh w-full flex overflow-hidden"
@@ -2538,12 +2626,8 @@ export default function App() {
         {globalStyle}
         {showChrome && <InstallPrompt lang={lang}/>}
         {accessibilityModal}
-        {settingsOpen && (
-          <SettingsSheet lang={lang} room={roomNumber}
-            onToggleLang={()=>setLang(l=>l==="it"?"en":"it")}
-            onAccessibility={() => setAccessibilityOpen(true)}
-            onClose={() => setSettingsOpen(false)} />
-        )}
+        {settingsSheet}
+        {adminSheet}
         <DesktopSidebar
           active={screen} onChange={setScreen} lang={lang}
           roomNumber={roomNumber} showNav={showChrome}
@@ -2573,12 +2657,8 @@ export default function App() {
         style={{ background:"var(--background)", borderColor:"var(--border)" }}>
         {showChrome && <InstallPrompt lang={lang}/>}
         {accessibilityModal}
-        {settingsOpen && (
-          <SettingsSheet lang={lang} room={roomNumber}
-            onToggleLang={()=>setLang(l=>l==="it"?"en":"it")}
-            onAccessibility={() => setAccessibilityOpen(true)}
-            onClose={() => setSettingsOpen(false)} />
-        )}
+        {settingsSheet}
+        {adminSheet}
 
         <div className="flex items-center justify-between px-7 pt-3 pb-0 shrink-0 mt-2 md:mt-0">
           {/* Prima di scegliere una camera qui c'era un orologio finto (9:41,

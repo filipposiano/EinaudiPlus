@@ -1,17 +1,13 @@
-// Pannello amministrativo — /admin
+// Schermate amministrative — si aprono dal menu Impostazioni dell'app.
 //
-// Tiene solo cio' che nell'app normale non esiste: lo stato delle macchine, le
-// segnalazioni dei residenti e, per il sistemista, regole ricorrenti e pulizia.
+// Tengono solo cio' che nell'app normale non esiste: lo stato delle macchine,
+// le segnalazioni dei residenti e, per il sistemista, regole ricorrenti e
+// pulizia.
 //
 // Prenotare e cancellare NON si fa da qui: si fa nell'app principale, dove chi
 // ha una sessione admin puo' agire a nome della DIREZIONE su qualsiasi turno.
-// Le vecchie schede "Prenotazioni" e "Sale" erano copie peggiori di schermate
-// che gia' esistevano.
 //
-// Caricato in lazy da main.tsx: non pesa sul bundle dei residenti.
-//
-// Il file si chiama AdminPanel e non Admin perche' su filesystem insensibili
-// alle maiuscole Vite risolveva la rotta /admin come questo file.
+// Caricato in lazy da App.tsx: non pesa sul bundle dei residenti.
 
 import { useCallback, useEffect, useState } from "react";
 
@@ -33,8 +29,8 @@ type Recurring = {
   space?: string; space_id?: number; start?: number; end?: number; name?: string; type?: string;
 };
 
-type Role = "fdo" | "sistemista";
-type Tab = "macchine" | "segnalazioni" | "ricorrenti" | "manutenzione";
+export type Role = "fdo" | "sistemista";
+export type Tab = "macchine" | "segnalazioni" | "ricorrenti" | "manutenzione";
 
 // ─── Chiamate ────────────────────────────────────────────────────────────────
 
@@ -112,10 +108,11 @@ function Login({ onDone }: { onDone: () => void }) {
   }
 
   return (
-    <div style={{ ...S.page, display: "grid", placeItems: "center", padding: 24 }}>
-      <form onSubmit={submit} style={{ ...S.card, padding: 28, width: "100%", maxWidth: 360 }}>
-        <p style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", ...S.sub }}>EinaudiPlus</p>
-        <h1 style={{ fontSize: 22, fontWeight: 700, margin: "4px 0 20px" }}>Amministrazione</h1>
+    <div style={{ display: "grid", placeItems: "center" }}>
+      <form onSubmit={submit} style={{ ...S.card, padding: 24, width: "100%", maxWidth: 360 }}>
+        <p style={{ fontSize: 13, ...S.sub, marginBottom: 18 }}>
+          Le voci di amministrazione compaiono in questo menu dopo l'accesso.
+        </p>
 
         <label style={{ fontSize: 12, ...S.sub }}>Utente</label>
         <input style={{ ...S.input, marginBottom: 12 }} value={username} autoFocus
@@ -237,6 +234,22 @@ function MacchinaCard({ machine, busy, onToggle }: {
 
 // ─── Macchine ────────────────────────────────────────────────────────────────
 
+/** Le macchine reali raggruppate per lettera, lavatrice prima dell'asciugatrice. */
+function gruppiPerLettera(machines: Machine[]): [string, Machine[]][] {
+  const per = new Map<string, Machine[]>();
+  for (const m of machines) {
+    if (!m.bookable) continue;
+    const lettera = m.code.slice(-1);
+    (per.get(lettera) ?? per.set(lettera, []).get(lettera)!).push(m);
+  }
+  return [...per.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([lettera, ms]) => [
+      lettera,
+      ms.sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "washer" ? -1 : 1)),
+    ]);
+}
+
 function Macchine({ laundries, reload }: { laundries: Laundry[]; reload: () => void }) {
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -269,22 +282,42 @@ function Macchine({ laundries, reload }: { laundries: Laundry[]; reload: () => v
             </span>
           </div>
 
-          {/* Solo le macchine che esistono davvero.
-              Nel database ci sono tutte e sei le sigle per ogni lavanderia,
-              perché il client le indicizza per posizione, ma alla Manica solo
-              W-A e D-A sono reali: mostrare le altre come "non presente" era
-              rumore, e per l'amministratore non c'è nulla da farci. */}
+          {/* Raggruppate per lettera, non in un elenco piatto: lavatrice e
+              asciugatrice della stessa lettera sono la coppia che il residente
+              usa di fila (lava in A, asciuga in A), quindi è quella la coppia
+              che l'amministratore guarda insieme quando qualcosa non va.
+
+              Le lettere si ricavano dai dati e non sono fisse A/B/C: alla
+              Manica esiste solo la A, e una colonna vuota per B e C sarebbe
+              rumore senza niente da farci.
+
+              Solo le macchine che esistono davvero: nel database ci sono tutte
+              e sei le sigle per ogni lavanderia perché il client le indicizza
+              per posizione. */}
           <div style={{
             display: "grid", gap: 14,
-            gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))",
           }}>
-            {l.machines.filter((m) => m.bookable).map((m) => (
-              <MacchinaCard
-                key={m.code}
-                machine={m}
-                busy={busy === `${l.id}-${m.code}`}
-                onToggle={() => toggle(l, m)}
-              />
+            {gruppiPerLettera(l.machines).map(([lettera, gruppo]) => (
+              <div key={lettera} style={{
+                border: "1px solid var(--border)", borderRadius: 14, padding: "10px 10px 12px",
+              }}>
+                <p style={{
+                  fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase",
+                  textAlign: "center", marginBottom: 8, ...S.sub,
+                }}>Gruppo {lettera}</p>
+
+                <div style={{ display: "grid", gap: 10, gridTemplateColumns: `repeat(${gruppo.length}, 1fr)` }}>
+                  {gruppo.map((m) => (
+                    <MacchinaCard
+                      key={m.code}
+                      machine={m}
+                      busy={busy === `${l.id}-${m.code}`}
+                      onToggle={() => toggle(l, m)}
+                    />
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -661,28 +694,44 @@ function Manutenzione() {
 }
 
 // ─── Guscio ──────────────────────────────────────────────────────────────────
+//
+// Non e' piu' una pagina a se': e' una schermata che si apre sopra l'app
+// normale, dal menu Impostazioni. Un amministratore usa esattamente la stessa
+// app di tutti gli altri — stessa dashboard, stesse prenotazioni — e in piu'
+// trova nel menu le voci che qui dentro vivono. Il login sta nello stesso
+// posto, perche' e' li' che uno va a cercarlo.
+//
+// La pagina /admin separata voleva dire due interfacce da mantenere e un
+// amministratore che, per prenotare a nome della DIREZIONE, doveva comunque
+// tornare sull'app: la separazione non pagava niente.
 
-export default function Admin() {
+export function AdminSheet({ tab, onClose, onSession }: {
+  tab: Tab | null;                     // null = si apre sul login
+  onClose: () => void;
+  onSession: (role: Role | null) => void;   // per riallineare l'app dopo login/logout
+}) {
   const [logged, setLogged] = useState<boolean | null>(null);
   const [role, setRole] = useState<Role | null>(null);
-  const [user, setUser] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("macchine");
+  const [current, setCurrent] = useState<Tab>(tab ?? "macchine");
   const [laundries, setLaundries] = useState<Laundry[]>([]);
 
   const loadOverview = useCallback(async () => {
     try { setLaundries((await call("overview")).laundries); }
-    catch (e: any) { if (e.message === "SESSIONE_SCADUTA") setLogged(false); }
-  }, []);
+    catch (e: any) { if (e.message === "SESSIONE_SCADUTA") { setLogged(false); onSession(null); } }
+  }, [onSession]);
 
   const refreshSession = useCallback(() => {
     fetch("/api/admin/auth")
       .then((r) => r.json())
-      .then((d) => { setLogged(Boolean(d.logged)); setRole(d.role || null); setUser(d.user || null); })
-      .catch(() => setLogged(false));
-  }, []);
+      .then((d) => {
+        setLogged(Boolean(d.logged));
+        setRole(d.role || null);
+        onSession(d.logged ? (d.role as Role) : null);
+      })
+      .catch(() => { setLogged(false); onSession(null); });
+  }, [onSession]);
 
   useEffect(() => { refreshSession(); }, [refreshSession]);
-
   useEffect(() => { if (logged) loadOverview(); }, [logged, loadOverview]);
 
   async function logout() {
@@ -691,24 +740,15 @@ export default function Admin() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "logout" }),
     });
-    setLogged(false); setRole(null); setUser(null);
+    setLogged(false); setRole(null);
+    onSession(null);
+    onClose();
   }
-
-  if (logged === null) {
-    return <div style={{ ...S.page, display: "grid", placeItems: "center" }}>
-      <p style={S.sub}>Caricamento…</p>
-    </div>;
-  }
-  if (!logged) return <Login onDone={refreshSession} />;
 
   const sistemista = role === "sistemista";
 
   // Le schede riservate si nascondono, ma il controllo vero sta sul server:
-  // nascondere un pulsante non è un'autorizzazione.
-  // "Prenotazioni" e "Sale" non ci sono piu': erano solo elenchi di cio' che
-  // l'app principale gia' mostra, in una veste peggiore. Da amministratore si
-  // apre l'app normale, dove ora si puo' prenotare e cancellare a nome della
-  // DIREZIONE su qualsiasi turno e qualsiasi sala.
+  // nascondere un pulsante non e' un'autorizzazione.
   const TABS: [Tab, string][] = [
     ["macchine", "Macchine"],
     ["segnalazioni", "Segnalazioni"],
@@ -716,42 +756,57 @@ export default function Admin() {
   ];
 
   return (
-    <div style={S.page}>
-      {/* Era 860px: le righe delle prenotazioni sono lunghe (giorno, ora,
-          macchina, camera, pulsante) e si comprimevano senza motivo. */}
-      <div style={{ maxWidth: 1280, margin: "0 auto", padding: "28px 24px 60px" }}>
-        <header style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 24 }}>
-          <div>
-            <p style={{ fontSize: 11, letterSpacing: 2, textTransform: "uppercase", ...S.sub }}>EinaudiPlus</p>
-            <h1 style={{ fontSize: 24, fontWeight: 700 }}>Amministrazione</h1>
-            <p style={{ fontSize: 12, ...S.sub }}>
-              {user}
+    <div style={{
+      position: "absolute", inset: 0, zIndex: 50,
+      background: "var(--background)", display: "flex", flexDirection: "column",
+    }}>
+      <header style={{
+        display: "flex", alignItems: "center", gap: 12, flexShrink: 0,
+        padding: "16px 20px", borderBottom: "1px solid var(--border)",
+      }}>
+        <div style={{ minWidth: 0 }}>
+          <h1 style={{ fontSize: 17, fontWeight: 700 }}>Amministrazione</h1>
+          {/* Solo il ruolo, non anche il nome utente: c'e' un account per
+              ruolo e i due valori coincidono ("fdo" col badge FDO), quindi
+              stamparli entrambi dava "sistemistaSISTEMISTA". */}
+          {logged && (
+            <p style={{ fontSize: 11, ...S.sub }}>
               <span style={{
-                marginLeft: 8, padding: "1px 7px", borderRadius: 99, fontSize: 10,
+                padding: "1px 7px", borderRadius: 99, fontSize: 10,
                 fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase",
                 background: "color-mix(in srgb, var(--primary) 15%, transparent)",
                 color: "var(--primary)",
               }}>{sistemista ? "sistemista" : "FDO"}</span>
             </p>
-          </div>
-          <div style={{ flex: 1 }} />
-          <a href="/" style={{ ...S.btn, textDecoration: "none" }}>App</a>
-          <button style={S.btn} onClick={logout}>Esci</button>
-        </header>
+          )}
+        </div>
+        <div style={{ flex: 1 }} />
+        {logged && <button style={S.btn} onClick={logout}>Esci</button>}
+        <button style={S.btn} onClick={onClose} aria-label="Chiudi">Chiudi</button>
+      </header>
 
-        <nav style={{ display: "flex", gap: 8, marginBottom: 22, flexWrap: "wrap" }}>
-          {TABS.map(([k, label]) => (
-            <button key={k} onClick={() => setTab(k)}
-              style={{ ...S.btn, ...(tab === k ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" } : {}) }}>
-              {label}
-            </button>
-          ))}
-        </nav>
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "18px 20px 40px" }}>
+        {logged === null && <p style={{ fontSize: 13, ...S.sub }}>Caricamento…</p>}
 
-        {tab === "macchine" && <Macchine laundries={laundries} reload={loadOverview} />}
-        {tab === "segnalazioni" && <Segnalazioni />}
-        {tab === "ricorrenti" && sistemista && laundries.length > 0 && <Ricorrenti laundries={laundries} />}
-        {tab === "manutenzione" && sistemista && <Manutenzione />}
+        {logged === false && <Login onDone={refreshSession} />}
+
+        {logged === true && (
+          <>
+            <nav style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+              {TABS.map(([k, label]) => (
+                <button key={k} onClick={() => setCurrent(k)}
+                  style={{ ...S.btn, ...(current === k ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" } : {}) }}>
+                  {label}
+                </button>
+              ))}
+            </nav>
+
+            {current === "macchine" && <Macchine laundries={laundries} reload={loadOverview} />}
+            {current === "segnalazioni" && <Segnalazioni />}
+            {current === "ricorrenti" && sistemista && laundries.length > 0 && <Ricorrenti laundries={laundries} />}
+            {current === "manutenzione" && sistemista && <Manutenzione />}
+          </>
+        )}
       </div>
     </div>
   );

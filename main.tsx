@@ -1,22 +1,15 @@
-import React, { Suspense } from 'react'
+import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './style.css'
 
-// Il pannello admin sta su /admin ed è caricato in lazy: chi usa l'app non ne
-// scarica una riga. Non serve un router per due sole rotte.
-const isAdmin = window.location.pathname.replace(/\/+$/, '') === '/admin'
-// Il file si chiama AdminPanel e non Admin di proposito: su filesystem
-// insensibili alle maiuscole (Windows, macOS) Vite in sviluppo risolveva la
-// rotta /admin come il file Admin.tsx e ne serviva il sorgente, rendendo il
-// pannello irraggiungibile con `npm run dev`.
-const Admin = React.lazy(() => import('./AdminPanel.tsx'))
+// Una sola app, anche per gli amministratori: le schermate riservate si aprono
+// dal menu Impostazioni, non da una pagina /admin separata. Chi non ha una
+// sessione admin non ne scarica una riga — App.tsx le carica in lazy.
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    {isAdmin
-      ? <Suspense fallback={null}><Admin /></Suspense>
-      : <App />}
+    <App />
   </React.StrictMode>,
 )
 

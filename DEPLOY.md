@@ -90,6 +90,14 @@ Bot da creare con [@BotFather](https://t.me/BotFather).
 > caratteri (`!`, `@`, spazi…) `setWebhook` risponde errore e il webhook non
 > viene registrato: il bot resta muto senza che nulla lo segnali.
 
+> **`VITE_TELEGRAM_BOT` oggi manca in produzione**, verificato con
+> `/api/health`. È l'unica delle tre col prefisso `VITE_`, quindi Vite la
+> compila **dentro il bundle al momento della build**: aggiungerla non basta,
+> serve anche un nuovo deploy perché il JavaScript già pubblicato non la
+> contiene. Finché manca, `bot` è `undefined` nel browser e il pulsante
+> "Collega Telegram" genera il codice ma non apre nulla — senza errori a
+> schermo, che è il motivo per cui sembrava un bug del client.
+
 Dopo il deploy, registra il webhook una volta sola:
 
 ```bash
@@ -158,9 +166,10 @@ Sul preview, con un telefono vero.
    ```
 4. Ripeti con una camera **sotto il 100**: lì i promemoria sono **tre** —
    inizio turno, fine lavaggio, fine asciugatura
-5. Apri `/admin`, entra, metti una macchina fuori servizio e verifica che
+5. Apri Impostazioni → Accesso amministratore, entra, metti una macchina
+   fuori servizio e verifica che
    nell'app compaia come guasta **ma resti prenotabile con un avviso**
-6. Dall'app segnala un guasto e controlla che compaia in `/admin` → Segnalazioni
+6. Segnala un guasto e controlla che compaia in Impostazioni → Segnalazioni
 
 ---
 
@@ -227,7 +236,7 @@ di prenotazione risolto male, o zero promemoria partiti la prima mattina.
 ## Cosa cambia per chi usa l'app
 
 - **Il pulsante "fuori servizio" diventa una segnalazione.** Il residente
-  segnala, un amministratore verifica e decide da `/admin`. Prima quel pulsante
+  segnala, un amministratore verifica e decide dal menu Impostazioni. Prima quel pulsante
   non funzionava affatto: il client mandava l'azione `status`, il backend si
   aspettava `setStatus`, nessun ramo combaciava.
 - **Segnare una macchina guasta non impedisce di prenotarla**, mostra un avviso.
@@ -235,7 +244,10 @@ di prenotazione risolto male, o zero promemoria partiti la prima mattina.
   avvio. Chi non apre l'app per due settimane, per due settimane non riceve.
 - **La quota di 2 turni a settimana ora è applicata dal server.** Prima era solo
   lato client, quindi aggirabile.
-- **Nuovo pannello `/admin`** e **promemoria Telegram opzionali**.
+- **Schermate di amministrazione dentro l'app** (Impostazioni → Amministrazione:
+  macchine, segnalazioni, e per il sistemista ricorrenti e manutenzione) e
+  **promemoria Telegram opzionali**. Non c'è una pagina `/admin` separata: un
+  amministratore usa la stessa app di tutti, con qualche voce in più nel menu.
 
 ---
 
