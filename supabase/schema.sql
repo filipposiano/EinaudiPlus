@@ -31,8 +31,13 @@ create table laundry (
   check (room_min <= room_max)
 );
 
+-- Tutte e due 'triple'. Valentino era 'single' per eredita' del vecchio
+-- laundry-Code.gs, che mandava un solo avviso: ma anche li' l'asciugatrice del
+-- turno successivo e' riservata in automatico, quindi "sposta i vestiti" e
+-- "ritira i vestiti" servono esattamente come alla Manica. Chi lavava al
+-- Valentino non li riceveva, e sembrava un guasto delle notifiche.
 insert into laundry (slug, name, reminder_mode, room_min, room_max) values
-  ('valentino', 'Lavanderia Valentino', 'single', 100, 9999),
+  ('valentino', 'Lavanderia Valentino', 'triple', 100, 9999),
   ('manica',    'Lavanderia Manica',    'triple',   1,   99);
 
 -- ─────────────────────────────────────────────────────────────────────────────

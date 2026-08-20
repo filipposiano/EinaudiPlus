@@ -11,9 +11,10 @@
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Quali promemoria genera una prenotazione
 --
--- 'single' (valentino, come laundry-Code.gs): uno solo, 16 minuti prima.
--- 'triple' (sezione, come new-laundry-Code.gs): inizio turno, fine lavaggio,
---          fine asciugatura.
+-- 'triple': inizio turno, fine lavaggio, fine asciugatura. E' cio' che usano
+--           oggi entrambe le lavanderie.
+-- 'single': solo l'avviso d'inizio turno. Resta come possibilita' ma nessuna
+--           lavanderia la usa piu': era l'eredita' di laundry-Code.gs.
 --
 -- I testi sono copiati alla lettera dai due script: i residenti li riconoscono.
 -- Anche i `tag` sono gli stessi, e contano: sw.js usa renotify:true con tag per

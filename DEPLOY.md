@@ -159,13 +159,17 @@ Sul preview, con un telefono vero.
 
 1. Apri l'app, scegli una camera, attiva i promemoria dal campanello
 2. Prenota un turno che inizi **fra ~20 minuti**
-3. Deve arrivare **una** notifica, e una sola:
+3. I promemoria sono **tre**, in entrambe le lavanderie: inizio turno, fine
+   lavaggio (`washerend`), fine asciugatura (`dryerend`). Ognuno deve arrivare
+   **una volta sola**:
    ```sql
    select booking_id, kind, claimed_at, sent_ok, sent_fail
    from reminder_log order by claimed_at desc limit 10;
    ```
-4. Ripeti con una camera **sotto il 100**: lì i promemoria sono **tre** —
-   inizio turno, fine lavaggio, fine asciugatura
+4. Al Valentino erano uno solo fino ad agosto 2026 (`reminder_mode = 'single'`,
+   ereditato dal vecchio Apps Script) e sembrava che le notifiche di
+   asciugatrice e ritiro fossero rotte. Se dovessero servire di nuovo:
+   `update laundry set reminder_mode = 'single' where slug = 'valentino';`
 5. Apri Impostazioni → Accesso amministratore, entra, metti una macchina
    fuori servizio e verifica che
    nell'app compaia come guasta **ma resti prenotabile con un avviso**
