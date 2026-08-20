@@ -55,7 +55,7 @@ function sign(payload) {
 export function issueToken(username, role) {
   const body = b64(JSON.stringify({
     u: username,
-    r: role,   // 'portineria' | 'sistemista'
+    r: role,   // 'fdo' | 'sistemista'
     exp: Date.now() + SESSION_HOURS * 3600_000,
     v: 2,   // alzare questo numero invalida tutte le sessioni in giro
   }));
@@ -75,7 +75,10 @@ export function readToken(token) {
   try {
     const claims = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
     if (claims.v !== 2 || !claims.exp || Date.now() > claims.exp) return null;
-    if (claims.r !== "portineria" && claims.r !== "sistemista") return null;
+    // Un vecchio token con ruolo 'portineria' (nome precedente dell'account
+    // FDO) non è più valido qui e va ri-autenticato: non c'è bisogno di
+    // alzare la versione, la whitelist stessa lo respinge già.
+    if (claims.r !== "fdo" && claims.r !== "sistemista") return null;
     return claims;
   } catch {
     return null;
@@ -114,7 +117,7 @@ export function currentAdmin(req) {
   return readToken(readCookie(req, COOKIE));
 }
 
-/** Il sistemista può tutto ciò che può la portineria, più il resto. */
+/** Il sistemista può tutto ciò che può l'FDO, più il resto. */
 export function isSysadmin(claims) {
   return claims?.r === "sistemista";
 }
@@ -122,7 +125,7 @@ export function isSysadmin(claims) {
 export function adminConfigured() {
   return Boolean(
     process.env.ADMIN_SESSION_SECRET &&
-    ((process.env.ADMIN_USER && process.env.ADMIN_PASSWORD_HASH) ||
+    ((process.env.FDO_USER && process.env.FDO_PASSWORD_HASH) ||
      (process.env.SYSADMIN_USER && process.env.SYSADMIN_PASSWORD_HASH))
   );
 }
@@ -136,7 +139,7 @@ export function adminConfigured() {
  */
 export function authenticate(username, password) {
   const accounts = [
-    { user: process.env.ADMIN_USER, hash: process.env.ADMIN_PASSWORD_HASH, role: "portineria" },
+    { user: process.env.FDO_USER, hash: process.env.FDO_PASSWORD_HASH, role: "fdo" },
     { user: process.env.SYSADMIN_USER, hash: process.env.SYSADMIN_PASSWORD_HASH, role: "sistemista" },
   ];
 

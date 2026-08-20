@@ -84,26 +84,32 @@ export function savePrefs(prefs: AccessibilityPrefs): void {
 }
 
 // ─── Applicazione via CSS Custom Properties ────────────────────────────────────
-// Scrive --status-free, --status-inuse, --status-oos su :root.
-// Tutte le schermate che usano var(--status-*) si aggiornano in tempo reale.
-
+//
+// style.css definisce due livelli per ogni stato:
+//   --status-KEY       la palette dichiarata qui sopra (DEFAULT_COLORS),
+//                       identica in entrambi i temi — quella che questo
+//                       pannello mostra e che l'utente personalizza.
+//   --status-KEY-text  la variante che l'app usa davvero per rendere testo e
+//                       icone, scelta per reggere il contrasto WCAG AA nel
+//                       tema in cui gira (diversa fra chiaro e scuro).
+//
+// Quando l'utente NON ha personalizzato nulla, non si scrive niente qui: è il
+// foglio di stile a decidere entrambi i livelli, ognuno per il proprio tema.
+// Quando personalizza (color picker o preset daltonismo), il valore scelto si
+// scrive su ENTRAMBI i livelli: la personalizzazione dell'utente vale più
+// della correzione automatica di contrasto, e resta visibile ovunque l'app
+// usi lo stato, non solo nell'anteprima di questo pannello.
 export function applyToDOM(prefs: AccessibilityPrefs): void {
   const s = document.documentElement.style;
 
-  // Quando il colore è quello predefinito si RIMUOVE la proprietà inline
-  // invece di riscriverla.
-  //
-  // Serve perché style.css definisce questi tre colori due volte, una per
-  // tema: su fondo chiaro le tinte vivaci sono illeggibili (il giallo dava
-  // 1,9:1 su bianco), quindi lì usa versioni scure. Uno stile inline vince
-  // sempre su entrambe le regole, così prima l'app applicava le tinte da tema
-  // scuro anche in chiaro e la distinzione non aveva alcun effetto.
-  //
-  // Chi ha scelto un preset daltonismo o un colore suo continua a vederlo:
-  // in quel caso il valore differisce dal default e viene scritto.
-  const apply = (name: string, value: string, fallback: string) => {
-    if (value === fallback) s.removeProperty(name);
-    else s.setProperty(name, value);
+  const apply = (base: string, value: string, fallback: string) => {
+    if (value === fallback) {
+      s.removeProperty(base);
+      s.removeProperty(`${base}-text`);
+    } else {
+      s.setProperty(base, value);
+      s.setProperty(`${base}-text`, value);
+    }
   };
 
   apply("--status-free",  prefs.colors.free,  DEFAULT_COLORS.free);

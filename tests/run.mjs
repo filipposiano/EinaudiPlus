@@ -197,18 +197,18 @@ let cookie = null;
 {
   check("stato iniziale non loggato", (await call(adminAuth, { method: "GET" })).body?.logged === false);
 
-  const bad = await call(adminAuth, { body: { action: "login", username: process.env.ADMIN_USER, password: "sbagliata" } });
+  const bad = await call(adminAuth, { body: { action: "login", username: process.env.FDO_USER, password: "sbagliata" } });
   check("password errata -> 401", bad.status === 401);
   check("nessun cookie emesso", !bad.headers["Set-Cookie"]);
 
   const badUser = await call(adminAuth, { body: { action: "login", username: "root", password: "qualsiasi" } });
   check("stesso errore con utente inesistente", badUser.body?.error === bad.body?.error);
 
-  const pw = process.env.ADMIN_TEST_PASSWORD;
+  const pw = process.env.FDO_TEST_PASSWORD;
   if (!pw) {
-    console.log("  salto  login corretto (serve ADMIN_TEST_PASSWORD nell'ambiente)");
+    console.log("  salto  login corretto (serve FDO_TEST_PASSWORD nell'ambiente)");
   } else {
-    const ok = await call(adminAuth, { body: { action: "login", username: process.env.ADMIN_USER, password: pw } });
+    const ok = await call(adminAuth, { body: { action: "login", username: process.env.FDO_USER, password: pw } });
     check("login corretto", ok.status === 200, JSON.stringify(ok.body));
     const raw = ok.headers["Set-Cookie"];
     const s = Array.isArray(raw) ? raw.join("; ") : String(raw || "");
@@ -251,14 +251,14 @@ section("Operazioni admin");
 
 section("Separazione dei ruoli");
 {
-  // Il controllo che conta: la portineria non deve poter toccare le funzioni
+  // Il controllo che conta: l'FDO non deve poter toccare le funzioni
   // del sistemista, indipendentemente da cosa mostra il pannello.
   if (!cookie) {
-    console.log("  salto  (nessuna sessione di portineria)");
+    console.log("  salto  (nessuna sessione FDO)");
   } else {
     for (const action of ["recurringList", "purge", "applyRecurring"]) {
       const r = await call(adminData, { body: { action, scope: "settimana" }, cookie });
-      check(`portineria non puo' '${action}' -> 403`, r.status === 403, `ricevuto ${r.status}`);
+      check(`FDO non puo' '${action}' -> 403`, r.status === 403, `ricevuto ${r.status}`);
     }
   }
 }

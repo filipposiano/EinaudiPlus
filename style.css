@@ -20,16 +20,12 @@
   --secondary: #f1f1f4;
   --secondary-foreground: #0c0c0f;
   --muted: #f1f1f4;
-  /* Era #6b6b80: 5,2:1 su bianco. Passa lo standard per il testo normale, ma
-     qui è usato quasi ovunque a 8-11px, dove diventa faticoso. Ora 6,8:1. */
-  --muted-foreground: #5a5a6b;
+  --muted-foreground: #6b6b80;
   --accent: #e11d2a;
   --accent-foreground: #ffffff;
-  /* Era #ff4757: 3,3:1, sotto il minimo di 4,5:1. Ora 5,4:1. */
-  --destructive: #d11a28;
+  --destructive: #ff4757;
   --destructive-foreground: #ffffff;
-  /* Era 0.08: i bordi sparivano e le griglie sembravano senza struttura. */
-  --border: rgba(0, 0, 0, 0.14);
+  --border: rgba(0, 0, 0, 0.08);
   --input: transparent;
   --input-background: #f1f1f4;
   --switch-background: #cbced4;
@@ -48,17 +44,35 @@
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #f1f1f4;
   --sidebar-accent-foreground: #0c0c0f;
-  --sidebar-border: rgba(0, 0, 0, 0.14);
+  --sidebar-border: rgba(0, 0, 0, 0.08);
   --sidebar-ring: #e11d2a;
-  /* Questi tre non sono solo pallini: l'app li usa anche come colore del TESTO
-     ("Libera", "In uso", orari). Le tinte vivaci di partenza su fondo bianco
-     davano 2,3:1 il verde e 1,9:1 il giallo — sotto la soglia di leggibilità,
-     e il giallo praticamente invisibile. Le versioni scure restano
-     riconoscibili come verde e ambra e stanno tutte sopra 4,9:1. */
-  --status-free: #15803d;   /* era #22c55e — 2,3:1 */
-  --status-inuse: #a16207;  /* era #eab308 — 1,9:1 */
-  --status-oos: #d11a28;    /* era #ff4757 — 3,3:1 */
-  --status-prev: #b45309;   /* turno precedente, era #f59e0b scritto a mano */
+
+  /* Palette di stato — IDENTICI ai default dichiarati in statusConfig.ts
+     (DEFAULT_COLORS) e mostrati come tali nel pannello Accessibilità. Non
+     toccare questi valori: sono il riferimento con cui quel pannello deve
+     "coincidere perfettamente". --status-prev non era gestito da quel
+     pannello (era ORANGE = "#f59e0b" scritto a mano in App.tsx): lo stesso
+     hex, solo ora è una variabile invece di una costante JS. */
+  --status-free: #22c55e;
+  --status-inuse: #eab308;
+  --status-oos: #ff4757;
+  --status-prev: #f59e0b;
+
+  /* ── Varianti accessibili ──────────────────────────────────────────────
+     Token NUOVI, non sostituzioni: la palette sopra resta quella dichiarata,
+     questi si usano SOLO dove il colore rende testo o un'icona che trasmette
+     significato (etichette di stato, triangoli di avviso, testo secondario).
+     Su sfondo bianco le tinte vivaci non reggono il testo: il verde dà 2,3:1,
+     il giallo 1,9:1 (praticamente invisibile), il grigio muted 5,2:1 passa il
+     minimo ma resta faticoso agli 8-11px usati quasi ovunque nell'app.
+     Tutti i valori qui sotto sono verificati contro #ffffff con la formula di
+     luminanza relativa del WCAG, margine minimo 4,9:1 (soglia AA: 4,5:1). */
+  --gray-accessible-text: #5a5a6b;   /* 6,76:1 */
+  --status-free-text:     #14672f;   /* 6,98:1 */
+  --status-inuse-text:    #8a5c07;   /* 5,81:1 */
+  --status-oos-text:      #d11a28;   /* 5,40:1 */
+  --status-prev-text:     #b45309;   /* 5,02:1 */
+  --destructive-text:     #d11a28;   /* 5,40:1 */
 }
 
 .dark {
@@ -73,14 +87,12 @@
   --secondary: #1e1e26;
   --secondary-foreground: #f0f0f5;
   --muted: #1e1e26;
-  /* Era #6b6b80, lo stesso valore del tema chiaro: su fondo scuro dava 3,8:1,
-     anch'esso sotto il minimo. Ora 7,1:1. */
-  --muted-foreground: #9a9ab0;
+  --muted-foreground: #6b6b80;
   --accent: #ff3b30;
   --accent-foreground: #ffffff;
   --destructive: #ff4757;
   --destructive-foreground: #ffffff;
-  --border: rgba(255, 255, 255, 0.14);
+  --border: rgba(255, 255, 255, 0.08);
   --input: transparent;
   --input-background: #1e1e26;
   --switch-background: #2e2e3a;
@@ -96,13 +108,25 @@
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #1e1e26;
   --sidebar-accent-foreground: #f0f0f5;
-  --sidebar-border: rgba(255, 255, 255, 0.14);
+  --sidebar-border: rgba(255, 255, 255, 0.08);
   --sidebar-ring: #ff3b30;
-  /* Su fondo scuro le tinte vivaci vanno bene: qui restano quelle originali. */
+
   --status-free: #22c55e;
   --status-inuse: #eab308;
   --status-oos: #ff4757;
   --status-prev: #f59e0b;
+
+  /* ── Varianti accessibili, tema scuro ──────────────────────────────────
+     Qui i colori brand passano già il minimo AA da soli contro lo sfondo
+     quasi nero (#0c0c0f): la variante "accessibile" coincide con la base,
+     tranne il grigio, che condivideva lo stesso hex del tema chiaro ed era
+     l'unico dei due davvero sotto soglia (3,8:1). Verificati allo stesso modo. */
+  --gray-accessible-text: #9a9ab0;   /* 7,09:1 — era #6b6b80 a 3,8:1 */
+  --status-free-text:     #22c55e;   /* 8,57:1 */
+  --status-inuse-text:    #eab308;   /* 10,18:1 */
+  --status-oos-text:      #ff4757;   /* 5,85:1 */
+  --status-prev-text:     #f59e0b;   /* margine ampio, stessa famiglia dell'oos */
+  --destructive-text:     #ff4757;   /* 5,85:1 */
 }
 
 @theme inline {

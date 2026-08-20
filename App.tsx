@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   Wind, Clock, CalendarDays,
-  Sun, Moon, Plus, CheckCircle2, AlertTriangle,
+  Plus, CheckCircle2, AlertTriangle,
   LayoutGrid, Delete, X, Wrench, Loader2, Star,
   History, Timer, Trash2, Film, Music,
   Bell, BellRing, Download, Share, Menu,
-  RefreshCw, MessageSquare, Send, Eye, LogOut,
+  MessageSquare, Send, Eye, LogOut,
+  Settings, ChevronRight, Globe,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -104,10 +105,14 @@ const monShort = (i: number, lang: Lang) => MON_SHORT[lang][WEEK_DATES[i].getMon
 
 const RED    = "var(--primary)";
 const RED_FG = "var(--primary-foreground)";
-const YELLOW = "var(--status-inuse)";
-const ORANGE = "var(--status-prev)";
-const OOS_C  = "var(--status-oos)";
-const GREEN  = "var(--status-free)";
+// Le varianti "-text": --status-inuse ecc. sono la palette dichiarata nel
+// pannello Accessibilità (dev'essere identica a quel che mostra), mentre
+// queste costanti rendono davvero testo e icone di stato nell'app, e devono
+// reggere il contrasto WCAG AA nel tema in cui girano. Vedi style.css.
+const YELLOW = "var(--status-inuse-text)";
+const ORANGE = "var(--status-prev-text)";
+const OOS_C  = "var(--status-oos-text)";
+const GREEN  = "var(--status-free-text)";
 
 // ─── i18n ─────────────────────────────────────────────────────────────────────
 
@@ -166,6 +171,7 @@ const T = {
     confirm:  "Conferma", cancel: "Annulla", modify: "Modifica stanza", delete: "Elimina prenotazione",
     forMe:    (r: string) => `Per me — Camera ${r}`,
     forOther: "Per qualcun altro",
+    forDirezione: "Per la Direzione",
     whoIsIt:  "Per chi è la prenotazione?",
     chooseFree: "Scegli una lavatrice libera",
     occupied: "Occupata",
@@ -259,6 +265,7 @@ const T = {
     confirm:  "Confirm", cancel:  "Cancel", modify: "Edit room", delete: "Delete booking",
     forMe:    (r: string) => `For me — Room ${r}`,
     forOther: "For someone else",
+    forDirezione: "For the front desk",
     whoIsIt:  "Who is this booking for?",
     chooseFree: "Choose a free washer",
     occupied: "Taken",
@@ -436,9 +443,9 @@ function Toast({ msg, onClose }: { msg: string; onClose: () => void }) {
 
 interface BookTarget { dayIdx?: number; slotIdx: number; machineId: string; prefillRoom?: string; }
 
-function BookModal({ target, bookings, status = {}, myRoom, lang, onConfirm, onClose }: {
+function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = false, onConfirm, onClose }: {
   target: BookTarget; bookings: WeekData; status?: StatusData; isDark: boolean;
-  myRoom?: string; lang: Lang;
+  myRoom?: string; lang: Lang; isAdmin?: boolean;
   onConfirm: (room: string) => void; onClose: () => void;
 }) {
   const t = T[lang];
@@ -455,7 +462,7 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, onConfirm, onC
   
   const bg   = "var(--background)";
   const fg   = "var(--foreground)";
-  const sub  = "var(--muted-foreground)";
+  const sub  = "var(--gray-accessible-text)";
   const chip = "var(--secondary)";
   const machLabel = selMachine?.split("-")[1] ?? "";
 
@@ -629,7 +636,7 @@ function ModifyModal({ target, lang, onEdit, onDelete, onClose }: {
   const slot = TIME_SLOTS[target.slotIdx];
   const bg   = "var(--background)";
   const fg   = "var(--foreground)";
-  const sub  = "var(--muted-foreground)";
+  const sub  = "var(--gray-accessible-text)";
   const chip = "var(--secondary)";
 
   return (
@@ -668,7 +675,7 @@ function FavPicker({ lang, favs, onAdd, onClose }: {
   lang: Lang; favs: Fav[]; onAdd: (day:number, slot:number)=>void; onClose: ()=>void;
 }) {
   const t = T[lang];
-  const fg="var(--foreground)", sub="var(--muted-foreground)", chip="var(--secondary)";
+  const fg="var(--foreground)", sub="var(--gray-accessible-text)", chip="var(--secondary)";
   const [day, setDay]   = useState(TODAY_DOW);
   const [slot, setSlot] = useState(0);
   const already = favs.some((f)=>f.day===day && f.slot===slot);
@@ -713,7 +720,7 @@ function QuickBookModal({ lang, day, slot, week, status, roomNumber, onBook, onC
   onBook: (day:number, slot:number, mid:string)=>Promise<void>; onClose: ()=>void;
 }) {
   const t = T[lang];
-  const fg="var(--foreground)", sub="var(--muted-foreground)", div="var(--border)", surf="var(--card)";
+  const fg="var(--foreground)", sub="var(--gray-accessible-text)", div="var(--border)", surf="var(--card)";
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr]   = useState<string | null>(null);
   const sl = TIME_SLOTS[slot];
@@ -792,7 +799,7 @@ function QuickBookModal({ lang, day, slot, week, status, roomNumber, onBook, onC
 // ─── Modale Feedback ────────────────────────────────────────────────────────────
 function FeedbackModal({ lang, room, onClose }: { lang: Lang; room: string | null; onClose: ()=>void }) {
   const t = T[lang];
-  const fg="var(--foreground)", sub="var(--muted-foreground)", chip="var(--secondary)", div="var(--border)";
+  const fg="var(--foreground)", sub="var(--gray-accessible-text)", chip="var(--secondary)", div="var(--border)";
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
@@ -836,12 +843,13 @@ function FeedbackModal({ lang, room, onClose }: { lang: Lang; room: string | nul
 
 // ─── Dashboard ─────────────────────────────────────────────────────────────────
 
-function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, onClear, onStatus }: {
+function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, onClear, onStatus, isAdmin }: {
   theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
   favs: Fav[]; onToggleFav: (day:number, slot:number)=>void;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
   onClear: (day:number, slot:number, machine:string)=>Promise<void>;
   onStatus: (machine:string, oos:boolean)=>Promise<void>;
+  isAdmin: boolean;
 }) {
   const t = T[lang];
   const [now, setNow]           = useState(new Date());
@@ -853,7 +861,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
   const [quickTarget, setQuickTarget] = useState<{ day:number; slot:number } | null>(null);
 
   const fg   = "var(--foreground)";
-  const sub  = "var(--muted-foreground)";
+  const sub  = "var(--gray-accessible-text)";
   const surf = "var(--card)";
   const div  = "var(--border)";
 
@@ -919,6 +927,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
           isDark={false}
           lang={lang}
           myRoom={roomNumber}
+          isAdmin={isAdmin}
           onConfirm={(r)=>confirmBooking(booking,r)}
           onClose={()=>setBooking(null)}
         />
@@ -1254,11 +1263,12 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
 
 // ─── Day Schedule ──────────────────────────────────────────────────────────────
 
-function DaySchedule({ lang, week, status, roomNumber: sessionRoom, favs, onToggleFav, onBook, onClear }: {
+function DaySchedule({ lang, week, status, roomNumber: sessionRoom, favs, onToggleFav, onBook, onClear, isAdmin }: {
   theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
   favs: Fav[]; onToggleFav: (day:number, slot:number)=>void;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
   onClear: (day:number, slot:number, machine:string)=>Promise<void>;
+  isAdmin: boolean;
 }) {
   const t = T[lang];
   const [selDay, setSelDay]       = useState(TODAY_DOW);
@@ -1267,7 +1277,7 @@ function DaySchedule({ lang, week, status, roomNumber: sessionRoom, favs, onTogg
   const [toast, setToast]         = useState<string | null>(null);
 
   const fg  = "var(--foreground)";
-  const sub = "var(--muted-foreground)";
+  const sub = "var(--gray-accessible-text)";
   const hdr = "var(--muted)";
   const div = "var(--border)";
   const dayData = week[selDay] ?? {};
@@ -1298,7 +1308,7 @@ function DaySchedule({ lang, week, status, roomNumber: sessionRoom, favs, onTogg
   return (
     <div className="flex flex-col h-full lg:max-w-5xl lg:mx-auto lg:w-full">
       {toast     && <Toast msg={toast} onClose={()=>setToast(null)}/>}
-      {target    && <BookModal target={{...target,dayIdx:selDay}} bookings={week} status={status} isDark={false} lang={lang} myRoom={sessionRoom} onConfirm={confirmBooking} onClose={()=>setTarget(null)}/>}
+      {target    && <BookModal target={{...target,dayIdx:selDay}} bookings={week} status={status} isDark={false} lang={lang} myRoom={sessionRoom} isAdmin={isAdmin} onConfirm={confirmBooking} onClose={()=>setTarget(null)}/>}
       {modTarget && (
         <ModifyModal
           target={modTarget} isDark={false} lang={lang}
@@ -1379,7 +1389,7 @@ function DaySchedule({ lang, week, status, roomNumber: sessionRoom, favs, onTogg
                         onClick={()=>!isPast && setTarget({ slotIdx:si, machineId:mid })}
                         className="w-full h-9 rounded-xl flex items-center justify-center transition-colors border"
                         style={{ borderColor:"var(--border)", borderStyle:"dashed", background:"transparent", cursor:isPast?"default":"pointer" }}>
-                        {!isPast && <Plus size={10} style={{ color:"var(--muted-foreground)", opacity:0.6 }}/>}
+                        {!isPast && <Plus size={10} style={{ color:"var(--gray-accessible-text)", opacity:0.6 }}/>}
                       </button>
                     )}
                   </div>
@@ -1414,7 +1424,7 @@ function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify,
   
   const bg       = "var(--background)";
   const fg       = "var(--foreground)";
-  const sub      = "var(--muted-foreground)";
+  const sub      = "var(--gray-accessible-text)";
   const chip     = "var(--secondary)";
   const divC     = "var(--border)";
 
@@ -1489,10 +1499,11 @@ function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify,
 
 // ─── Week Overview ─────────────────────────────────────────────────────────────
 
-function WeekOverview({ lang, week, status, roomNumber: sessionRoom, onBook, onClear }: {
+function WeekOverview({ lang, week, status, roomNumber: sessionRoom, onBook, onClear, isAdmin }: {
   theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
   onClear: (day:number, slot:number, machine:string)=>Promise<void>;
+  isAdmin: boolean;
 }) {
   const t = T[lang];
   const [target, setTarget]           = useState<BookTarget | null>(null);
@@ -1501,7 +1512,7 @@ function WeekOverview({ lang, week, status, roomNumber: sessionRoom, onBook, onC
   const [toast, setToast]             = useState<string | null>(null);
 
   const fg  = "var(--foreground)";
-  const sub = "var(--muted-foreground)";
+  const sub = "var(--gray-accessible-text)";
   const div = "var(--border)";
   const hdr = "var(--muted)";
 
@@ -1555,7 +1566,7 @@ function WeekOverview({ lang, week, status, roomNumber: sessionRoom, onBook, onC
   return (
     <div className="flex flex-col h-full w-full">
       {toast      && <Toast msg={toast} onClose={()=>setToast(null)}/>}
-      {target     && <BookModal target={target} bookings={week} status={status} isDark={false} lang={lang} myRoom={sessionRoom} onConfirm={confirmBooking} onClose={()=>setTarget(null)}/>}
+      {target     && <BookModal target={target} bookings={week} status={status} isDark={false} lang={lang} myRoom={sessionRoom} isAdmin={isAdmin} onConfirm={confirmBooking} onClose={()=>setTarget(null)}/>}
       {modTarget  && (
         <ModifyModal
           target={modTarget} isDark={false} lang={lang}
@@ -1662,7 +1673,7 @@ function AdminSheet({ lang, status, onStatus, onClose, roomNumber }: {
   const [toast, setToast] = useState<string | null>(null);
   const bg   = "var(--background)";
   const fg   = "var(--foreground)";
-  const sub  = "var(--muted-foreground)";
+  const sub  = "var(--gray-accessible-text)";
   const surf = "var(--card)";
   const div  = "var(--border)";
 
@@ -1747,7 +1758,7 @@ function AdminRow({ machine, lang, isLast, divColor, onToggle }: {
       <button onClick={onToggle} disabled={isOOO}
         className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold shrink-0 transition-all active:scale-95 disabled:active:scale-100"
         style={isOOO
-          ? { background:"var(--secondary)", color:"var(--muted-foreground)", cursor:"default" }
+          ? { background:"var(--secondary)", color:"var(--gray-accessible-text)", cursor:"default" }
           : { background:`color-mix(in srgb, var(--destructive) 12%, transparent)`, color:OOS_C }}>
         {isOOO ? <><AlertTriangle size={12}/>{t.alreadyOos}</> : <><Wrench size={12}/>{t.reportAction}</>}
       </button>
@@ -1761,7 +1772,7 @@ function LoginScreen({ lang, onLogin }: { theme?: Theme; lang: Lang; onLogin: (r
   const t = T[lang];
   const [room, setRoom] = useState("");
   const fg   = "var(--foreground)";
-  const sub  = "var(--muted-foreground)";
+  const sub  = "var(--gray-accessible-text)";
   const chip = "var(--secondary)";
   const surf = "var(--card)";
 
@@ -1835,7 +1846,7 @@ function BottomNav({ active, onChange, lang }: { active:number; onChange:(i:numb
     <div className="flex shrink-0 border-t" style={{ background:"var(--background)", borderColor:"var(--border)" }}>
       {tabs.map((tab,i)=>{ const Icon=tab.icon; return (
         <button key={i} onClick={()=>onChange(i)} className="flex-1 flex flex-col items-center gap-1 py-3 transition-colors"
-          style={{ color:active===i?RED:"var(--muted-foreground)" }}>
+          style={{ color:active===i?RED:"var(--gray-accessible-text)" }}>
           <Icon size={19}/><span className="text-[9px] font-medium tracking-wide">{tab.label}</span>
         </button>
       ); })}
@@ -1859,17 +1870,15 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
-function DesktopSidebar({ active, onChange, lang, theme, roomNumber, showNav, facility, onFacility, onChangeRoom, onToggleLang, onToggleTheme, onRefresh, refreshing, onAccessibility }: {
-  active: number; onChange: (i: number) => void; lang: Lang; theme: Theme;
+function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility, onFacility, onChangeRoom, onOpenSettings }: {
+  active: number; onChange: (i: number) => void; lang: Lang;
   roomNumber: string | null; showNav: boolean;
   facility: Facility; onFacility: (f: Facility) => void;
-  onChangeRoom: () => void; onToggleLang: () => void; onToggleTheme: () => void;
-  onRefresh: () => void; refreshing: boolean;
-  onAccessibility: () => void;
+  onChangeRoom: () => void; onOpenSettings: () => void;
 }) {
   const t   = T[lang];
   const fg  = "var(--foreground)";
-  const sub = "var(--muted-foreground)";
+  const sub = "var(--gray-accessible-text)";
   const div = "var(--border)";
   const tabs = [
     { icon: Clock,        label: "Dashboard" },
@@ -1929,27 +1938,13 @@ function DesktopSidebar({ active, onChange, lang, theme, roomNumber, showNav, fa
             <LogOut size={13} style={{ color:sub }}/>
           </button>
         )}
-        <div className="flex gap-2">
-          <button onClick={onToggleLang}
-            className="flex-1 rounded-xl py-2 text-xs font-mono font-bold transition-colors"
-            style={{ background:"var(--secondary)", color:fg }}>
-            {lang==="it"?"EN":"IT"}
-          </button>
-          <button onClick={onToggleTheme}
-            className="flex-1 rounded-xl py-2 flex items-center justify-center transition-colors"
-            style={{ background:"var(--secondary)", color:sub }}>
-            {theme==="dark" ? <Sun size={15}/> : <Moon size={15}/>}
-          </button>
-          <button onClick={onRefresh} disabled={refreshing} aria-label="Refresh"
-            className="flex-1 rounded-xl py-2 flex items-center justify-center transition-colors"
-            style={{ background:"var(--secondary)", color:sub }}>
-            <RefreshCw size={15} className={refreshing ? "animate-spin-slow" : ""}/>
-          </button>
-        </div>
-        <button onClick={onAccessibility}
-          className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-colors desk-nav"
-          style={{ color:sub }}>
-          <Eye size={14}/>{lang === "it" ? "Accessibilità" : "Accessibility"}
+        {/* Lingua, notifiche, installazione, accessibilità stanno tutte dentro
+            Impostazioni. Il refresh manuale è sparito (tornare sull'app ricarica
+            già i dati) e il tema segue sempre quello del sistema. */}
+        <button onClick={onOpenSettings}
+          className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors desk-nav"
+          style={{ color:fg }}>
+          <Settings size={16} style={{ color:sub }}/>{lang === "it" ? "Impostazioni" : "Settings"}
         </button>
         <p className="text-center text-[10px] font-mono pt-1" style={{ color:sub }}>v. {APP_VERSION} (beta)</p>
       </div>
@@ -1962,7 +1957,7 @@ function DesktopSidebar({ active, onChange, lang, theme, roomNumber, showNav, fa
 function CenterState({ children }: { isDark?: boolean; children: React.ReactNode }) {
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-8 text-center gap-4"
-      style={{ color:"var(--muted-foreground)" }}>
+      style={{ color:"var(--gray-accessible-text)" }}>
       {children}
     </div>
   );
@@ -1986,7 +1981,7 @@ function FacilitySwitcher({ facility, onChange, lang }: { facility: Facility; on
             className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all active:scale-95 border"
             style={active
               ? { background:RED, color:RED_FG, borderColor:RED }
-              : { background:"var(--secondary)", color:"var(--muted-foreground)", borderColor:"var(--border)" }}>
+              : { background:"var(--secondary)", color:"var(--gray-accessible-text)", borderColor:"var(--border)" }}>
             <Icon size={14}/>{label[lang]}
           </button>
         );
@@ -1995,50 +1990,97 @@ function FacilitySwitcher({ facility, onChange, lang }: { facility: Facility; on
   );
 }
 
-// ─── Campanello promemoria push ────────────────────────────────────────────────
-function ReminderBell({ room, lang }: { room: string | null; lang: Lang }) {
-  const [state, setState] = useState<push.ReminderState>("unknown");
-  const [busy, setBusy]   = useState(false);
-  const [sheet, setSheet] = useState(false);
+// ─── Impostazioni ───────────────────────────────────────────────────────────
+//
+// Un solo pulsante al posto di quattro-cinque icone sparse nell'header: lingua,
+// notifiche, installazione app, accessibilità. Il refresh manuale è sparito del
+// tutto (riaprire l'app ricarica già i dati da sola) e così il selettore
+// manuale del tema, che ora segue sempre quello del telefono — vedi l'effetto
+// che ascolta prefers-color-scheme in cima al componente App.
+function SettingsSheet({ lang, room, onToggleLang, onAccessibility, onClose }: {
+  lang: Lang; room: string | null;
+  onToggleLang: () => void; onAccessibility: () => void; onClose: () => void;
+}) {
+  const it = lang === "it";
+  const fg  = "var(--foreground)";
+  const sub = "var(--gray-accessible-text)";
+  const div = "var(--border)";
 
-  useEffect(() => { push.getReminderState().then(setState); }, []);
+  const [reminderState, setReminderState] = useState<push.ReminderState>("unknown");
+  const [remindersOpen, setRemindersOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const standalone = typeof window !== "undefined" &&
+    (window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true);
 
-  // Si mostra anche senza supporto push: è proprio lì che Telegram serve.
-  // Dentro al pannello la riga delle notifiche del telefono si adatta da sola.
-  if (!room) return null;
+  useEffect(() => { push.getReminderState().then(setReminderState); }, []);
 
-  const on = state === "on";
-  const label = lang === "it"
-    ? (state === "denied" ? "Notifiche bloccate nelle impostazioni del browser"
-       : on ? "Promemoria turni attivi (tocca per disattivare)"
-            : "Attiva promemoria 15 min prima del turno")
-    : (state === "denied" ? "Notifications blocked in browser settings"
-       : on ? "Shift reminders on (tap to turn off)"
-            : "Turn on a reminder 15 min before your shift");
-
-  async function toggle() {
-    if (busy) return;
+  async function toggleReminders() {
+    if (busy || !room) return;
     setBusy(true);
     try {
-      if (on) { await push.disableReminders(); setState("off"); }
-      else    { await push.enableReminders(room!); setState(await push.getReminderState()); }
+      if (reminderState === "on") { await push.disableReminders(); setReminderState("off"); }
+      else { await push.enableReminders(room); setReminderState(await push.getReminderState()); }
     } catch (e: any) {
-      if (String(e?.message) === "denied") setState("denied");
+      if (String(e?.message) === "denied") setReminderState("denied");
     } finally { setBusy(false); }
   }
 
+  const reminderSub = reminderState === "denied"
+    ? (it ? "Bloccate dal browser" : "Blocked by the browser")
+    : reminderState === "on" ? (it ? "Attive" : "On") : (it ? "Non attive" : "Off");
+
+  const Row = ({ icon, label, sub: subtext, onClick }: {
+    icon: React.ReactNode; label: string; sub?: string; onClick: () => void;
+  }) => (
+    <button onClick={onClick}
+      className="w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors active:scale-[0.99]">
+      <span style={{ color: sub }}>{icon}</span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm font-semibold" style={{ color: fg }}>{label}</span>
+        {subtext && <span className="block text-xs" style={{ color: sub }}>{subtext}</span>}
+      </span>
+      <ChevronRight size={16} style={{ color: sub, opacity: 0.5 }} />
+    </button>
+  );
+
   return (
-    <>
-      <button onClick={() => setSheet(true)} title={label} aria-label={label}
-        className="p-1.5 rounded-lg transition-colors"
-        style={{ color: on ? RED : "var(--muted-foreground)", opacity: busy ? 0.5 : 1 }}>
-        {on ? <BellRing size={13}/> : <Bell size={13}/>}
-      </button>
-      {sheet && (
-        <RemindersSheet lang={lang} room={room} state={state} busy={busy}
-          onToggle={toggle} onClose={() => setSheet(false)} />
+    <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
+      <div className="w-full rounded-t-3xl pb-8" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
+        <div className="px-6 pt-5 pb-4 flex items-center justify-between">
+          <p className="text-lg font-bold" style={{ color:fg }}>{it ? "Impostazioni" : "Settings"}</p>
+          <button onClick={onClose} className="p-2 rounded-xl" style={{ color:sub, background:"var(--secondary)" }}>
+            <X size={16}/>
+          </button>
+        </div>
+
+        <div className="rounded-2xl overflow-hidden border mx-5" style={{ borderColor:div }}>
+          <div style={{ borderBottom:`1px solid ${div}` }}>
+            <Row icon={<Globe size={18}/>} label={it ? "Lingua" : "Language"}
+              sub={it ? "Italiano" : "English"} onClick={onToggleLang}/>
+          </div>
+          {room && (
+            <div style={{ borderBottom:`1px solid ${div}` }}>
+              <Row icon={reminderState==="on" ? <BellRing size={18}/> : <Bell size={18}/>}
+                label={it ? "Notifiche turni" : "Shift reminders"} sub={reminderSub}
+                onClick={() => setRemindersOpen(true)}/>
+            </div>
+          )}
+          {!standalone && (
+            <div style={{ borderBottom:`1px solid ${div}` }}>
+              <Row icon={<Download size={18}/>} label={it ? "Installa l'app" : "Install the app"}
+                onClick={() => { window.dispatchEvent(new Event("open-install")); onClose(); }}/>
+            </div>
+          )}
+          <Row icon={<Eye size={18}/>} label={it ? "Accessibilità" : "Accessibility"}
+            onClick={() => { onAccessibility(); onClose(); }}/>
+        </div>
+      </div>
+
+      {remindersOpen && (
+        <RemindersSheet lang={lang} room={room} state={reminderState} busy={busy}
+          onToggle={toggleReminders} onClose={() => setRemindersOpen(false)} />
       )}
-    </>
+    </div>
   );
 }
 
@@ -2097,11 +2139,11 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
             <p className="text-lg font-bold" style={{ color:"var(--foreground)" }}>
               {it ? "Promemoria turni" : "Shift reminders"}
             </p>
-            <button onClick={onClose} className="p-2 rounded-xl" style={{ color:"var(--muted-foreground)", background:"var(--secondary)" }}>
+            <button onClick={onClose} className="p-2 rounded-xl" style={{ color:"var(--gray-accessible-text)", background:"var(--secondary)" }}>
               <X size={16}/>
             </button>
           </div>
-          <p className="text-xs" style={{ color:"var(--muted-foreground)" }}>
+          <p className="text-xs" style={{ color:"var(--gray-accessible-text)" }}>
             {it ? "Ti avvisiamo poco prima che inizi il tuo turno." : "We'll ping you shortly before your shift starts."}
           </p>
         </div>
@@ -2110,12 +2152,12 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
           {/* Notifiche del browser */}
           <div className="rounded-2xl border p-4" style={{ background:"var(--card)", borderColor:"var(--border)" }}>
             <div className="flex items-center gap-3">
-              <BellRing size={18} style={{ color: on ? RED : "var(--muted-foreground)" }}/>
+              <BellRing size={18} style={{ color: on ? RED : "var(--gray-accessible-text)" }}/>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold" style={{ color:"var(--foreground)" }}>
                   {it ? "Notifiche del telefono" : "Phone notifications"}
                 </p>
-                <p className="text-xs" style={{ color:"var(--muted-foreground)" }}>
+                <p className="text-xs" style={{ color:"var(--gray-accessible-text)" }}>
                   {state === "unsupported"
                     ? (it ? "Non disponibili su questo dispositivo" : "Not available on this device")
                     : state === "denied"
@@ -2127,7 +2169,7 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
                 <button onClick={onToggle} disabled={busy}
                   className="rounded-xl px-3 py-2 text-xs font-semibold shrink-0"
                   style={on
-                    ? { background:"var(--secondary)", color:"var(--muted-foreground)" }
+                    ? { background:"var(--secondary)", color:"var(--gray-accessible-text)" }
                     : { background:`color-mix(in srgb, ${RED} 12%, transparent)`, color:RED }}>
                   {busy ? "…" : on ? (it ? "Disattiva" : "Turn off") : (it ? "Attiva" : "Turn on")}
                 </button>
@@ -2138,10 +2180,10 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
           {/* Telegram */}
           <div className="rounded-2xl border p-4" style={{ background:"var(--card)", borderColor:"var(--border)" }}>
             <div className="flex items-center gap-3">
-              <Send size={18} style={{ color:"var(--muted-foreground)" }}/>
+              <Send size={18} style={{ color:"var(--gray-accessible-text)" }}/>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold" style={{ color:"var(--foreground)" }}>Telegram</p>
-                <p className="text-xs" style={{ color:"var(--muted-foreground)" }}>
+                <p className="text-xs" style={{ color:"var(--gray-accessible-text)" }}>
                   {it ? "Utile su iPhone, dove le notifiche sono capricciose" : "Handy on iPhone, where push is unreliable"}
                 </p>
               </div>
@@ -2167,13 +2209,13 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
                 </p>
                 {/* Riserva, non il percorso principale: serve solo se
                     l'apertura automatica non è andata a buon fine. */}
-                <p className="text-[11px] mt-2" style={{ color:"var(--muted-foreground)" }}>
+                <p className="text-[11px] mt-2" style={{ color:"var(--gray-accessible-text)" }}>
                   {it ? "Non si è aperto? Scrivi al bot " : "Didn't open? Message "}
                   {bot && <span className="font-mono font-semibold">@{bot}</span>}
                   {it ? " questo codice: " : " this code: "}
                   <span className="font-mono font-bold tracking-wider" style={{ color:"var(--foreground)" }}>{code}</span>
                 </p>
-                <p className="text-[11px] mt-1" style={{ color:"var(--muted-foreground)" }}>
+                <p className="text-[11px] mt-1" style={{ color:"var(--gray-accessible-text)" }}>
                   {it ? "Vale una volta sola e scade in 24 ore." : "Single use, expires in 24 hours."}
                 </p>
               </div>
@@ -2182,20 +2224,6 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
         </div>
       </div>
     </div>
-  );
-}
-
-// Pulsante "Installa" nell'header: visibile solo se l'app NON è già installata.
-function InstallButton({ lang }: { lang: Lang }) {
-  const standalone = typeof window !== "undefined" &&
-    (window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true);
-  if (standalone) return null;
-  return (
-    <button onClick={() => window.dispatchEvent(new Event("open-install"))}
-      title={T[lang].installTitle} aria-label={T[lang].installTitle}
-      className="p-1.5 rounded-lg transition-colors" style={{ color: "var(--muted-foreground)" }}>
-      <Download size={13}/>
-    </button>
   );
 }
 
@@ -2260,7 +2288,7 @@ function InstallPrompt({ lang }: { lang: Lang }) {
           </div>
           <p className="text-lg font-bold" style={{ color: "var(--foreground)" }}>{t.installTitle}</p>
         </div>
-        <p className="text-sm leading-relaxed mb-5" style={{ color: "var(--muted-foreground)" }}>{bodyText}</p>
+        <p className="text-sm leading-relaxed mb-5" style={{ color: "var(--gray-accessible-text)" }}>{bodyText}</p>
         {mode === "native" ? (
           <button onClick={install}
             className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold mb-2 transition-all active:scale-[0.98]"
@@ -2274,7 +2302,7 @@ function InstallPrompt({ lang }: { lang: Lang }) {
             <span className="text-sm font-medium">{mode === "ios" ? t.installIosStep : t.installAndroidStep}</span>
           </div>
         )}
-        <button onClick={close} className="w-full py-3 rounded-2xl text-sm font-medium" style={{ color: "var(--muted-foreground)" }}>
+        <button onClick={close} className="w-full py-3 rounded-2xl text-sm font-medium" style={{ color: "var(--gray-accessible-text)" }}>
           {mode === "native" ? t.installLater : t.installIosDone}
         </button>
       </div>
@@ -2288,16 +2316,17 @@ export default function App() {
   const [screen, setScreen]   = useState(0);
   const [facility, setFacility] = useState<Facility>("laundry");
   const [accessibilityOpen, setAccessibilityOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [_aPrefs, _setAPrefs] = useState<AccessibilityPrefs>(loadPrefs);
-  const [theme, setTheme] = useState<Theme>(() => {
-    try {
-      const saved = localStorage.getItem("laundryhub.theme");
-      // Se c'è un salvataggio valido lo usiamo, altrimenti di default "dark"
-      return (saved === "light" || saved === "dark") ? saved : "light";
-    } catch {
-      return "light";
-    }
-  });
+  // Il tema segue sempre quello del telefono: niente più selettore manuale né
+  // preferenza salvata. Un secondo interruttore che duplica un'impostazione
+  // che il sistema operativo offre già non aggiunge nulla, e rischia solo di
+  // restare "bloccato" su una scelta vecchia quando l'utente cambia tema al
+  // telefono altrove.
+  const [theme, setTheme] = useState<Theme>(() =>
+    typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark" : "light"
+  );
   const [lang,   setLang]     = useState<Lang>("it");
   const [roomNumber] = useState<string | null>(() => {
     try { return localStorage.getItem("laundryhub.room"); } catch { return null; }
@@ -2328,14 +2357,17 @@ export default function App() {
   }, [roomNumber]);
 
   useEffect(() => {
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-    // Salviamo la preferenza ogni volta che cambia
-    try { localStorage.setItem("laundryhub.theme", theme); } catch {}
+    document.documentElement.classList.toggle("dark", theme === "dark");
   }, [theme]);
+
+  // Se l'utente cambia tema al telefono MENTRE l'app è aperta, si adegua
+  // subito invece di aspettare una ricarica.
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (e: MediaQueryListEvent) => setTheme(e.matches ? "dark" : "light");
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
 
   // Applica preferenze accessibilità al DOM al mount
   useEffect(() => { applyToDOM(accessibilityPrefs); }, []);
@@ -2358,16 +2390,34 @@ export default function App() {
     }
   }, []);
 
-  // Refresh manuale: ricarica la pagina. Serve un reload completo (non solo
-  // un re-fetch dei dati) perché il giorno/turno correnti — TODAY_DOW e
-  // CUR_SLOT — sono calcolati al caricamento e non si aggiornano al cambio d'ora.
-  const [refreshing, setRefreshing] = useState(false);
-  const doRefresh = useCallback(() => {
-    setRefreshing(true);
-    window.location.reload();
+  useEffect(() => { refresh(); }, [refresh]);
+
+  // Il pulsante di refresh manuale è sparito: "torno sull'app e si aggiorna
+  // da sola" è vero solo se riaprirla fa davvero un caricamento nuovo. Senza
+  // il pulsante, un'app lasciata aperta in background per ore manterrebbe
+  // TODAY_DOW/CUR_SLOT calcolati al vecchio caricamento — sono valori fissati
+  // all'avvio e non si aggiornano da soli al passare del tempo. Qui si
+  // ricarica automaticamente quando l'app torna in primo piano dopo essere
+  // rimasta nascosta più di 5 minuti, così l'assunzione diventa vera davvero.
+  useEffect(() => {
+    let hiddenAt: number | null = null;
+    function onVisibility() {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+      } else if (hiddenAt !== null && Date.now() - hiddenAt > 5 * 60_000) {
+        window.location.reload();
+      }
+    }
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  // Se questo dispositivo ha una sessione /admin valida, l'app principale
+  // offre in più la prenotazione a nome DIREZIONE. Un solo controllo qui,
+  // propagato a chi ne ha bisogno — il vero controllo resta comunque sul
+  // cookie lato server: nascondere il pulsante non è un'autorizzazione.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => { api.adminRole().then((r) => setIsAdmin(r !== null)); }, []);
 
   // Riallinea in silenzio la subscription push col server.
   //
@@ -2390,9 +2440,18 @@ export default function App() {
     window.location.reload(); 
   }
 
+  // Un solo punto d'ingresso per tutte e tre le viste: se la camera è
+  // DIREZIONE la richiesta passa dall'endpoint amministrativo (autorizzato dal
+  // cookie di sessione, non dal client), altrimenti dal percorso normale.
   const handleBook = useCallback(async (day:number, slot:number, machine:string, room:string) => {
-    const s = await api.book(day, slot, machine, room); setWeek(s.week); setStatus(s.status);
+    const s = room === api.DIREZIONE
+      ? await api.bookAsDirezione(day, slot, machine)
+      : await api.book(day, slot, machine, room);
+    setWeek(s.week); setStatus(s.status);
   }, []);
+  // clear_laundry è già permissiva per chiunque (nessun controllo di proprietà
+  // lato server, scelta deliberata in assenza di autenticazione): non serve un
+  // percorso amministrativo separato per cancellare, funziona già per tutti.
   const handleClear = useCallback(async (day:number, slot:number, machine:string) => {
     const s = await api.clearBooking(day, slot, machine); setWeek(s.week); setStatus(s.status);
   }, []);
@@ -2437,9 +2496,9 @@ export default function App() {
     <LoginScreen lang={lang} onLogin={chooseRoom}/>
   ) : (
     <>
-      {screen===0 && <Dashboard   theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} onStatus={handleStatus}/>}
-      {screen===1 && <DaySchedule theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear}/>}
-      {screen===2 && <WeekOverview theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} onBook={handleBook} onClear={handleClear}/>}
+      {screen===0 && <Dashboard   theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} onStatus={handleStatus} isAdmin={isAdmin}/>}
+      {screen===1 && <DaySchedule theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} isAdmin={isAdmin}/>}
+      {screen===2 && <WeekOverview theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} onBook={handleBook} onClear={handleClear} isAdmin={isAdmin}/>}
     </>
   );
 
@@ -2464,15 +2523,18 @@ export default function App() {
         {globalStyle}
         {showChrome && <InstallPrompt lang={lang}/>}
         {accessibilityModal}
+        {settingsOpen && (
+          <SettingsSheet lang={lang} room={roomNumber}
+            onToggleLang={()=>setLang(l=>l==="it"?"en":"it")}
+            onAccessibility={() => setAccessibilityOpen(true)}
+            onClose={() => setSettingsOpen(false)} />
+        )}
         <DesktopSidebar
-          active={screen} onChange={setScreen} lang={lang} theme={theme}
+          active={screen} onChange={setScreen} lang={lang}
           roomNumber={roomNumber} showNav={showChrome}
           facility={facility} onFacility={setFacility}
           onChangeRoom={changeRoom}
-          onToggleLang={()=>setLang(l=>l==="it"?"en":"it")}
-          onToggleTheme={()=>setTheme(theme === "dark" ? "light" : "dark")}
-          onRefresh={doRefresh} refreshing={refreshing}
-          onAccessibility={() => setAccessibilityOpen(true)}
+          onOpenSettings={() => setSettingsOpen(true)}
         />
         <main className="flex-1 h-dvh min-h-0 flex flex-col overflow-y-auto overscroll-contain">
           {/* Era max-w-6xl (1152px): su uno schermo grande restavano centinaia
@@ -2496,41 +2558,35 @@ export default function App() {
         style={{ background:"var(--background)", borderColor:"var(--border)" }}>
         {showChrome && <InstallPrompt lang={lang}/>}
         {accessibilityModal}
+        {settingsOpen && (
+          <SettingsSheet lang={lang} room={roomNumber}
+            onToggleLang={()=>setLang(l=>l==="it"?"en":"it")}
+            onAccessibility={() => setAccessibilityOpen(true)}
+            onClose={() => setSettingsOpen(false)} />
+        )}
 
         <div className="flex items-center justify-between px-7 pt-3 pb-0 shrink-0 mt-2 md:mt-0">
+          {/* Prima di scegliere una camera qui c'era un orologio finto (9:41,
+              lo stesso hardcoded in ogni mockup Apple): non è mai stata l'ora
+              vera e non serviva a niente, solo confondeva. */}
           {roomNumber !== null ? (
             <button onClick={changeRoom}
               className="text-[11px] font-mono px-2 py-1 rounded-lg transition-colors"
-              style={{ background:"var(--secondary)", color:"var(--muted-foreground)" }}>
+              style={{ background:"var(--secondary)", color:"var(--gray-accessible-text)" }}>
               {roomNumber ? `St. ${roomNumber}` : t.changeRoom}
             </button>
-          ) : (
-            <span className="text-[11px] font-mono" style={{ color:"var(--muted-foreground)" }}>9:41</span>
-          )}
+          ) : <span/>}
           <div className="w-24 h-6 rounded-full hidden md:flex items-center justify-center" style={{ background:"var(--secondary)" }}>
             <div className="w-3 h-3 rounded-full border" style={{ background:"var(--background)", borderColor:"var(--border)" }}/>
           </div>
-          <div className="flex items-center gap-1.5">
-            {showChrome && (
-              <button onClick={doRefresh} disabled={refreshing} aria-label="Refresh"
-                className="p-1.5 rounded-lg" style={{ color:"var(--muted-foreground)" }}>
-                <RefreshCw size={13} className={refreshing ? "animate-spin-slow" : ""}/>
-              </button>
-            )}
-            <InstallButton lang={lang} />
-            <ReminderBell room={roomNumber} lang={lang} />
-            <button onClick={()=>setLang(l=>l==="it"?"en":"it")}
-              className="rounded-lg px-2 py-1 text-[10px] font-mono font-bold transition-colors"
-              style={{ background:"var(--secondary)", color:"var(--foreground)" }}>
-              {lang==="it"?"EN":"IT"}
-            </button>
-            <button onClick={()=>setTheme(theme === "dark" ? "light" : "dark")} className="p-1.5 rounded-lg" style={{ color:"var(--muted-foreground)" }}>
-              {theme === "dark" ? <Sun size={13}/> : <Moon size={13}/>}
-            </button>
-            <button onClick={() => setAccessibilityOpen(true)} className="p-1.5 rounded-lg" style={{ color:"var(--muted-foreground)" }} aria-label="Accessibilità">
-              <Eye size={13}/>
-            </button>
-          </div>
+          {/* Il refresh manuale è sparito: tornare sull'app ricarica già i
+              dati da sola. Il tema segue sempre quello del telefono. Lingua,
+              notifiche, installazione e accessibilità stanno tutte dentro
+              Impostazioni, invece di quattro-cinque icone separate. */}
+          <button onClick={() => setSettingsOpen(true)} className="p-1.5 rounded-lg" style={{ color:"var(--gray-accessible-text)" }}
+            aria-label={lang==="it" ? "Impostazioni" : "Settings"}>
+            <Settings size={16}/>
+          </button>
         </div>
 
         {showChrome && <FacilitySwitcher facility={facility} onChange={setFacility} lang={lang}/>}

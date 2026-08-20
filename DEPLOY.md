@@ -30,15 +30,21 @@ possono contenere segreti.
 | `SUPABASE_SECRET_KEY` | chiedere a Filippo — **segreto**, bypassa la RLS |
 | `CRON_SECRET` | chiedere a Filippo — **segreto**, condiviso col job pg_cron |
 | `APP_TOKEN` | stesso valore di `VITE_SECRET_TOKEN` |
-| `ADMIN_USER` | `admin` — portineria |
-| `ADMIN_PASSWORD_HASH` | chiedere a Filippo — è un hash scrypt, non la password |
+| `FDO_USER` | `fdo` — front desk |
+| `FDO_PASSWORD_HASH` | chiedere a Filippo — è un hash scrypt, non la password |
 | `SYSADMIN_USER` | `sistemista` — super admin |
 | `SYSADMIN_PASSWORD_HASH` | chiedere a Filippo — hash scrypt |
 | `ADMIN_SESSION_SECRET` | chiedere a Filippo — **segreto**, firma i cookie di sessione |
 
+> `ADMIN_USER`/`ADMIN_PASSWORD_HASH` si chiamavano così prima: l'account
+> "portineria" è diventato FDO (Front Desk Officer) da tutte le parti, incluse
+> queste due variabili. Un vecchio cookie di sessione con il ruolo precedente
+> smette semplicemente di essere valido — chi lo aveva rifà login, non serve
+> nessun'altra azione.
+
 I due account hanno poteri diversi:
 
-| | portineria | sistemista |
+| | FDO | sistemista |
 |---|---|---|
 | Macchine fuori servizio, prenotazioni, segnalazioni, sale | ✓ | ✓ |
 | Regole ricorrenti | | ✓ |
@@ -49,7 +55,7 @@ pannello non sarebbe un'autorizzazione.
 
 > La password del pannello è passata da una chat durante lo sviluppo. Vale la
 > pena cambiarla: `node scripts/hash-password.cjs "nuova-password"` rigenera
-> l'hash, che poi va incollato in `ADMIN_PASSWORD_HASH`.
+> l'hash, che poi va incollato in `FDO_PASSWORD_HASH`.
 
 ### Chiavi VAPID — non toccare
 

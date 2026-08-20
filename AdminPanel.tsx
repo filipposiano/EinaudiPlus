@@ -33,7 +33,7 @@ type Recurring = {
   space?: string; space_id?: number; start?: number; end?: number; name?: string; type?: string;
 };
 
-type Role = "portineria" | "sistemista";
+type Role = "fdo" | "sistemista";
 type Tab = "macchine" | "segnalazioni" | "ricorrenti" | "manutenzione";
 
 // ─── Chiamate ────────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ const timeLabel = (m: number) => {
 const S = {
   page: { minHeight: "100vh", background: "var(--background)", color: "var(--foreground)" } as const,
   card: { background: "var(--card)", border: "1px solid var(--border)", borderRadius: 16 } as const,
-  sub: { color: "var(--muted-foreground)" } as const,
+  sub: { color: "var(--gray-accessible-text)" } as const,
   btn: {
     padding: "8px 14px", borderRadius: 12, fontSize: 13, fontWeight: 600,
     border: "1px solid var(--border)", background: "var(--secondary)",
@@ -74,8 +74,8 @@ const S = {
   } as const,
   danger: {
     padding: "6px 12px", borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: "pointer",
-    border: "none", background: "color-mix(in srgb, var(--destructive) 12%, transparent)",
-    color: "var(--destructive)",
+    border: "none", background: "color-mix(in srgb, var(--destructive-text) 12%, transparent)",
+    color: "var(--destructive-text)",
   } as const,
   input: {
     padding: "10px 12px", borderRadius: 12, fontSize: 14, width: "100%",
@@ -125,7 +125,7 @@ function Login({ onDone }: { onDone: () => void }) {
         <input style={{ ...S.input, marginBottom: 18 }} type="password" value={password}
                onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
 
-        {err && <p style={{ fontSize: 13, color: "var(--destructive)", marginBottom: 12 }}>{err}</p>}
+        {err && <p style={{ fontSize: 13, color: "var(--destructive-text)", marginBottom: 12 }}>{err}</p>}
 
         <button type="submit" disabled={busy}
           style={{ ...S.btn, width: "100%", padding: 12, background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}>
@@ -147,7 +147,7 @@ function Login({ onDone }: { onDone: () => void }) {
 // una macchina rotta: la si spegne.
 
 function Oblo({ kind, acceso }: { kind: "washer" | "dryer"; acceso: boolean }) {
-  const colore = acceso ? "var(--status-free, #15803d)" : "var(--destructive)";
+  const colore = acceso ? "var(--status-free-text)" : "var(--destructive-text)";
   return (
     <svg viewBox="0 0 64 72" width="72" height="81" aria-hidden="true"
          style={{ display: "block", margin: "0 auto" }}>
@@ -179,7 +179,7 @@ function Oblo({ kind, acceso }: { kind: "washer" | "dryer"; acceso: boolean }) {
 
       {/* Croce quando è fuori servizio */}
       {!acceso && (
-        <g stroke="var(--destructive)" strokeWidth="3.5" strokeLinecap="round">
+        <g stroke="var(--destructive-text)" strokeWidth="3.5" strokeLinecap="round">
           <path d="M24 36 L40 52" />
           <path d="M40 36 L24 52" />
         </g>
@@ -196,18 +196,18 @@ function MacchinaCard({ machine, busy, onToggle }: {
 
   return (
     <div style={{
-      border: `1px solid ${acceso ? "var(--border)" : "var(--destructive)"}`,
+      border: `1px solid ${acceso ? "var(--border)" : "var(--destructive-text)"}`,
       borderRadius: 16,
       padding: "16px 12px 12px",
       textAlign: "center",
-      background: acceso ? "transparent" : "color-mix(in srgb, var(--destructive) 7%, transparent)",
+      background: acceso ? "transparent" : "color-mix(in srgb, var(--destructive-text) 7%, transparent)",
       transition: "border-color .2s, background .2s",
       opacity: busy ? 0.55 : 1,
     }}>
       <Oblo kind={machine.kind} acceso={acceso} />
 
       <p style={{ fontSize: 14, fontWeight: 700, marginTop: 10 }}>{nome}</p>
-      <p style={{ fontSize: 12, marginBottom: 12, color: acceso ? "var(--status-free, #15803d)" : "var(--destructive)" }}>
+      <p style={{ fontSize: 12, marginBottom: 12, color: acceso ? "var(--status-free-text)" : "var(--destructive-text)" }}>
         {acceso ? "In servizio" : "Fuori servizio"}
       </p>
 
@@ -222,7 +222,7 @@ function MacchinaCard({ machine, busy, onToggle }: {
         style={{
           width: 52, height: 30, borderRadius: 99, border: "none", padding: 3,
           cursor: busy ? "default" : "pointer",
-          background: acceso ? "var(--status-free, #15803d)" : "var(--destructive)",
+          background: acceso ? "var(--status-free-text)" : "var(--destructive-text)",
           display: "flex", justifyContent: acceso ? "flex-end" : "flex-start",
           transition: "background .2s",
         }}>
@@ -339,7 +339,7 @@ function Segnalazioni() {
           return (
             <div key={f.id} style={{
               ...S.card, padding: 14,
-              borderColor: guasto && !f.handled ? "var(--destructive)" : "var(--border)",
+              borderColor: guasto && !f.handled ? "var(--destructive-text)" : "var(--border)",
               opacity: f.handled ? 0.6 : 1,
             }}>
               <div style={{ display: "flex", gap: 10, alignItems: "baseline", marginBottom: 6 }}>
@@ -347,7 +347,7 @@ function Segnalazioni() {
                   {f.room ? `Camera ${f.room}` : "Anonimo"}
                 </span>
                 {f.laundry && <span style={{ fontSize: 11, ...S.sub }}>{f.laundry}</span>}
-                {guasto && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--destructive)" }}>GUASTO</span>}
+                {guasto && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--destructive-text)" }}>GUASTO</span>}
                 <div style={{ flex: 1 }} />
                 <span style={{ fontSize: 11, ...S.sub }}>
                   {new Date(f.created_at).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}
@@ -602,7 +602,7 @@ function Manutenzione() {
           return (
             <div key={scope} style={{
               ...S.card, padding: 14,
-              borderColor: totale || inAttesa ? "var(--destructive)" : "var(--border)",
+              borderColor: totale || inAttesa ? "var(--destructive-text)" : "var(--border)",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -726,14 +726,12 @@ export default function Admin() {
             <h1 style={{ fontSize: 24, fontWeight: 700 }}>Amministrazione</h1>
             <p style={{ fontSize: 12, ...S.sub }}>
               {user}
-              {sistemista && (
-                <span style={{
-                  marginLeft: 8, padding: "1px 7px", borderRadius: 99, fontSize: 10,
-                  fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase",
-                  background: "color-mix(in srgb, var(--primary) 15%, transparent)",
-                  color: "var(--primary)",
-                }}>sistemista</span>
-              )}
+              <span style={{
+                marginLeft: 8, padding: "1px 7px", borderRadius: 99, fontSize: 10,
+                fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase",
+                background: "color-mix(in srgb, var(--primary) 15%, transparent)",
+                color: "var(--primary)",
+              }}>{sistemista ? "sistemista" : "FDO"}</span>
             </p>
           </div>
           <div style={{ flex: 1 }} />

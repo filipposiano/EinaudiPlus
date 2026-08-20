@@ -76,34 +76,9 @@ begin
 end;
 $$;
 
--- Cancella qualunque prenotazione lavanderia della settimana corrente,
--- indipendentemente dalla camera. Serve all'amministratore che agisce
--- dall'app principale.
-create or replace function admin_clear_any(
-  p_laundry_id smallint, p_day int, p_slot int, p_machine text
-) returns jsonb language plpgsql as $$
-declare
-  v_l  laundry%rowtype;
-  v_ws date;
-begin
-  select * into v_l from laundry where id = p_laundry_id;
-  if not found then
-    return jsonb_build_object('ok', false, 'error', 'lavanderia non valida');
-  end if;
-
-  v_ws := current_week_start(v_l.tz);
-
-  delete from laundry_booking
-  where laundry_id = v_l.id and week_start = v_ws
-    and day = p_day and slot = p_slot and machine_code = p_machine;
-
-  return jsonb_build_object(
-    'ok', true,
-    'week', week_snapshot(v_l.id, v_ws),
-    'status', status_snapshot(v_l.id)
-  );
-end;
-$$;
+-- Non serve una funzione di cancellazione amministrativa: clear_laundry e'
+-- gia' permissiva per chiunque (nessun controllo di proprieta', scelta
+-- deliberata in assenza di autenticazione), quindi vale anche per l'admin.
 
 -- Prenota una sala a nome della direzione. Per le sale il nome e' testo
 -- libero, quindi non serviva allentare nessun vincolo.

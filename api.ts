@@ -178,9 +178,6 @@ export async function bookAsDirezione(day: number, slot: number, machine: string
   });
 }
 
-/** Cancella qualunque turno, non solo il proprio. */
-export async function clearAsAdmin(day: number, slot: number, machine: string) {
-  return adminAction("clearAny", {
-    laundry_id: laundryIdFor(currentRoom()), day, slot, machine,
-  });
-}
+// Non serve un percorso di cancellazione amministrativo: clear_laundry è già
+// permissiva per chiunque (nessun controllo di proprietà lato server), quindi
+// api.clearBooking basta anche per l'admin.

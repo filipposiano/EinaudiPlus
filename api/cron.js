@@ -67,7 +67,7 @@ export default async function handler(req, res) {
           if (r.endpoint) {
             const outcome = await sendWebPush(
               { endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } },
-              { title: r.title, body: r.body, url: "/", tag: r.tag }
+              { title: r.title, body: r.body, url: "/", tag: r.tag, kind: r.kind }
             );
             if (outcome === "gone") gone.add(r.endpoint);
             bump(r, outcome === "ok" ? "ok" : "fail");
