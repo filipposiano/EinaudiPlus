@@ -81,8 +81,12 @@ Bot da creare con [@BotFather](https://t.me/BotFather).
 | Nome | Valore |
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | il token del bot — **segreto** |
-| `TELEGRAM_WEBHOOK_SECRET` | una stringa casuale a piacere — **segreto** |
+| `TELEGRAM_WEBHOOK_SECRET` | stringa casuale, **solo `A-Z a-z 0-9 _ -`** — **segreto** |
 | `VITE_TELEGRAM_BOT` | username del bot senza `@`, es. `einaudiplus_bot` |
+
+> Telegram ammette in `secret_token` **solo** `A-Z a-z 0-9 _ -`. Con altri
+> caratteri (`!`, `@`, spazi…) `setWebhook` risponde errore e il webhook non
+> viene registrato: il bot resta muto senza che nulla lo segnali.
 
 Dopo il deploy, registra il webhook una volta sola:
 

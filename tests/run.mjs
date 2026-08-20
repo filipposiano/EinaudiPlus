@@ -136,20 +136,33 @@ section("Sale cinema e musica");
   check("lettura", g.body?.ok === true && Array.isArray(g.body.bookings));
   check("sala inesistente", (await call(rooms, { method: "GET", query: { token: TOKEN, space: "piscina" } })).body?.error === "sala non valida");
 
-  const start = 600 + SLOT * 20;
-  const b1 = await call(rooms, { query: { token: TOKEN, space: "cinema", action: "book" }, body: { day: 4, start, end: start + 60, name: "Test", type: "open" } });
+  // Giorno e fascia dedicati a questo giro: l'exclude constraint e' reale, e
+  // due esecuzioni sulla stessa fascia si darebbero fastidio a vicenda.
+  const day = Math.floor(Math.random() * 7);
+  const start = 60 + Math.floor(Math.random() * 20) * 60;
+  const tag = "TEST-" + Math.random().toString(36).slice(2, 7);
+
+  const b1 = await call(rooms, { query: { token: TOKEN, space: "cinema", action: "book" }, body: { day, start, end: start + 60, name: tag, type: "open" } });
   check("prenota", b1.body?.ok === true, JSON.stringify(b1.body).slice(0, 120));
 
-  const b2 = await call(rooms, { query: { token: TOKEN, space: "cinema", action: "book" }, body: { day: 4, start: start + 30, end: start + 90, name: "Altro", type: "open" } });
+  const b2 = await call(rooms, { query: { token: TOKEN, space: "cinema", action: "book" }, body: { day, start: start + 30, end: start + 90, name: tag + "-x", type: "open" } });
   check("sovrapposizione respinta", b2.body?.error === "overlap");
 
-  const b3 = await call(rooms, { query: { token: TOKEN, space: "cinema", action: "book" }, body: { day: 4, start: start + 60, end: start + 120, name: "Adiacente", type: "open" } });
+  const b3 = await call(rooms, { query: { token: TOKEN, space: "cinema", action: "book" }, body: { day, start: start + 60, end: start + 120, name: tag + "-adj", type: "open" } });
   check("turno adiacente ammesso", b3.body?.ok === true, JSON.stringify(b3.body).slice(0, 120));
 
-  const mine = (b3.body.bookings || []).find((x) => x.name === "Test");
+  const mine = (b3.body?.bookings || []).find((x) => x.name === tag);
   check("id stringa, orari numerici", typeof mine?.id === "string" && typeof mine?.start === "number");
-  check("cancellazione",
-    (await call(rooms, { query: { token: TOKEN, space: "cinema", action: "clear" }, body: { id: mine.id } })).body?.ok === true);
+
+  // Il test si ripulisce dietro: senza, ogni giro lascia righe che il giro
+  // dopo trova come sovrapposizioni.
+  let removed = 0;
+  for (const b of b3.body?.bookings || []) {
+    if (!b.name.startsWith(tag)) continue;
+    const r = await call(rooms, { query: { token: TOKEN, space: "cinema", action: "clear" }, body: { id: b.id } });
+    if (r.body?.ok) removed++;
+  }
+  check("cancellazione e pulizia", removed === 2, `rimosse ${removed} su 2`);
 }
 
 // ─── Cron ────────────────────────────────────────────────────────────────────
@@ -318,18 +331,27 @@ section("Telegram");
   check("senza vocali", !/[AEIOU]/.test(code || ""), code);
 
   const chat = "9" + Math.floor(Math.random() * 1e8);
-  const tgSend = (text, headers = {}) =>
+  // Se il segreto e' configurato l'header va sempre mandato, altrimenti il
+  // webhook rifiuta — che e' esattamente quello che deve fare.
+  const auth = process.env.TELEGRAM_WEBHOOK_SECRET
+    ? { "x-telegram-bot-api-secret-token": process.env.TELEGRAM_WEBHOOK_SECRET }
+    : {};
+  const tgSend = (text, headers = auth) =>
     call(telegram, { body: { message: { chat: { id: chat }, text } }, headers });
 
   check("/start senza codice", (await tgSend("/start")).status === 200);
   check("/start con codice", (await tgSend("/start " + code)).status === 200);
   check("/stop", (await tgSend("/stop")).status === 200);
 
+  const prev = process.env.TELEGRAM_WEBHOOK_SECRET;
   process.env.TELEGRAM_WEBHOOK_SECRET = "prova";
-  check("webhook senza segreto -> 401", (await tgSend("/start")).status === 401);
-  check("webhook con segreto -> 200",
+  check("webhook senza segreto -> 401", (await tgSend("/start", {})).status === 401);
+  check("webhook con segreto sbagliato -> 401",
+    (await tgSend("/start", { "x-telegram-bot-api-secret-token": "altro" })).status === 401);
+  check("webhook con segreto giusto -> 200",
     (await tgSend("/start", { "x-telegram-bot-api-secret-token": "prova" })).status === 200);
-  delete process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (prev) process.env.TELEGRAM_WEBHOOK_SECRET = prev;
+  else delete process.env.TELEGRAM_WEBHOOK_SECRET;
 
   check("camera non valida respinta",
     (await call(laundry, { body: { token: TOKEN, action: "telegramCode", room: "xyz" } })).body?.ok === false);
