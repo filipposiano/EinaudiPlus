@@ -53,10 +53,13 @@ select cron.schedule(
 -- con l'ora solare sia con quella legale.
 select cron.schedule('ricorrenti', '0 2 * * *', $job$ select apply_recurring(0); $job$);
 
--- Potatura settimanale delle settimane vecchie: le prenotazioni oltre le 8
--- settimane non servono piu'. Il CASCADE porta via anche reminder_log.
--- Lunedi' alle 04:00 UTC, quando non c'e' nessuno sveglio.
-select cron.schedule('potatura-settimanale', '0 4 * * 1', $job$ select prune_old_weeks(8); $job$);
+-- Potatura: si tiene la settimana corrente piu' la precedente, il resto va via.
+-- Il CASCADE porta via anche reminder_log.
+--
+-- Ogni giorno e non solo il lunedi': se un'esecuzione salta, il giorno dopo si
+-- rimedia invece di portarsi dietro una settimana di troppo.
+-- Alle 04:00 UTC, quando non c'e' nessuno sveglio.
+select cron.schedule('potatura', '0 4 * * *', $job$ select prune_old_weeks(1); $job$);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Verifica e diagnostica

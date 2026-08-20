@@ -53,8 +53,14 @@ const post = async (p, body, headers = {}) => {
   console.log("        risposta in " + s1.ms + "ms");
 
   const s2 = await get(`/api/laundry?token=${encodeURIComponent(TOKEN)}&room=42`);
-  check("snapshot sezione", s2.body?.ok === true);
-  check("  solo W-A operativa", s2.body?.status?.["W-A"] === "ok" && s2.body?.status?.["W-B"] === "oos");
+  check("snapshot Manica", s2.body?.ok === true);
+  // Solo la configurazione: che W-A e D-A siano "ok" dipende dagli
+  // amministratori e non e' un invariante.
+  check("  macchine inesistenti oos",
+    ["W-B", "W-C", "D-B", "D-C"].every((c) => s2.body?.status?.[c] === "oos"),
+    JSON.stringify(s2.body?.status));
+  check("  W-A e D-A presenti",
+    s2.body?.status && "W-A" in s2.body.status && "D-A" in s2.body.status);
 
   check("token errato respinto", (await get("/api/laundry?token=no&room=112")).status === 401);
 

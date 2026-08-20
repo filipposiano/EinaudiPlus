@@ -33,15 +33,16 @@ create table laundry (
 
 insert into laundry (slug, name, reminder_mode, room_min, room_max) values
   ('valentino', 'Lavanderia Valentino', 'single', 100, 9999),
-  ('sezione',   'Lavanderia Sezione',   'triple',   1,   99);
+  ('manica',    'Lavanderia Manica',    'triple',   1,   99);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Macchine
 --
--- `sezione` ha fisicamente solo W-A, ma il client indicizza sempre tutte e sei
--- le sigle (deriveMachines e AdminSheet usano liste fisse). Le creiamo tutte:
--- quelle inesistenti hanno bookable=false, così lo snapshot resta uniforme e
--- l'admin non può riattivare per sbaglio una macchina che non c'è.
+-- Manica ha fisicamente una lavatrice e un'asciugatrice (W-A e D-A), ma il
+-- client indicizza sempre tutte e sei le sigle (deriveMachines e AdminSheet
+-- usano liste fisse). Le creiamo tutte: quelle inesistenti hanno
+-- bookable=false, così lo snapshot resta uniforme e l'admin non può
+-- riattivare per sbaglio una macchina che non c'è.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 create table machine (
@@ -57,8 +58,8 @@ create table machine (
 
 insert into machine (laundry_id, code, kind, bookable, is_oos, sort_order)
 select l.id, m.code, m.kind,
-       case when l.slug = 'sezione' and m.code <> 'W-A' then false else true end,
-       case when l.slug = 'sezione' and m.code <> 'W-A' then true  else false end,
+       case when l.slug = 'manica' and m.code not in ('W-A','D-A') then false else true end,
+       case when l.slug = 'manica' and m.code not in ('W-A','D-A') then true  else false end,
        m.ord
 from laundry l
 cross join (values

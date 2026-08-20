@@ -176,9 +176,16 @@ begin
 end;
 $$;
 
--- Le prenotazioni vecchie non servono piu' dopo qualche settimana. Il vincolo
--- ON DELETE CASCADE porta via anche le righe di reminder_log collegate.
-create or replace function prune_old_weeks(p_keep_weeks int default 8)
+-- Le prenotazioni passate non servono a nessuno: si tiene la settimana corrente
+-- piu' la precedente, e basta.
+--
+-- La precedente si tiene per un motivo pratico, non per archivio: quando
+-- qualcuno lascia il bucato in lavatrice, l'unico modo per sapere di chi e' e'
+-- guardare chi aveva il turno prima. Con zero settimane di storico, il pulsante
+-- "settimana precedente" del pannello admin non mostrerebbe mai nulla.
+--
+-- Il vincolo ON DELETE CASCADE porta via anche le righe di reminder_log.
+create or replace function prune_old_weeks(p_keep_weeks int default 1)
 returns int language plpgsql as $$
 declare v_n int;
 begin

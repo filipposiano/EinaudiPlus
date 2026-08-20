@@ -127,7 +127,7 @@ begin
   end if;
 
   -- `bookable = false` e `is_oos = true` sono due cose diverse:
-  --  - bookable=false: la macchina non esiste fisicamente (es. W-B in sezione).
+  --  - bookable=false: la macchina non esiste fisicamente (es. W-B alla Manica).
   --    Prenotarla non ha senso, si rifiuta.
   --  - is_oos=true: la macchina c'è ma è guasta. Si può prenotare lo stesso,
   --    il client mostra un avviso. Serve a non bloccare chi vuole mettersi in

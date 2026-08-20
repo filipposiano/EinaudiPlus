@@ -73,7 +73,16 @@ section("Snapshot");
   check("risposta non cacheabile", r.headers["Cache-Control"] === "no-store");
 
   const s = await call(laundry, { method: "GET", query: { token: TOKEN, room: "42" } });
-  check("sezione: solo W-A operativa", s.body.status["W-A"] === "ok" && s.body.status["W-B"] === "oos");
+  // Si assertisce solo su cio' che e' configurazione. Che W-A e D-A siano
+  // "ok" NON e' verificabile: un amministratore puo' legittimamente segnarle
+  // guaste in qualsiasi momento, e il test fallirebbe senza che nulla sia rotto.
+  // Le altre quattro invece non esistono fisicamente, e set_machine_status
+  // rifiuta di toccarle (filtra su bookable = true).
+  check("Manica: le macchine inesistenti restano oos",
+    ["W-B", "W-C", "D-B", "D-C"].every((c) => s.body.status[c] === "oos"),
+    JSON.stringify(s.body.status));
+  check("Manica: W-A e D-A esistono nello snapshot",
+    "W-A" in s.body.status && "D-A" in s.body.status);
 
   const n = await call(laundry, { method: "GET", query: { token: TOKEN } });
   check("senza camera ricade sulla principale", n.body?.ok === true);
