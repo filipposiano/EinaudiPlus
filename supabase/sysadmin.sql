@@ -207,6 +207,20 @@ $$;
 -- non esiste un "pulisci" generico senza argomenti.
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- NOTA sui `where id is not null` che sembrano inutili.
+--
+-- Supabase attiva l'estensione safeupdate sulla connessione usata da PostgREST:
+-- ogni DELETE o UPDATE senza WHERE viene rifiutato con
+-- "21000: DELETE requires a WHERE clause". Vale anche per le istruzioni dentro
+-- una funzione chiamata via RPC.
+--
+-- Il risultato era insidioso: `select sysadmin_purge('tutto')` dal SQL Editor
+-- funzionava (connessione diversa, nessuna protezione), mentre lo stesso
+-- pulsante nel pannello falliva sempre — e l'API restituiva un generico
+-- "errore del server", quindi sembrava che il pulsante non facesse nulla.
+--
+-- Le condizioni qui sotto sono sempre vere e servono solo a soddisfare quel
+-- controllo. Non toglierle.
 create or replace function sysadmin_purge(p_scope text)
 returns jsonb language plpgsql as $$
 declare
@@ -231,33 +245,33 @@ begin
 
   -- Tutto lo storico delle prenotazioni.
   if p_scope in ('prenotazioni', 'tutto') then
-    delete from laundry_booking;  get diagnostics v_n = row_count;
+    delete from laundry_booking where id is not null;  get diagnostics v_n = row_count;
     v_out := v_out || jsonb_build_object('prenotazioni', v_n);
-    delete from space_booking;    get diagnostics v_n = row_count;
+    delete from space_booking where id is not null;    get diagnostics v_n = row_count;
     v_out := v_out || jsonb_build_object('sale', v_n);
   end if;
 
   if p_scope in ('segnalazioni', 'tutto') then
-    delete from feedback;  get diagnostics v_n = row_count;
+    delete from feedback where id is not null;  get diagnostics v_n = row_count;
     v_out := v_out || jsonb_build_object('segnalazioni', v_n);
   end if;
 
   if p_scope in ('notifiche', 'tutto') then
-    delete from push_sub;      get diagnostics v_n = row_count;
+    delete from push_sub where id is not null;      get diagnostics v_n = row_count;
     v_out := v_out || jsonb_build_object('push', v_n);
-    delete from telegram_sub;  get diagnostics v_n = row_count;
+    delete from telegram_sub where id is not null;  get diagnostics v_n = row_count;
     v_out := v_out || jsonb_build_object('telegram', v_n);
   end if;
 
   if p_scope in ('ricorrenti', 'tutto') then
-    delete from recurring_booking;  get diagnostics v_n = row_count;
+    delete from recurring_booking where id is not null;  get diagnostics v_n = row_count;
     v_out := v_out || jsonb_build_object('ricorrenti', v_n);
   end if;
 
   if p_scope = 'tutto' then
-    delete from rate_limit;
+    delete from rate_limit where bucket is not null;
     -- audit_log NON si cancella: serve proprio a sapere chi ha svuotato cosa.
-    update machine set is_oos = not bookable;
+    update machine set is_oos = not bookable where laundry_id is not null;
     v_out := v_out || jsonb_build_object('macchine_ripristinate', true);
   end if;
 

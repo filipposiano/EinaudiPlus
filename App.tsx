@@ -694,8 +694,8 @@ function FavPicker({ lang, favs, onAdd, onClose }: {
 }
 
 // ─── Modale scelta lavatrice (da un turno preferito) ────────────────────────────
-function QuickBookModal({ lang, day, slot, week, status, onBook, onClose }: {
-  lang: Lang; day: number; slot: number; week: WeekData; status: StatusData;
+function QuickBookModal({ lang, day, slot, week, status, roomNumber, onBook, onClose }: {
+  lang: Lang; day: number; slot: number; week: WeekData; status: StatusData; roomNumber: string | null;
   onBook: (day:number, slot:number, mid:string)=>Promise<void>; onClose: ()=>void;
 }) {
   const t = T[lang];
@@ -704,13 +704,16 @@ function QuickBookModal({ lang, day, slot, week, status, onBook, onClose }: {
   const [err, setErr]   = useState<string | null>(null);
   const sl = TIME_SLOTS[slot];
 
-  const washers = ["A","B","C"].map((L) => {
-    const wid = "W-" + L;
+  const washers = machinesFor(roomNumber).washers.map((wid) => {
+    const L = wid[2];
     const oos = status[wid] === "oos";
     const room = bookingAt(week, day, slot, wid);
-    return { L, wid, oos, room, free: !oos && !room };
+    // Guasta ma libera resta prenotabile: chi vuole rischiare può farlo, il
+    // banner sotto glielo dice esplicitamente prima che tocchi "Prenota".
+    return { L, wid, oos, room, free: !room };
   });
   const anyFree = washers.some((w) => w.free);
+  const anyOosFree = washers.some((w) => w.free && w.oos);
 
   async function book(wid: string) {
     if (busy) return;
@@ -745,15 +748,26 @@ function QuickBookModal({ lang, day, slot, week, status, onBook, onClose }: {
                 {w.free
                   ? <button onClick={()=>book(w.wid)} disabled={!!busy}
                       className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all active:scale-95 shrink-0"
-                      style={{ background:RED, color:RED_FG, opacity: busy && busy!==w.wid ? 0.5 : 1 }}>
-                      {busy===w.wid ? <Loader2 size={12} className="animate-spin-slow"/> : <Plus size={12}/>}{t.book}
+                      style={{
+                        background: w.oos ? OOS_C : RED,
+                        color: w.oos ? "var(--destructive-foreground)" : RED_FG,
+                        opacity: busy && busy!==w.wid ? 0.5 : 1,
+                      }}>
+                      {busy===w.wid ? <Loader2 size={12} className="animate-spin-slow"/>
+                        : w.oos ? <AlertTriangle size={12}/> : <Plus size={12}/>}
+                      {w.oos ? t.bookAnyway : t.book}
                     </button>
-                  : <span className="text-xs font-medium shrink-0" style={{ color: w.oos ? OOS_C : sub }}>{w.oos ? t.oos : t.favFull}</span>}
+                  : <span className="text-xs font-medium shrink-0" style={{ color:sub }}>{t.favFull}</span>}
               </div>
             );
           })}
         </div>
 
+        {anyOosFree && (
+          <p className="text-xs text-center mb-2 flex items-center justify-center gap-1.5" style={{ color:OOS_C }}>
+            <AlertTriangle size={12} className="shrink-0"/>{t.oosWarnBody}
+          </p>
+        )}
         {!anyFree && <p className="text-xs text-center" style={{ color:sub }}>{t.noFreeWashers}</p>}
         {err && <p className="text-xs text-center" style={{ color:OOS_C }}>{err}</p>}
       </div>
@@ -887,6 +901,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
         <BookModal
           target={{ slotIdx:CUR_SLOT, machineId:booking.id }}
           bookings={week}
+          status={status}
           isDark={false}
           lang={lang}
           myRoom={roomNumber}
@@ -901,7 +916,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
       {feedbackOpen && <FeedbackModal lang={lang} room={roomNumber} onClose={()=>setFeedbackOpen(false)}/>}
       {quickTarget && (
         <QuickBookModal lang={lang} day={quickTarget.day} slot={quickTarget.slot}
-          week={week} status={status} onBook={quickBook}
+          week={week} status={status} roomNumber={roomNumber} onBook={quickBook}
           onClose={()=>setQuickTarget(null)}/>
       )}
 
@@ -1067,7 +1082,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
       <section className="px-5 mb-4">
         <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.machines}</p>
         <div className="flex flex-col gap-3">
-          {((parseInt(roomNumber?.match(/^(\d+)/)?.[1] || "0", 10) > 0 && parseInt(roomNumber?.match(/^(\d+)/)?.[1] || "0", 10) < 100) ? ["A"] : ["A","B","C"]).map((L) => {
+          {machinesFor(roomNumber).washers.map((id) => id[2]).map((L) => {
             const wm = washers.find((m) => m.label === L);
             const dm = dryers.find((m) => m.label === L);
             return (
@@ -1220,8 +1235,8 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
 
 // ─── Day Schedule ──────────────────────────────────────────────────────────────
 
-function DaySchedule({ lang, week, roomNumber: sessionRoom, favs, onToggleFav, onBook, onClear }: {
-  theme: Theme; lang: Lang; week: WeekData; roomNumber: string;
+function DaySchedule({ lang, week, status, roomNumber: sessionRoom, favs, onToggleFav, onBook, onClear }: {
+  theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
   favs: Fav[]; onToggleFav: (day:number, slot:number)=>void;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
   onClear: (day:number, slot:number, machine:string)=>Promise<void>;
@@ -1453,8 +1468,8 @@ function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify,
 
 // ─── Week Overview ─────────────────────────────────────────────────────────────
 
-function WeekOverview({ lang, week, roomNumber: sessionRoom, onBook, onClear }: {
-  theme: Theme; lang: Lang; week: WeekData; roomNumber: string;
+function WeekOverview({ lang, week, status, roomNumber: sessionRoom, onBook, onClear }: {
+  theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
   onClear: (day:number, slot:number, machine:string)=>Promise<void>;
 }) {
@@ -2380,8 +2395,8 @@ export default function App() {
   ) : (
     <>
       {screen===0 && <Dashboard   theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} onStatus={handleStatus}/>}
-      {screen===1 && <DaySchedule theme={theme} lang={lang} week={week} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear}/>}
-      {screen===2 && <WeekOverview theme={theme} lang={lang} week={week} roomNumber={roomNumber} onBook={handleBook} onClear={handleClear}/>}
+      {screen===1 && <DaySchedule theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear}/>}
+      {screen===2 && <WeekOverview theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} onBook={handleBook} onClear={handleClear}/>}
     </>
   );
 

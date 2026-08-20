@@ -1,4 +1,4 @@
-// statusConfig.ts — Configurazione centralizzata degli stati (Libero / In uso / Fuori uso).
+// statusConfig.ts — Configurazione centralizzata degli stati (Libera / In uso / Fuori servizio).
 //
 // Unico punto di verità per colori, icone, preset daltonismo, persistenza
 // e applicazione via CSS custom properties.
@@ -84,14 +84,31 @@ export function savePrefs(prefs: AccessibilityPrefs): void {
 }
 
 // ─── Applicazione via CSS Custom Properties ────────────────────────────────────
-// Scrive --status-free, --status-inuse, --status-oos direttamente su :root.
+// Scrive --status-free, --status-inuse, --status-oos su :root.
 // Tutte le schermate che usano var(--status-*) si aggiornano in tempo reale.
 
 export function applyToDOM(prefs: AccessibilityPrefs): void {
   const s = document.documentElement.style;
-  s.setProperty("--status-free",  prefs.colors.free);
-  s.setProperty("--status-inuse", prefs.colors.inuse);
-  s.setProperty("--status-oos",   prefs.colors.oos);
+
+  // Quando il colore è quello predefinito si RIMUOVE la proprietà inline
+  // invece di riscriverla.
+  //
+  // Serve perché style.css definisce questi tre colori due volte, una per
+  // tema: su fondo chiaro le tinte vivaci sono illeggibili (il giallo dava
+  // 1,9:1 su bianco), quindi lì usa versioni scure. Uno stile inline vince
+  // sempre su entrambe le regole, così prima l'app applicava le tinte da tema
+  // scuro anche in chiaro e la distinzione non aveva alcun effetto.
+  //
+  // Chi ha scelto un preset daltonismo o un colore suo continua a vederlo:
+  // in quel caso il valore differisce dal default e viene scritto.
+  const apply = (name: string, value: string, fallback: string) => {
+    if (value === fallback) s.removeProperty(name);
+    else s.setProperty(name, value);
+  };
+
+  apply("--status-free",  prefs.colors.free,  DEFAULT_COLORS.free);
+  apply("--status-inuse", prefs.colors.inuse, DEFAULT_COLORS.inuse);
+  apply("--status-oos",   prefs.colors.oos,   DEFAULT_COLORS.oos);
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────

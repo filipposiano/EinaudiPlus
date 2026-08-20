@@ -7,8 +7,11 @@
 // che manda il client gia' installato sui telefoni.
 //
 // I test scrivono davvero sul database. Camere, slot e IP sono casuali a ogni
-// giro apposta: quota settimanale, vincolo di unicita' sugli slot e rate limit
-// sono reali, e con valori fissi il secondo giro fallirebbe. Correttamente.
+// giro apposta: il vincolo di unicita' sugli slot e il rate limit sono reali,
+// e con valori fissi il secondo giro fallirebbe. Correttamente.
+// (La quota settimanale non e' piu' applicata lato server: era aggirabile
+// comunque, l'app non ha login, e bloccava anche chi prenotava per un
+// coinquilino o due turni nello stesso giorno.)
 
 import fs from "node:fs";
 import path from "node:path";
@@ -327,6 +330,21 @@ let sysCookie = null;
 
     check("ambito di pulizia inventato respinto",
       (await call(adminData, { body: { action: "purge", scope: "qualsiasi" }, cookie: sysCookie })).body?.ok === false);
+
+    // La pulizia deve ESEGUIRE davvero, non solo rispondere.
+    //
+    // Regressione vera: le DELETE senza WHERE sono rifiutate dall'estensione
+    // safeupdate quando passano da PostgREST ("21000: DELETE requires a WHERE
+    // clause"). Dal SQL Editor funzionavano, dal pannello no — e l'errore
+    // arrivava mascherato, quindi il pulsante "Azzera tutto" sembrava inerte.
+    //
+    // Si usa l'ambito 'ricorrenti' perche' e' l'unico che si puo' svuotare
+    // senza toccare prenotazioni di persone vere.
+    const purge = await call(adminData, { body: { action: "purge", scope: "ricorrenti" }, cookie: sysCookie });
+    check("la pulizia esegue senza errori del server", purge.body?.ok === true,
+      JSON.stringify(purge.body));
+    check("la pulizia riporta i conteggi", purge.body?.cancellati !== undefined,
+      JSON.stringify(purge.body));
   }
 }
 

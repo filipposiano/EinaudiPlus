@@ -166,6 +166,14 @@ export default async function handler(req, res) {
     return json(res, 200, result);
   } catch (err) {
     console.error("[admin]", err.rpc || "", err.message);
-    return fail(res, "errore del server", {}, 500);
+
+    // Qui l'errore vero si restituisce, a differenza degli endpoint pubblici.
+    //
+    // Chi arriva a questo punto ha gia' superato l'autenticazione admin, quindi
+    // non stiamo rivelando nulla a un estraneo. E il messaggio di PostgREST e'
+    // quasi sempre gia' la diagnosi: "DELETE requires a WHERE clause" diceva
+    // esattamente cosa fosse rotto, ma il generico "errore del server" lo
+    // nascondeva e il pulsante sembrava semplicemente non funzionare.
+    return fail(res, "errore del server: " + err.message, { rpc: err.rpc }, 500);
   }
 }

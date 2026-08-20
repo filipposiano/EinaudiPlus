@@ -17,7 +17,12 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     proxy: {
-      '/api': {
+      // '^/api/' e non '/api': il prefisso semplice intercetta anche
+      // '/api.ts', che e' il modulo sorgente del client (api.ts alla radice
+      // del progetto) servito da Vite in dev, non l'endpoint serverless.
+      // Con quel bug la pagina restava bianca: api.ts tornava 404 e nessun
+      // componente riusciva a importarlo.
+      '^/api/': {
         target: API_TARGET,
         changeOrigin: true,
         secure: true,

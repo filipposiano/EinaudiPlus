@@ -2,7 +2,7 @@
 //
 // Si apre come bottom sheet modale (coerente con RulesModal, AdminSheet, ecc.)
 // e permette di modificare:
-//  • Colori per Libero / In uso / Fuori uso (color picker + preset daltonismo)
+//  • Colori per Libera / In uso / Fuori servizio (color picker + preset daltonismo)
 //  • Icone per ciascuno stato (set predefinito: ✓ ✕ ! ● ▲ ■)
 //
 // Ogni modifica aggiorna in tempo reale:
@@ -30,12 +30,12 @@ const T = {
     preview: "Anteprima",
     presets: "Preset daltonismo",
     reset: "Ripristina default",
-    free: "Libero",
+    free: "Libera",
     inuse: "In uso",
-    oos: "Fuori uso",
+    oos: "Fuori servizio",
     freeDesc: "Disponibile per la prenotazione.",
     inuseDesc: "Turno in corso.",
-    oosDesc: "Segnalato come fuori servizio.",
+    oosDesc: "Segnalata come guasta.",
     close: "Chiudi",
   },
   en: {
@@ -48,17 +48,17 @@ const T = {
     reset: "Reset to default",
     free: "Free",
     inuse: "In use",
-    oos: "Out of order",
+    oos: "Out of service",
     freeDesc: "Available for booking.",
     inuseDesc: "Shift in progress.",
-    oosDesc: "Reported as out of order.",
+    oosDesc: "Reported as broken.",
     close: "Close",
   },
 } as const;
 
 const STATUS_LABELS: Record<Lang, Record<StatusKey, string>> = {
-  it: { free: "Libero", inuse: "In uso", oos: "Fuori uso" },
-  en: { free: "Free", inuse: "In use", oos: "Out of order" },
+  it: { free: "Libera", inuse: "In uso", oos: "Fuori servizio" },
+  en: { free: "Free", inuse: "In use", oos: "Out of service" },
 };
 
 const STATUS_DESCS: Record<Lang, Record<StatusKey, string>> = {
