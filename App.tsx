@@ -2105,28 +2105,30 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
    * Collega Telegram in un tocco solo.
    *
    * Il codice si genera e si passa al bot dentro il link `?start=<codice>`:
-   * Telegram lo invia da solo quando l'utente tocca AVVIA, quindi non c'è
-   * niente da copiare a mano. Il codice resta visibile solo come riserva, per
-   * il caso in cui l'apertura non funzioni.
+   * Telegram lo invia da solo (se l'utente ha già avviato il bot in passato)
+   * o mostra il pulsante AVVIA da toccare una volta (la prima volta) — è
+   * Telegram stesso a funzionare così, non c'è un modo per saltare quel tocco
+   * al primissimo collegamento. Il codice resta visibile come riserva.
    *
-   * La finestra si apre PRIMA della chiamata di rete, non dopo: se aspettassimo
-   * l'await il browser avrebbe già considerato concluso il tocco dell'utente e
-   * bloccherebbe l'apertura come popup indesiderato.
+   * Prima si apriva una finestra VUOTA e la si reindirizzava dopo la chiamata
+   * di rete: molti browser bloccano proprio i popup vuoti-poi-reindirizzati
+   * (è la firma di un pattern pubblicitario), quindi la finestra non si apriva
+   * mai e il tentativo falliva in silenzio. Ora si apre già il link finale,
+   * un solo passaggio, col fallback sulla stessa scheda se anche quello viene
+   * bloccato.
    */
   async function linkTelegram() {
     setTgBusy(true); setTgErr(false);
-    const w = bot ? window.open("", "_blank") : null;
     try {
       const c = await api.telegramCode();
       setCode(c);
       if (bot) {
         const link = `https://t.me/${bot}?start=${c}`;
-        if (w && !w.closed) w.location.href = link;
-        else window.location.href = link;   // popup bloccato: si va diretti
+        const w = window.open(link, "_blank", "noopener,noreferrer");
+        if (!w) window.location.href = link;   // popup bloccato: si va diretti
       }
     } catch {
       setTgErr(true);
-      if (w && !w.closed) w.close();
     } finally { setTgBusy(false); }
   }
 
@@ -2208,14 +2210,27 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
                     : "Telegram is open: tap START in the bot and you're linked."}
                 </p>
                 {/* Riserva, non il percorso principale: serve solo se
-                    l'apertura automatica non è andata a buon fine. */}
-                <p className="text-[11px] mt-2" style={{ color:"var(--gray-accessible-text)" }}>
-                  {it ? "Non si è aperto? Scrivi al bot " : "Didn't open? Message "}
-                  {bot && <span className="font-mono font-semibold">@{bot}</span>}
-                  {it ? " questo codice: " : " this code: "}
-                  <span className="font-mono font-bold tracking-wider" style={{ color:"var(--foreground)" }}>{code}</span>
+                    l'apertura automatica non è andata a buon fine (popup
+                    bloccato, Telegram non installato al primo tocco, ecc.).
+                    Un link vero — non solo il nome del bot da cercare a mano — perché
+                    ricopiare "@nome" e poi il codice a mano è l'esatto attrito
+                    che il tocco automatico dovrebbe evitare. */}
+                <p className="text-[11px] mt-2 mb-1.5" style={{ color:"var(--gray-accessible-text)" }}>
+                  {it ? "Non si è aperto?" : "Didn't open?"}
                 </p>
-                <p className="text-[11px] mt-1" style={{ color:"var(--gray-accessible-text)" }}>
+                {bot ? (
+                  <a href={`https://t.me/${bot}?start=${code}`} target="_blank" rel="noopener noreferrer"
+                     className="block text-center text-xs font-semibold py-2.5 rounded-xl"
+                     style={{ background:`color-mix(in srgb, ${RED} 12%, transparent)`, color:RED }}>
+                    {it ? "Riprova ad aprire Telegram" : "Try opening Telegram again"}
+                  </a>
+                ) : (
+                  <p className="text-[11px]" style={{ color:"var(--gray-accessible-text)" }}>
+                    {it ? "Scrivi al bot questo codice: " : "Message the bot this code: "}
+                    <span className="font-mono font-bold tracking-wider" style={{ color:"var(--foreground)" }}>{code}</span>
+                  </p>
+                )}
+                <p className="text-[11px] mt-2" style={{ color:"var(--gray-accessible-text)" }}>
                   {it ? "Vale una volta sola e scade in 24 ore." : "Single use, expires in 24 hours."}
                 </p>
               </div>

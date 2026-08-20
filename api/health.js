@@ -51,6 +51,7 @@ export default async function handler(req, res) {
     peek("VAPID_SUBJECT", { secret: false }),
     peek("TELEGRAM_BOT_TOKEN", { prefix: 10 }),
     peek("TELEGRAM_WEBHOOK_SECRET", { prefix: 4 }),
+    peek("VITE_TELEGRAM_BOT", { secret: false }),
   ];
 
   // Prova di raggiungibilita' del database, con l'errore vero di PostgREST:
