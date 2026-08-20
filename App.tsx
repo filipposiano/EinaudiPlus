@@ -105,7 +105,7 @@ const monShort = (i: number, lang: Lang) => MON_SHORT[lang][WEEK_DATES[i].getMon
 const RED    = "var(--primary)";
 const RED_FG = "var(--primary-foreground)";
 const YELLOW = "var(--status-inuse)";
-const ORANGE = "#f59e0b";
+const ORANGE = "var(--status-prev)";
 const OOS_C  = "var(--status-oos)";
 const GREEN  = "var(--status-free)";
 
@@ -136,6 +136,11 @@ const T = {
     washers:  "Lavatrici", dryers: "Asciugatrici", washer: "Lavatrice", dryer: "Asciugatrice",
     free:     "Libera", inUse: "In uso", oos: "Fuori servizio", operative: "Operativa",
     book:     "Prenota", reminder: "Reminder", sendReminder: "Manda reminder", sent: "Inviato ✓",
+    bookAnyway:   "Prenota comunque",
+    oosWarnTitle: "Macchina segnalata guasta",
+    oosWarnBody:  "Qualcuno ha segnalato un guasto e un amministratore non l'ha ancora verificato. Puoi prenotarla lo stesso, ma potrebbe non funzionare.",
+    oosDryerWarn: (m: string) => `L'asciugatrice ${m} è segnalata guasta: potresti dover stendere il bucato.`,
+    oosWasherWarn:(m: string) => `La lavatrice ${m} è segnalata guasta: potrebbe non partire.`,
     currentSlot: "Turno corrente", prevSlot: "Turno precedente", now: "ora", prev: "prec.",
     yourBookings: "Le tue prenotazioni",
     inProgressNow: "In corso ora",
@@ -183,12 +188,12 @@ const T = {
     legendFree:     "Verde — Libera", legendFreeDesc: "Puoi prenotarla subito.",
     legendInUse:    (t: string) => `Giallo — In uso — Turno in corso, fine alle ${t}.`,
     legendPrev:     "Camera — Turno precedente — Indica chi aveva lo slot prima di te.",
-    legendOos:      "Rosso — Fuori uso — Segnalata dalla sezione Admin.",
+    legendOos:      "Rosso — Fuori servizio — Puoi prenotarla comunque, a tuo rischio.",
     legendAuto:     "Asciugatrice automatica — prenotando una lavatrice, quella corrispondente viene riservata per il turno successivo.",
-    lgFree: "Libera", lgInUse: "In uso", lgOos: "Fuori uso", lgPrev: "Turno precedente",
+    lgFree: "Libera", lgInUse: "In uso", lgOos: "Fuori servizio", lgPrev: "Turno precedente",
     lgFreeD: "Puoi prenotarla subito.",
     lgInUseD: (t: string) => `Turno in corso, fine alle ${t}.`,
-    lgOosD: "Segnalata dalla sezione Admin.",
+    lgOosD: "Segnalata come guasta. Puoi prenotarla comunque, a tuo rischio.",
     lgPrevD: "La camera che aveva lo slot prima di te.",
     insertRoom:     "Numero di stanza",
     back:           "← Indietro",
@@ -222,8 +227,13 @@ const T = {
     skip:     "Continue without logging in",
     machines: "Machines", // <--- AGGIUNTO
     washers:  "Washers", dryers: "Dryers", washer: "Washer", dryer: "Dryer",
-    free:     "Free", inUse: "In use", oos: "Out of order", operative: "Operational",
+    free:     "Free", inUse: "In use", oos: "Out of service", operative: "Operational",
     book:     "Book", reminder: "Remind", sendReminder: "Send reminder", sent: "Sent ✓",
+    bookAnyway:   "Book anyway",
+    oosWarnTitle: "Machine reported broken",
+    oosWarnBody:  "Someone reported a fault and an admin hasn't checked it yet. You can still book it, but it may not work.",
+    oosDryerWarn: (m: string) => `Dryer ${m} is reported broken: you may have to hang your laundry.`,
+    oosWasherWarn:(m: string) => `Washer ${m} is reported broken: it may not start.`,
     currentSlot: "Current slot", prevSlot: "Previous slot", now: "now", prev: "prev.",
     yourBookings: "Your bookings",
     inProgressNow: "In progress now",
@@ -271,12 +281,12 @@ const T = {
     legendFree:     "Green — Free", legendFreeDesc: "Book it now.",
     legendInUse:    (t: string) => `Yellow — In use — Slot ends at ${t}.`,
     legendPrev:     "Room — Previous slot — Shows who had the slot before you.",
-    legendOos:      "Red — Out of order — Reported via Admin.",
+    legendOos:      "Red — Out of service — You can still book it, at your own risk.",
     legendAuto:     "Auto-dryer — booking a washer automatically reserves the matching dryer for the next slot.",
-    lgFree: "Free", lgInUse: "In use", lgOos: "Out of order", lgPrev: "Previous slot",
+    lgFree: "Free", lgInUse: "In use", lgOos: "Out of service", lgPrev: "Previous slot",
     lgFreeD: "Book it now.",
     lgInUseD: (t: string) => `In progress, ends at ${t}.`,
-    lgOosD: "Reported from the Admin section.",
+    lgOosD: "Reported as broken. You can still book it, at your own risk.",
     lgPrevD: "The room that had the slot before you.",
     insertRoom:     "Room number",
     back:           "← Back",
@@ -423,8 +433,9 @@ function Toast({ msg, onClose }: { msg: string; onClose: () => void }) {
 
 interface BookTarget { dayIdx?: number; slotIdx: number; machineId: string; prefillRoom?: string; }
 
-function BookModal({ target, bookings, myRoom, lang, onConfirm, onClose }: {
-  target: BookTarget; bookings: WeekData; isDark: boolean; myRoom?: string; lang: Lang;
+function BookModal({ target, bookings, status = {}, myRoom, lang, onConfirm, onClose }: {
+  target: BookTarget; bookings: WeekData; status?: StatusData; isDark: boolean;
+  myRoom?: string; lang: Lang;
   onConfirm: (room: string) => void; onClose: () => void;
 }) {
   const t = T[lang];
@@ -445,6 +456,14 @@ function BookModal({ target, bookings, myRoom, lang, onConfirm, onClose }: {
   const chip = "var(--secondary)";
   const machLabel = selMachine?.split("-")[1] ?? "";
 
+  // Prenotando una lavatrice si riserva anche l'asciugatrice con la stessa
+  // lettera per il turno successivo: se una delle due è segnalata guasta, chi
+  // prenota deve saperlo PRIMA, non scoprirlo davanti alla macchina.
+  const oosDi = (id: string) => status[id] === "oos";
+  const washerOos = selMachine ? oosDi(selMachine) : false;
+  const dryerOos  = selMachine ? oosDi("D-" + selMachine[2]) : false;
+  const avviso = washerOos || dryerOos;
+
   return (
     <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.65)" }} onClick={onClose}>
       <div className="w-full rounded-t-3xl p-6 pb-8" style={{ background:bg }} onClick={(e)=>e.stopPropagation()}>
@@ -457,20 +476,50 @@ function BookModal({ target, bookings, myRoom, lang, onConfirm, onClose }: {
           <button onClick={onClose} className="p-2 rounded-xl" style={{ color:sub, background:chip }}><X size={16}/></button>
         </div>
 
+        {/* Avviso guasto: resta visibile per tutti i passaggi successivi alla
+            scelta, così non lo si perde passando all'inserimento camera. */}
+        {avviso && step !== "pick" && (
+          <div className="rounded-2xl p-3.5 mb-5 flex gap-3"
+            style={{ background:`color-mix(in srgb, ${OOS_C} 10%, transparent)`, border:`1px solid ${OOS_C}` }}>
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" style={{ color:OOS_C }}/>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold mb-0.5" style={{ color:OOS_C }}>{t.oosWarnTitle}</p>
+              <p className="text-xs leading-snug" style={{ color:fg }}>
+                {washerOos && t.oosWasherWarn(machLabel)}
+                {washerOos && dryerOos && " "}
+                {dryerOos && t.oosDryerWarn(machLabel)}
+              </p>
+              <p className="text-xs leading-snug mt-1" style={{ color:sub }}>{t.oosWarnBody}</p>
+            </div>
+          </div>
+        )}
+
         {step === "pick" && (
           <>
             <p className="text-sm font-semibold mb-3" style={{ color:fg }}>{t.chooseFree}</p>
             <div className="flex gap-3 mb-4">
               {machinesFor(myRoom).washers.map((id) => {
                 const isTaken = taken.has(id);
+                // Guasta la lavatrice, oppure l'asciugatrice che verrebbe
+                // riservata insieme: in entrambi i casi va segnalato qui.
+                const rotta = oosDi(id) || oosDi("D-" + id[2]);
                 return (
                   <button key={id} disabled={isTaken}
                     onClick={() => { setSelMachine(id); setStep("input"); }}
                     className="flex-1 flex flex-col items-center gap-2 rounded-2xl py-4 transition-all active:scale-95 border"
-                    style={{ background:chip, borderColor: isTaken ? "transparent" : "var(--border)", opacity:isTaken?0.32:1, cursor:isTaken?"not-allowed":"pointer" }}>
-                    <WashingMachine size={22} style={{ color:isTaken?sub:fg }}/>
+                    style={{
+                      background: rotta && !isTaken ? `color-mix(in srgb, ${OOS_C} 8%, transparent)` : chip,
+                      borderColor: isTaken ? "transparent" : rotta ? OOS_C : "var(--border)",
+                      opacity: isTaken ? 0.32 : 1,
+                      cursor: isTaken ? "not-allowed" : "pointer",
+                    }}>
+                    <WashingMachine size={22} style={{ color:isTaken?sub:rotta?OOS_C:fg }}/>
                     <span className="text-sm font-bold font-mono" style={{ color:isTaken?sub:fg }}>Lav. {id[2]}</span>
-                    <span className="text-[10px]" style={{ color:isTaken?sub:GREEN }}>{isTaken ? t.occupied : t.free}</span>
+                    <span className="text-[10px] flex items-center gap-1"
+                      style={{ color: isTaken ? sub : rotta ? OOS_C : GREEN }}>
+                      {rotta && !isTaken && <AlertTriangle size={10}/>}
+                      {isTaken ? t.occupied : rotta ? t.oos : t.free}
+                    </span>
                   </button>
                 );
               })}
@@ -1149,7 +1198,20 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
               <Plus size={12}/>{t.book}
             </button>
           )}
-          {isOOO && <AlertTriangle size={15} style={{ color:OOS_C }}/>}
+          {/* Guasta ma libera: si può prenotare lo stesso. Il pulsante è rosso
+              apposta — non è l'azione consigliata, ma a volte la macchina
+              funziona e la segnalazione era di qualcun altro. Se è già
+              prenotata da qualcuno non lo mostriamo: il server rifiuterebbe. */}
+          {isOOO && machine.type==="washer" && !machine.room && (
+            <button onClick={onBook}
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all active:scale-95"
+              style={{ background:OOS_C, color:"var(--destructive-foreground)" }}>
+              <AlertTriangle size={12}/>{t.bookAnyway}
+            </button>
+          )}
+          {isOOO && !(machine.type==="washer" && !machine.room) && (
+            <AlertTriangle size={15} style={{ color:OOS_C }}/>
+          )}
         </div>
       </div>
     </div>
@@ -1200,7 +1262,7 @@ function DaySchedule({ lang, week, roomNumber: sessionRoom, favs, onToggleFav, o
   return (
     <div className="flex flex-col h-full lg:max-w-3xl lg:mx-auto lg:w-full">
       {toast     && <Toast msg={toast} onClose={()=>setToast(null)}/>}
-      {target    && <BookModal target={{...target,dayIdx:selDay}} bookings={week} isDark={false} lang={lang} myRoom={sessionRoom} onConfirm={confirmBooking} onClose={()=>setTarget(null)}/>}
+      {target    && <BookModal target={{...target,dayIdx:selDay}} bookings={week} status={status} isDark={false} lang={lang} myRoom={sessionRoom} onConfirm={confirmBooking} onClose={()=>setTarget(null)}/>}
       {modTarget && (
         <ModifyModal
           target={modTarget} isDark={false} lang={lang}
@@ -1454,7 +1516,7 @@ function WeekOverview({ lang, week, roomNumber: sessionRoom, onBook, onClear }: 
   return (
     <div className="flex flex-col h-full lg:max-w-4xl lg:mx-auto lg:w-full">
       {toast      && <Toast msg={toast} onClose={()=>setToast(null)}/>}
-      {target     && <BookModal target={target} bookings={week} isDark={false} lang={lang} myRoom={sessionRoom} onConfirm={confirmBooking} onClose={()=>setTarget(null)}/>}
+      {target     && <BookModal target={target} bookings={week} status={status} isDark={false} lang={lang} myRoom={sessionRoom} onConfirm={confirmBooking} onClose={()=>setTarget(null)}/>}
       {modTarget  && (
         <ModifyModal
           target={modTarget} isDark={false} lang={lang}

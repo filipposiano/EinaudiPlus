@@ -109,7 +109,6 @@ declare
   v_l     laundry%rowtype;
   v_m     machine%rowtype;
   v_ws    date;
-  v_used  int;
   v_id    bigint;
   v_by    text;
 begin
@@ -140,15 +139,17 @@ begin
   v_ws := current_week_start(v_l.tz);
 
   -- Quota settimanale: era solo lato client (LaundryView), quindi aggirabile.
-  if not p_as_admin then
-    select count(*) into v_used
-    from laundry_booking
-    where laundry_id = v_l.id and week_start = v_ws and room = p_room;
-
-    if v_used >= v_l.weekly_quota then
-      return jsonb_build_object('ok', false, 'error', 'quota', 'limit', v_l.weekly_quota);
-    end if;
-  end if;
+  -- Il limite di turni a settimana NON viene applicato qui.
+  --
+  -- Era stato spostato lato server perché il controllo client era aggirabile.
+  -- Ma aggirabile lo resta comunque: senza autenticazione la camera è
+  -- auto-dichiarata in localStorage, quindi chi vuole superare il limite
+  -- cambia numero e riprova. Il blocco fermava solo chi lo rispettava già,
+  -- e impediva casi legittimi (due turni nello stesso giorno, o prenotare
+  -- per un coinquilino).
+  --
+  -- Il client continua a mostrare la quota come indicazione. Se un domani
+  -- arriverà un'identità vera, è qui che il controllo andrà rimesso.
 
   -- Il cuore: insert atomica. Se lo slot è già preso il vincolo unique blocca,
   -- ON CONFLICT DO NOTHING non restituisce nulla e sappiamo di aver perso la corsa.

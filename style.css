@@ -20,12 +20,16 @@
   --secondary: #f1f1f4;
   --secondary-foreground: #0c0c0f;
   --muted: #f1f1f4;
-  --muted-foreground: #6b6b80;
+  /* Era #6b6b80: 5,2:1 su bianco. Passa lo standard per il testo normale, ma
+     qui è usato quasi ovunque a 8-11px, dove diventa faticoso. Ora 6,8:1. */
+  --muted-foreground: #5a5a6b;
   --accent: #e11d2a;
   --accent-foreground: #ffffff;
-  --destructive: #ff4757;
+  /* Era #ff4757: 3,3:1, sotto il minimo di 4,5:1. Ora 5,4:1. */
+  --destructive: #d11a28;
   --destructive-foreground: #ffffff;
-  --border: rgba(0, 0, 0, 0.08);
+  /* Era 0.08: i bordi sparivano e le griglie sembravano senza struttura. */
+  --border: rgba(0, 0, 0, 0.14);
   --input: transparent;
   --input-background: #f1f1f4;
   --switch-background: #cbced4;
@@ -44,11 +48,17 @@
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #f1f1f4;
   --sidebar-accent-foreground: #0c0c0f;
-  --sidebar-border: rgba(0, 0, 0, 0.08);
+  --sidebar-border: rgba(0, 0, 0, 0.14);
   --sidebar-ring: #e11d2a;
-  --status-free: #22c55e;
-  --status-inuse: #eab308;
-  --status-oos: #ff4757;
+  /* Questi tre non sono solo pallini: l'app li usa anche come colore del TESTO
+     ("Libera", "In uso", orari). Le tinte vivaci di partenza su fondo bianco
+     davano 2,3:1 il verde e 1,9:1 il giallo — sotto la soglia di leggibilità,
+     e il giallo praticamente invisibile. Le versioni scure restano
+     riconoscibili come verde e ambra e stanno tutte sopra 4,9:1. */
+  --status-free: #15803d;   /* era #22c55e — 2,3:1 */
+  --status-inuse: #a16207;  /* era #eab308 — 1,9:1 */
+  --status-oos: #d11a28;    /* era #ff4757 — 3,3:1 */
+  --status-prev: #b45309;   /* turno precedente, era #f59e0b scritto a mano */
 }
 
 .dark {
@@ -63,12 +73,14 @@
   --secondary: #1e1e26;
   --secondary-foreground: #f0f0f5;
   --muted: #1e1e26;
-  --muted-foreground: #6b6b80;
+  /* Era #6b6b80, lo stesso valore del tema chiaro: su fondo scuro dava 3,8:1,
+     anch'esso sotto il minimo. Ora 7,1:1. */
+  --muted-foreground: #9a9ab0;
   --accent: #ff3b30;
   --accent-foreground: #ffffff;
   --destructive: #ff4757;
   --destructive-foreground: #ffffff;
-  --border: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.14);
   --input: transparent;
   --input-background: #1e1e26;
   --switch-background: #2e2e3a;
@@ -84,8 +96,13 @@
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #1e1e26;
   --sidebar-accent-foreground: #f0f0f5;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-border: rgba(255, 255, 255, 0.14);
   --sidebar-ring: #ff3b30;
+  /* Su fondo scuro le tinte vivaci vanno bene: qui restano quelle originali. */
+  --status-free: #22c55e;
+  --status-inuse: #eab308;
+  --status-oos: #ff4757;
+  --status-prev: #f59e0b;
 }
 
 @theme inline {

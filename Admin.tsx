@@ -581,19 +581,31 @@ const AMBITI: [string, string, string][] = [
 function Manutenzione() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [chiesto, setChiesto] = useState<string | null>(null);   // ambito in attesa di conferma
+  const [parola, setParola] = useState("");
 
-  async function purge(scope: string, label: string) {
-    if (!confirm(`${label}\n\nL'operazione non è annullabile. Procedere?`)) return;
-    if (scope === "tutto" && !confirm("Conferma definitiva: azzerare TUTTI i dati?")) return;
-
+  // La conferma sta dentro la pagina e non in window.confirm().
+  //
+  // confirm() è bloccato in diversi contesti — PWA installata, iframe senza
+  // allow-modals — e quando lo è ritorna false senza mostrare niente: il
+  // pulsante sembrava semplicemente non funzionare. "Azzera tutto" ne aveva
+  // due di fila, quindi era il primo a dare quell'impressione.
+  //
+  // Qui invece si vede sempre cosa sta succedendo, e per l'azzeramento totale
+  // si deve scrivere una parola: non basta un doppio clic distratto.
+  async function esegui(scope: string) {
     setBusy(true); setMsg(null);
     try {
       const r = await call("purge", { scope });
       const righe = Object.entries(r.cancellati || {})
-        .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(" · ");
-      setMsg(righe || "Nessun dato da cancellare.");
-    } catch (e: any) { setMsg(e.message); }
-    finally { setBusy(false); }
+        .filter(([, v]) => v !== 0 && v !== false)
+        .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`)
+        .join(" · ");
+      setMsg(righe ? "Fatto — " + righe : "Fatto. Non c'era nulla da cancellare.");
+      setChiesto(null); setParola("");
+    } catch (e: any) {
+      setMsg("Non è riuscito: " + e.message);
+    } finally { setBusy(false); }
   }
 
   return (
@@ -606,18 +618,69 @@ function Manutenzione() {
       {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
 
       <div style={{ display: "grid", gap: 10 }}>
-        {AMBITI.map(([scope, label, desc]) => (
-          <div key={scope} style={{
-            ...S.card, padding: 14, display: "flex", alignItems: "center", gap: 14,
-            borderColor: scope === "tutto" ? "var(--destructive)" : "var(--border)",
-          }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{ fontSize: 14, fontWeight: 600 }}>{label}</p>
-              <p style={{ fontSize: 12, ...S.sub }}>{desc}</p>
+        {AMBITI.map(([scope, label, desc]) => {
+          const inAttesa = chiesto === scope;
+          const totale   = scope === "tutto";
+          // Per l'azzeramento totale serve scrivere la parola: un clic di
+          // troppo non deve poter svuotare tutto.
+          const puoi = !totale || parola.trim().toUpperCase() === "AZZERA";
+
+          return (
+            <div key={scope} style={{
+              ...S.card, padding: 14,
+              borderColor: totale || inAttesa ? "var(--destructive)" : "var(--border)",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <p style={{ fontSize: 14, fontWeight: 600 }}>{label}</p>
+                  <p style={{ fontSize: 12, ...S.sub }}>{desc}</p>
+                </div>
+                {!inAttesa && (
+                  <button style={S.danger} disabled={busy}
+                    onClick={() => { setChiesto(scope); setParola(""); setMsg(null); }}>
+                    Esegui
+                  </button>
+                )}
+              </div>
+
+              {inAttesa && (
+                <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+                  <p style={{ fontSize: 13, marginBottom: 10 }}>
+                    <strong>L'operazione non è annullabile.</strong>{" "}
+                    {totale
+                      ? "Scrivi AZZERA qui sotto per confermare."
+                      : "Confermi?"}
+                  </p>
+
+                  {totale && (
+                    <input
+                      style={{ ...S.input, marginBottom: 10 }}
+                      value={parola} autoFocus placeholder="AZZERA"
+                      onChange={(e) => setParola(e.target.value)}
+                    />
+                  )}
+
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button
+                      style={{
+                        ...S.danger,
+                        opacity: puoi && !busy ? 1 : 0.45,
+                        cursor: puoi && !busy ? "pointer" : "default",
+                      }}
+                      disabled={!puoi || busy}
+                      onClick={() => esegui(scope)}>
+                      {busy ? "In corso…" : totale ? "Azzera tutto" : "Sì, procedi"}
+                    </button>
+                    <button style={S.btn} disabled={busy}
+                      onClick={() => { setChiesto(null); setParola(""); }}>
+                      Annulla
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
-            <button style={S.danger} disabled={busy} onClick={() => purge(scope, label)}>Esegui</button>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </>
   );
