@@ -735,7 +735,15 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
     finally { setBusy(false); }
   }
 
-  const machines = laundries.find((l) => l.id === lid)?.machines.filter((m) => m.bookable) ?? [];
+  // Solo lavatrici: una regola ricorrente di lavanderia prenota sempre una
+  // lavatrice, mai un'asciugatrice (quella si deriva da sola, come nelle
+  // prenotazioni normali). Senza questo filtro il menu offriva anche D-A/B/C
+  // — sceglierne una creava comunque la regola, ma la prenotazione che ne
+  // usciva non compariva mai nella griglia, che le asciugatrici non le
+  // legge da laundry_booking.
+  const machines = laundries.find((l) => l.id === lid)?.machines
+    .filter((m) => m.bookable && m.kind === "washer") ?? [];
+  const roomsHint = laundries.find((l) => l.id === lid)?.rooms;
 
   return (
     <>
@@ -765,7 +773,12 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
           <select style={S.input} value={machine} onChange={(e) => setMachine(e.target.value)}>
             {machines.map((m) => <option key={m.code} value={m.code}>{m.code}</option>)}
           </select>
-          <input style={S.input} placeholder="Camera" value={room} onChange={(e) => setRoom(e.target.value)} />
+          {/* Il numero ricorda a quale lavanderia appartiene la camera scelta
+              sopra: scrivere "215" per la Manica (camere 1-99) creava una
+              regola che si applicava alla Manica ma che nessuno, guardando la
+              camera 215 (Valentino), avrebbe mai visto. */}
+          <input style={S.input} placeholder={roomsHint ? `Camera (${roomsHint})` : "Camera"}
+                 value={room} onChange={(e) => setRoom(e.target.value)} />
           <button style={{ ...S.btn, background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
                   disabled={busy} onClick={addLaundry}>Aggiungi</button>
         </div>
