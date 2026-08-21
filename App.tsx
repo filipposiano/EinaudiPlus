@@ -1924,6 +1924,21 @@ function LoginScreen({ lang, onLogin, onAdmin }: {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (e.metaKey || e.ctrlKey || e.altKey) return;   // scorciatoie del browser
+
+      // Se si sta scrivendo in un campo, i tasti sono suoi e basta.
+      //
+      // L'ascoltatore sta sulla finestra perché in questa schermata non c'è
+      // nessun campo da mettere a fuoco: le cifre le raccoglie il tastierino
+      // disegnato. Ma sopra ci si apre il foglio di accesso amministratore,
+      // che di campi ne ha due — e lì ogni cifra della password finiva ANCHE
+      // nella casella della camera, mentre preventDefault ne rubava una parte
+      // all'input. Risultato: la password non si riusciva a digitare, si
+      // poteva solo incollare. Invio, peggio, faceva partire l'accesso alla
+      // camera invece del login.
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" ||
+                t.tagName === "SELECT" || t.isContentEditable)) return;
+
       if (e.key === "Enter")     { e.preventDefault(); submit(); return; }
       if (e.key === "Backspace") { e.preventDefault(); setRoom(r=>r.slice(0,-1)); return; }
       if (e.key === "Escape")    { setRoom(""); return; }
@@ -2837,7 +2852,10 @@ export default function App() {
     // px-5 come le sezioni della lavanderia: senza, le schede amministrative
     // toccavano i bordi dello schermo sul telefono — il corpo pagina non ha
     // padding proprio, se lo mettono le viste.
-    ? <div className="px-5"><Suspense fallback={null}><AdminScreens tab={facility} onSession={handleAdminSession}/></Suspense></div>
+    // pt-4 oltre al px-5: le altre viste cominciano con un'intestazione che
+    // porta il suo margine, le sezioni amministrative no e partivano incollate
+    // ai selettori qui sopra.
+    ? <div className="px-5 pt-4"><Suspense fallback={null}><AdminScreens tab={facility} onSession={handleAdminSession}/></Suspense></div>
     : isRoom
       ? <RoomView room={facility} lang={lang} roomNumber={roomNumber}/>
       : mainContent;
