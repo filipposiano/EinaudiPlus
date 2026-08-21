@@ -73,13 +73,17 @@ function endOptions(start: number, cfg: { winEnd: number; step: number; overnigh
 /**
  * L'orario di fine, dicendo a parole se cade il giorno dopo.
  *
- * "01:00 (domani)" e non "01:00 (+1)": la seconda forma è una notazione da
- * tabella oraria, e chi prenota la sala cinema non la sta leggendo. Fuori da
- * chi già la conosce, "+1" non si capisce — e qui l'unica cosa che conta è che
- * sia chiarissimo di quale notte si sta parlando.
+ * Prima "(+1)", che è una notazione da tabella oraria: fuori da chi la conosce
+ * già non vuol dire niente, e chi prenota la sala cinema non sta leggendo un
+ * orario ferroviario.
+ *
+ * Poi "(domani)", che era sbagliato in un modo più insidioso: se oggi è
+ * mercoledì e stai prenotando per venerdì sera, quella fascia finisce sabato,
+ * non domani. "Domani" si misura da oggi; qui il riferimento è il giorno della
+ * prenotazione. "(del giorno successivo)" lo dice senza ambiguità.
  */
 const fmtEnd = (m: number, lang: Lang = "it") =>
-  m > 24 * 60 ? `${fmtMin(m)} ${lang === "it" ? "(domani)" : "(next day)"}`
+  m > 24 * 60 ? `${fmtMin(m)} ${T[lang].giornoSuccessivo}`
   : m === 24 * 60 ? "24:00"
   : fmtMin(m);
 
@@ -105,6 +109,7 @@ const T = {
     musicNote: "Strumenti non in cuffia: consentiti solo 16:00–20:00.",
     overnightPart: "serata a cavallo della mezzanotte",
     resetToMyRoom: "↩ Ripristina la tua stanza",
+    giornoSuccessivo: "(del giorno successivo)",
   },
   en: {
     cinema: "Cinema Room", music: "Music Room",
@@ -126,8 +131,9 @@ const T = {
     musicNote: "Instruments without headphones: allowed only 16:00–20:00.",
     overnightPart: "overnight booking",
     resetToMyRoom: "↩ Reset to your room",
+    giornoSuccessivo: "(the next day)",
   },
-fr: {
+  fr: {
     cinema: "Salle Cinéma", music: "Salle Musique",
     days: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"],
     daysLong: ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"],
@@ -147,6 +153,7 @@ fr: {
     musicNote: "Instruments sans casque : autorisés seulement de 16h00 à 20h00.",
     overnightPart: "soirée à cheval sur minuit",
     resetToMyRoom: "↩ Rétablir ta chambre",
+    giornoSuccessivo: "(le lendemain)",
   },
   de: {
     cinema: "Kinoraum", music: "Musikraum",
@@ -168,6 +175,7 @@ fr: {
     musicNote: "Instrumente ohne Kopfhörer: nur von 16:00 bis 20:00 erlaubt.",
     overnightPart: "Abend über Mitternacht",
     resetToMyRoom: "↩ Dein Zimmer zurücksetzen",
+    giornoSuccessivo: "(am Folgetag)",
   },
   es: {
     cinema: "Sala de Cine", music: "Sala de Música",
@@ -189,6 +197,7 @@ fr: {
     musicNote: "Instrumentos sin auriculares: permitidos solo de 16:00 a 20:00.",
     overnightPart: "velada que pasa la medianoche",
     resetToMyRoom: "↩ Restablecer tu habitación",
+    giornoSuccessivo: "(del día siguiente)",
   },
   nap: {
     cinema: "Sala Cinema", music: "Sala Musica",
@@ -210,6 +219,7 @@ fr: {
     musicNote: "Strumenti senza cuffie: se ponno sunà sulo 'a 16:00 ê 20:00.",
     overnightPart: "serata ca passa 'a mezanotte",
     resetToMyRoom: "↩ Rimiette 'a cammera toia",
+    giornoSuccessivo: "(o juorno appriesso)",
   },
 } as const;
 
