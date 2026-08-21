@@ -128,11 +128,32 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
   // Chi risulta intestatario del turno: una camera, o la Direzione.
   const intestatario = room === api.DIREZIONE ? "Direzione" : `${t.room} ${room}`;
 
-  // Camera digitata che appartiene all'altro edificio. Si valuta solo a numero
-  // completo (>=2 cifre): con una cifra sola "2" sarebbe già "Manica" e
-  // l'avviso lampeggerebbe mentre si sta ancora scrivendo "215".
+  /**
+   * La camera digitata appartiene all'altro edificio.
+   *
+   * Si valuta a ogni cifra, ma NON si mostra mentre si scrive: chi digita
+   * "215" passa per "2" e "21", che sono numeri della Manica, e l'avviso
+   * compariva e spariva sotto le dita spostando tutto il modale. Un avviso che
+   * lampeggia mentre stai ancora scrivendo non ti sta dicendo niente: ti sta
+   * solo dando torto in anticipo.
+   *
+   * Compare quando si prova ad andare avanti, ed è lì che serve.
+   */
   const altraLavanderia =
-    !!myRoom && myRoom !== api.DIREZIONE && room.length >= 2 && !api.sameLaundry(myRoom, room);
+    !!myRoom && myRoom !== api.DIREZIONE && room.length > 0 && !api.sameLaundry(myRoom, room);
+
+  const [avvisoLavanderia, setAvvisoLavanderia] = useState(false);
+
+  // Ricominciando a scrivere l'avviso se ne va: il numero che l'aveva
+  // provocato non è più quello sullo schermo.
+  useEffect(() => { setAvvisoLavanderia(false); }, [room]);
+
+  /** Avanti dal tastierino: o si prosegue, o si dice perché no. */
+  function avanti() {
+    if (room.length === 0) return;
+    if (altraLavanderia) { setAvvisoLavanderia(true); return; }
+    setStep("confirm");
+  }
 
   // Prenotando una lavatrice si riserva anche l'asciugatrice con la stessa
   // lettera per il turno successivo: se una delle due è segnalata guasta, chi
@@ -149,7 +170,7 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
   useTastieraFisica(
     step === "input",
     setRoom,
-    () => { if (room.length > 0 && !altraLavanderia) setStep("confirm"); },
+    avanti,
     4,
     TASTI_CAMERA,
   );
@@ -276,9 +297,9 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
               <button onClick={()=>setRoom(r=>r.length<4?r+"0":r)}
                 className="rounded-2xl h-12 text-lg font-bold transition-all active:scale-95"
                 style={{ background:chip, color:fg }}>0</button>
-              <button onClick={()=>room.length>0&&!altraLavanderia&&setStep("confirm")}
+              <button onClick={avanti}
                 className="rounded-2xl h-12 text-lg font-bold transition-all active:scale-95"
-                style={{ background:room.length>0&&!altraLavanderia?RED:chip, color:room.length>0&&!altraLavanderia?RED_FG:sub }}>→</button>
+                style={{ background:room.length>0?RED:chip, color:room.length>0?RED_FG:sub }}>→</button>
             </div>
 
             {/* Le due lavanderie sono edifici separati: prenotare una macchina
@@ -286,7 +307,7 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
                 schermata (si finiva a vedere la griglia dell'altro edificio).
                 Il rifiuto vero è sul server; qui si dice perché, prima di far
                 battere il numero a vuoto. */}
-            {altraLavanderia && (
+            {avvisoLavanderia && (
               <p className="text-xs mb-3 px-1 flex items-start gap-1.5" style={{ color:OOS_T }}>
                 <AlertTriangle size={13} style={{ flexShrink:0, marginTop:1 }}/>
                 {t.altraLavanderia}
