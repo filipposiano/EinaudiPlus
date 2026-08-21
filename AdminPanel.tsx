@@ -492,7 +492,9 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
       {/* La spiegazione prima dei filtri: stava sotto, quindi si leggeva
           dopo aver gia' dovuto scegliere fra due pulsanti senza sapere
           cosa contenessero. */}
-      <p style={{ fontSize: 13, ...S.sub, marginBottom: 14 }}>
+      {/* Il testo si ferma a 70ch. Una riga lunga quanto uno schermo da 1440px
+          si legge male: l'occhio perde il capo della riga successiva. */}
+      <p style={{ fontSize: 13, ...S.sub, marginBottom: 14, maxWidth: "70ch" }}>
         Qui arrivano le segnalazioni dei residenti, comprese quelle di guasto: da quando il fuori servizio
         è riservato agli amministratori, è questo il canale con cui si scopre che una macchina è rotta.
       </p>
@@ -510,7 +512,18 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
         </p>
       )}
 
-      <div style={{ display: "grid", gap: 10 }}>
+      {/* A griglia, non una fascia per riga.
+          Su desktop ogni segnalazione occupava tutta la larghezza — 1100px per
+          quattro parole — con il testo appiccicato a sinistra e il pulsante
+          Archivia dall'altra parte dello schermo: per chiudere una segnalazione
+          l'occhio doveva attraversare il monitor, e per confrontarne due
+          bisognava scorrere. Cosi' invece stanno affiancate, si leggono come
+          schede e ce ne stanno tre o quattro per riga.
+          `min(100%, 340px)` tiene una colonna sola sul telefono. */}
+      <div style={{
+        display: "grid", gap: 10, alignItems: "start",
+        gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 340px), 1fr))",
+      }}>
         {mostrati.map((f) => {
           const { machine, testo } = leggiGuasto(f.body);
           const l = laundries.find((x) => x.slug === f.laundry);
@@ -581,13 +594,18 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
                     Non è guasta
                   </button>
                 )}
-                {/* Archivia diventa un'icona: e' l'azione che si ripete su
-                    ogni riga e non ha bisogno di rileggersi ogni volta, mentre
-                    le decisioni sul guasto restano a parole perche' quelle
-                    vanno lette. Il titolo e l'aria-label tengono il testo per
-                    chi passa col mouse e per i lettori di schermo. */}
+                {/* Archivia e' un'icona: e' l'azione che si ripete su ogni
+                    scheda e non ha bisogno di rileggersi ogni volta, mentre le
+                    decisioni sul guasto restano a parole perche' quelle vanno
+                    lette. Titolo e aria-label tengono il testo per chi passa
+                    col mouse e per i lettori di schermo.
+
+                    Niente `marginLeft: auto`: spingeva l'icona all'estremita'
+                    della scheda, e su desktop la scheda era larga tutto lo
+                    schermo — per archiviare bisognava attraversare il monitor.
+                    Sta accanto alle altre azioni, dove si guarda gia'. */}
                 <button
-                  style={{ ...S.btn, padding: "6px 9px", marginLeft: "auto", lineHeight: 0 }}
+                  style={{ ...S.btn, padding: "6px 9px", lineHeight: 0 }}
                   disabled={inCorso} onClick={() => mark(f)}
                   title={f.handled ? "Riapri la segnalazione" : "Archivia"}
                   aria-label={f.handled ? "Riapri la segnalazione" : "Archivia"}>
