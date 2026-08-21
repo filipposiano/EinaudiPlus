@@ -879,7 +879,11 @@ function SalaConferenze() {
     try {
       await call("conferenzaAdd", {
         titolo: titolo.trim(), inizio, fine, dal, al,
-        giorno: giorno === "" ? null : Number(giorno),
+        // Un evento di un solo giorno non ha un giorno della settimana: si
+        // ignora qui, e non solo lato server, cosi' il selettore disabilitato
+        // (quando dal === al) non lascia comunque passare un valore rimasto
+        // da una modifica precedente del modulo.
+        giorno: dal === al ? null : (giorno === "" ? null : Number(giorno)),
         note: note.trim() || null,
       });
       setMsg("Programmazione aggiunta.");
@@ -924,7 +928,12 @@ function SalaConferenze() {
         <div className="adm-form">
           <input style={S.input} placeholder="Titolo (es. Corsi PFP)" value={titolo}
                  maxLength={60} onChange={(e) => setTitolo(e.target.value)} />
-          <select style={S.input} value={giorno} onChange={(e) => setGiorno(e.target.value)}>
+          {/* Disabilitato per un evento di un solo giorno: "ogni martedì" non
+              vuol dire niente quando dal e al sono la stessa data, ed è
+              esattamente quello che il database ignora — qui lo si rende
+              visibile invece di lasciarlo scelto e silenziosamente inutile. */}
+          <select style={S.input} value={giorno} disabled={dal === al}
+                  onChange={(e) => setGiorno(e.target.value)}>
             {DAYS.map((d, i) => <option key={i} value={String(i)}>Ogni {d.toLowerCase()}</option>)}
             {/* Per un convegno di giorni consecutivi: nessuna cadenza
                 settimanale, occupa ogni giorno del periodo. */}
