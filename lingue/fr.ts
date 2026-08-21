@@ -146,6 +146,7 @@ const fr: Testi = {
   guardaAnno: "Voir toute l'année",
   lavBreve: "Lav.",
   navProgrammazione: "Programmation",
+  navAccount: "Comptes",
 };
 
 export default fr;

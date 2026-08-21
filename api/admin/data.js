@@ -5,7 +5,7 @@
 
 import { rpc } from "../_lib/db.js";
 import { readBody, json, fail, methodOk, intero } from "../_lib/http.js";
-import { currentAdmin, isSysadmin } from "../_lib/auth.js";
+import { currentAdmin, isSysadmin, hashPassword } from "../_lib/auth.js";
 
 // Le azioni che modificano qualcosa finiscono nell'audit log. Le letture no,
 // sarebbero solo rumore.
@@ -16,6 +16,7 @@ const MUTATIONS = new Set([
   "recurringDelete", "applyRecurring", "purge",
   "bookDirezione", "bookSpaceDirezione", "clearDirezione",
   "conferenzaAdd", "conferenzaDelete",
+  "accountCreate", "accountSetPassword", "accountSetActive", "accountDelete",
 ]);
 
 // Riservate al sistemista. La portineria non le vede nel pannello, ma il
@@ -23,6 +24,8 @@ const MUTATIONS = new Set([
 const SOLO_SISTEMISTA = new Set([
   "recurringList", "recurringAddLaundry", "recurringAddSpace",
   "recurringSetActive", "recurringDelete", "applyRecurring", "purge",
+  "accountList", "accountCreate", "accountSetPassword",
+  "accountSetActive", "accountDelete",
 ]);
 
 export default async function handler(req, res) {
@@ -198,6 +201,47 @@ export default async function handler(req, res) {
         result = await rpc("conference_delete", { p_id: Number(body.id) });
         break;
 
+      // ── Sistemista: account amministrativi ───────────────────────────────
+      // Prima c'erano solo le tre variabili d'ambiente su Vercel; ora il
+      // sistemista crea, disattiva e reimposta gli account da qui. Le
+      // password non toccano mai il database in chiaro: si cifrano subito,
+      // esattamente come per gli account storici.
+      case "accountList":
+        result = await rpc("account_list");
+        break;
+
+      case "accountCreate": {
+        const password = String(body.password || "");
+        if (password.length < 8) return fail(res, "la password deve avere almeno 8 caratteri");
+        result = await rpc("account_create", {
+          p_username: String(body.username || "").trim(),
+          p_password_hash: hashPassword(password),
+          p_ruolo: String(body.ruolo || ""),
+          p_attore: me.u,
+        });
+        break;
+      }
+
+      case "accountSetPassword": {
+        const password = String(body.password || "");
+        if (password.length < 8) return fail(res, "la password deve avere almeno 8 caratteri");
+        result = await rpc("account_set_password", {
+          p_id: Number(body.id),
+          p_password_hash: hashPassword(password),
+        });
+        break;
+      }
+
+      case "accountSetActive":
+        result = await rpc("account_set_active", {
+          p_id: Number(body.id), p_attivo: body.attivo !== false,
+        });
+        break;
+
+      case "accountDelete":
+        result = await rpc("account_delete", { p_id: Number(body.id) });
+        break;
+
       // ── Sistemista: regole ricorrenti ────────────────────────────────────
       case "recurringList":
         result = await rpc("recurring_list");
@@ -256,7 +300,10 @@ export default async function handler(req, res) {
     }
 
     if (MUTATIONS.has(action)) {
-      const { action: _drop, ...detail } = body;
+      // La password non deve mai finire nell'audit log, nemmeno hashata:
+      // chi lo legge deve sapere CHE un account e' stato creato o ha
+      // cambiato password, non conoscerne il segreto.
+      const { action: _drop, password: _pw, ...detail } = body;
       try {
         await rpc("admin_log", { p_actor: me.u, p_action: action, p_detail: detail });
       } catch { /* il log non deve far fallire l'operazione */ }

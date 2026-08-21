@@ -5,7 +5,7 @@ import {
   LayoutGrid, Delete, X, Wrench, Loader2, Star,
   History, Timer, Trash2, Film, Music,
   MessageSquare, Send, LogOut,
-  Settings, Repeat, Eraser, Presentation,
+  Settings, Repeat, Eraser, Presentation, UserCog,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -45,7 +45,7 @@ const AdminLoginSheet = lazy(() => import("./AdminPanel").then((m) => ({ default
 // Lavanderia, Cinema e Musica.
 type Facility = "laundry" | "cinema" | "music" | "conferenze" | AdminTab;
 
-const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "programmazione", "ricorrenti", "manutenzione"];
+const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "programmazione", "account", "ricorrenti", "manutenzione"];
 const isAdminFacility = (f: Facility): f is AdminTab => (ADMIN_TABS as string[]).includes(f);
 
 /** Etichetta della camera nell'intestazione. Chi amministra è la Direzione. */
@@ -1942,7 +1942,7 @@ const FACILITIES: {
 // controllo vero resta sul server: nascondere una voce non è un'autorizzazione.
 const ADMIN_SECTIONS: {
   id: AdminTab; icon: any;
-  chiave: "navMacchine" | "navSegnalazioni" | "navProgrammazione" | "navRicorrenti" | "navManutenzione";
+  chiave: "navMacchine" | "navSegnalazioni" | "navProgrammazione" | "navAccount" | "navRicorrenti" | "navManutenzione";
   sistemistaOnly?: boolean;
 }[] = [
   { id: "macchine",       icon: Wrench,        chiave: "navMacchine" },
@@ -1950,6 +1950,9 @@ const ADMIN_SECTIONS: {
   // Aperta a qualunque admin (fdo, staff, sistemista): è il "solo gli admin
   // possono segnare" della sala conferenze, non una faccenda da sistemista.
   { id: "programmazione", icon: Presentation,  chiave: "navProgrammazione" },
+  // Chi crea e disattiva gli account e' una decisione dello stesso livello di
+  // "chi puo' cancellare tutto": resta al sistemista.
+  { id: "account",        icon: UserCog,       chiave: "navAccount",      sistemistaOnly: true },
   { id: "ricorrenti",     icon: Repeat,        chiave: "navRicorrenti",   sistemistaOnly: true },
   { id: "manutenzione",   icon: Eraser,        chiave: "navManutenzione", sistemistaOnly: true },
 ];

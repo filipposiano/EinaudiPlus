@@ -146,6 +146,7 @@ const en: Testi = {
   guardaAnno: "See the whole year",
   lavBreve: "Wash.",
   navProgrammazione: "Scheduling",
+  navAccount: "Accounts",
 };
 
 export default en;

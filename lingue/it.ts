@@ -156,6 +156,7 @@ const it = {
   guardaAnno: "Guarda tutto l'anno",
   lavBreve: "Lav.",
   navProgrammazione: "Programmazione",
+  navAccount: "Account",
 };
 
 export default it;

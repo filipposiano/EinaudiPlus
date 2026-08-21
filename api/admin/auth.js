@@ -39,7 +39,7 @@ export default async function handler(req, res) {
   const username = String(body.username || "");
   const password = String(body.password || "");
 
-  const role = authenticate(username, password);
+  const role = await authenticate(username, password);
 
   if (!role) {
     try {

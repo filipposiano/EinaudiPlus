@@ -71,7 +71,12 @@ begin
              'id',     e.id,
              'titolo', e.titolo,
              'note',   e.note,
-             'data',   g.d,
+             -- g.d e' un timestamp (generate_series lavora su timestamp, non
+             -- su date): senza il cast finiva in jsonb come "2026-10-07T00:00:00",
+             -- e il frontend (che si aspetta "2026-10-07" e ci concatena lui
+             -- stesso l'ora per fare new Date()) costruiva una stringa doppia
+             -- e non riusciva piu' a leggere la data.
+             'data',   g.d::date,
              'inizio', to_char(e.ora_inizio, 'HH24:MI'),
              'fine',   to_char(e.ora_fine,   'HH24:MI'),
              -- Serve al pannello per dire "ogni martedi'" invece di ripetere

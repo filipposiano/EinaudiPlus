@@ -146,6 +146,7 @@ const de: Testi = {
   guardaAnno: "Ganzes Jahr ansehen",
   lavBreve: "WM",
   navProgrammazione: "Programm",
+  navAccount: "Konten",
 };
 
 export default de;

@@ -1,13 +1,15 @@
 // Autenticazione del pannello admin.
 //
-// Un solo account condiviso: non c'e' una tabella utenti perche' non ci sono
-// utenti da gestire. La password si cambia rigenerando l'hash e aggiornando la
-// variabile d'ambiente su Vercel.
+// Gli account vivono nella tabella `admin_account` (migrazione 008): il
+// sistemista li crea, disattiva e reimposta dal pannello. Le tre variabili
+// d'ambiente storiche (FDO/STAFF/SYSADMIN_USER e _PASSWORD_HASH) restano
+// come rete di sicurezza — vedi authenticate() piu' sotto.
 //
 // scrypt invece di bcrypt: e' nella libreria standard di Node, quindi zero
 // dipendenze da mantenere e nessun modulo nativo che si rompe in build.
 
 import crypto from "node:crypto";
+import { rpc } from "./db.js";
 
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
 const SESSION_HOURS = 12;
@@ -148,25 +150,54 @@ export function adminConfigured() {
   );
 }
 
+// Hash fisso, di nessun account: serve solo a far passare verifyPassword()
+// dal suo ramo piu' lento (scrypt) anche quando l'username cercato nella
+// tabella account non esiste, cosi' un utente sconosciuto non risponde piu'
+// in fretta di uno esistente con password sbagliata.
+const HASH_FASULLO = `scrypt$${"00".repeat(16)}$${"00".repeat(64)}`;
+
 /**
  * Riconosce l'utente e ne restituisce il ruolo.
  *
- * Le password si verificano SEMPRE entrambe, anche quando l'username non
- * corrisponde a nessuna: uscire prima renderebbe il tempo di risposta un
- * indizio su quali account esistono.
+ * Due fonti, controllate entrambe sempre:
+ *  1. La tabella `admin_account`, dove il sistemista crea e gestisce gli
+ *     account dal pannello.
+ *  2. Le tre variabili d'ambiente storiche (FDO/STAFF/SYSADMIN), che restano
+ *     come rete di sicurezza: se il database non risponde, o la tabella e'
+ *     ancora vuota subito dopo la migrazione, non si resta tutti fuori.
+ *
+ * Le password si verificano SEMPRE entrambe le fonti, anche quando l'username
+ * non corrisponde a nessuna: uscire prima renderebbe il tempo di risposta un
+ * indizio su quali account esistono. (La rete verso Supabase introduce comunque
+ * una variabilita' di per se', ma non e' un motivo per smettere di provarci.)
  */
-export function authenticate(username, password) {
+export async function authenticate(username, password) {
+  let dbRole = null;
+  try {
+    const row = await rpc("account_by_username", { p_username: username });
+    if (row?.id) {
+      const ok = verifyPassword(password, row.password_hash);
+      if (ok && row.attivo) dbRole = row.ruolo;
+    } else {
+      verifyPassword(password, HASH_FASULLO);
+    }
+  } catch {
+    // Database irraggiungibile: si scende comunque al controllo delle env
+    // var qui sotto, che e' pensato apposta per non dipendere dal database.
+  }
+
   const accounts = [
     { user: process.env.FDO_USER, hash: process.env.FDO_PASSWORD_HASH, role: "fdo" },
     { user: process.env.STAFF_USER, hash: process.env.STAFF_PASSWORD_HASH, role: "staff" },
     { user: process.env.SYSADMIN_USER, hash: process.env.SYSADMIN_PASSWORD_HASH, role: "sistemista" },
   ];
 
-  let matched = null;
+  let envRole = null;
   for (const a of accounts) {
     if (!a.user || !a.hash) continue;
     const ok = verifyPassword(password, a.hash);
-    if (ok && a.user === username) matched = a.role;
+    if (ok && a.user === username) envRole = a.role;
   }
-  return matched;
+
+  return dbRole || envRole;
 }
