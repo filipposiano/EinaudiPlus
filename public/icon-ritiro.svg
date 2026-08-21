@@ -1,0 +1,16 @@
+<!-- Ritiro del bucato.
+     Nessun corpo macchina: una gruccia. E' l'unico dei tre promemoria che non
+     parla di una macchina ma di una cosa da fare — andare a prendere i
+     vestiti — e una sagoma completamente diversa lo dice prima di qualsiasi
+     testo. Prima questo promemoria usava la stessa icona dell'asciugatrice. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="40" fill="#e11d2a"/>
+  <g fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Gancio -->
+    <path d="M96 74V62a14 14 0 1 1 14-14"/>
+    <!-- Spalle della gruccia -->
+    <path d="M96 74 38 122h116L96 74z"/>
+    <!-- Barra inferiore -->
+    <path d="M38 122h116"/>
+  </g>
+</svg>

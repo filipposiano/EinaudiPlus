@@ -7,13 +7,21 @@ self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim(
 // richiesta da Chrome per considerare la PWA installabile (beforeinstallprompt).
 self.addEventListener("fetch", () => { /* lascia gestire la richiesta al browser */ });
 
-// Quale icona mostrare a seconda del passo del ciclo: prima del "kind" indicava
-// solo il tag, che ora è uguale per tutti e tre i promemoria di una stessa
-// prenotazione (serve a farli sostituire in tray invece di accumularsi).
-// "pre" riguarda la lavatrice, gli altri due l'asciugatrice.
+// Un'icona per ciascuno dei tre passi del ciclo.
+//
+// I tre promemoria condividono il `tag` — serve a farli SOSTITUIRE nel centro
+// notifiche invece di accumularsi — quindi l'icona è l'unica cosa che dice a
+// colpo d'occhio a che punto si è, prima ancora di leggere.
+//
+// Le tre sagome sono diverse fra loro, non tre varianti della stessa: a 48px,
+// la dimensione a cui il sistema disegna davvero l'icona, un dettaglio dentro
+// l'oblò non si vede. Prima "sposta in asciugatrice" e "ritira i vestiti"
+// usavano lo stesso file, e l'asciugatrice differiva dalla lavatrice per tre
+// righine invisibili.
 function iconFor(kind) {
-  if (kind === "washerend" || kind === "dryerend") return "/icon-dryer.svg";
-  return "/icon-washer.svg";
+  if (kind === "washerend") return "/icon-dryer.svg";   // sposta in asciugatrice
+  if (kind === "dryerend")  return "/icon-ritiro.svg";  // vieni a prendere il bucato
+  return "/icon-washer.svg";                            // 'pre': inizia il turno
 }
 
 self.addEventListener("push", (event) => {

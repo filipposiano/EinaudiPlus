@@ -254,50 +254,38 @@ function MacchinaCard({ machine, busy, onToggle }: {
 
 // ─── Macchine ────────────────────────────────────────────────────────────────
 
-type Gruppo = { chiave: string; titolo: string; sotto: string; laundry: Laundry; machines: Machine[] };
+type Gruppo = { chiave: string; titolo: string; machines: Machine[] };
 
 /**
- * Un solo elenco di gruppi: A, B, C e Manica.
+ * I gruppi di UNA lavanderia: A, B, C.
  *
- * Prima erano due schede separate, una per lavanderia, e la Manica ne occupava
- * una intera per mostrare un unico "Gruppo A" — che per giunta si chiamava
- * come il gruppo A del Valentino. Qui il gruppo e' l'unita' di lettura (la
- * coppia lavatrice+asciugatrice che il residente usa di fila) e la lavanderia
- * e' solo un'etichetta sopra. Le lettere si ricavano dai dati: nel database
- * ci sono tutte e sei le sigle per ogni lavanderia perche' il client le
- * indicizza per posizione, ma solo le `bookable` esistono davvero.
+ * Il gruppo è l'unità di lettura — la coppia lavatrice+asciugatrice che il
+ * residente usa di fila — e sopra ci sta il nome dell'edificio, che le tiene
+ * separate. Le lettere si ricavano dai dati: nel database ci sono tutte e sei
+ * le sigle per ogni lavanderia perché il client le indicizza per posizione, ma
+ * solo le `bookable` esistono davvero.
  *
- * La Manica prende il nome della lavanderia invece della lettera: la sua unica
- * macchina e' "la lavatrice della Manica" per chiunque ci lavori, non "la A".
+ * Se la lavanderia ha un gruppo solo la lettera sparisce: alla Manica quella
+ * macchina è "la lavatrice della Manica" per chiunque ci lavori, non "la A" —
+ * e il titolo dell'edificio lo dice già lì sopra.
  */
-function gruppiDiTutte(laundries: Laundry[]): Gruppo[] {
-  const out: Gruppo[] = [];
-
-  for (const l of laundries) {
-    const per = new Map<string, Machine[]>();
-    for (const m of l.machines) {
-      if (!m.bookable) continue;
-      const lettera = m.code.slice(-1);
-      (per.get(lettera) ?? per.set(lettera, []).get(lettera)!).push(m);
-    }
-
-    const lettere = [...per.keys()].sort((a, b) => a.localeCompare(b));
-    const unicoGruppo = lettere.length === 1;
-
-    for (const lettera of lettere) {
-      out.push({
-        chiave: `${l.id}-${lettera}`,
-        titolo: unicoGruppo ? l.name.replace(/^Lavanderia\s+/i, "") : lettera,
-        sotto: `${l.name} · ${l.bookings} prenotazioni`,
-        laundry: l,
-        machines: per.get(lettera)!.sort(
-          (a, b) => (a.kind === b.kind ? 0 : a.kind === "washer" ? -1 : 1)
-        ),
-      });
-    }
+function gruppiDiLavanderia(l: Laundry): Gruppo[] {
+  const per = new Map<string, Machine[]>();
+  for (const m of l.machines) {
+    if (!m.bookable) continue;
+    const lettera = m.code.slice(-1);
+    (per.get(lettera) ?? per.set(lettera, []).get(lettera)!).push(m);
   }
 
-  return out;
+  const lettere = [...per.keys()].sort((a, b) => a.localeCompare(b));
+
+  return lettere.map((lettera) => ({
+    chiave: `${l.id}-${lettera}`,
+    titolo: lettere.length === 1 ? "Unica macchina" : `Gruppo ${lettera}`,
+    machines: per.get(lettera)!.sort(
+      (a, b) => (a.kind === b.kind ? 0 : a.kind === "washer" ? -1 : 1)
+    ),
+  }));
 }
 
 function Macchine({ laundries, reload }: { laundries: Laundry[]; reload: () => void }) {
@@ -323,37 +311,58 @@ function Macchine({ laundries, reload }: { laundries: Laundry[]; reload: () => v
         ma <strong>può prenotarla lo stesso</strong>: lo stato informa, non blocca.
       </p>
 
-      {/* auto-fit e non auto-fill: con poche colonne auto-fill lascerebbe
-          piste vuote a destra invece di allargare i gruppi esistenti.
-          230px e' la larghezza sotto cui due schede affiancate iniziano a
-          spezzare "Asciugatrice" a meta'. */}
-      <div style={{
-        display: "grid", gap: 12,
-        gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 230px), 1fr))",
-      }}>
-        {gruppiDiTutte(laundries).map((g) => (
-          <div key={g.chiave} style={{ ...S.card, padding: "12px 10px 14px", minWidth: 0 }}>
-            <p style={{
-              fontSize: 13, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase",
-              textAlign: "center", lineHeight: 1.2,
-            }}>{g.titolo}</p>
-            <p style={{
-              fontSize: 10, textAlign: "center", marginBottom: 10, ...S.sub,
-            }}>{g.sotto}</p>
+      {/* Una sezione per edificio, separata da una riga.
+          Sono due lavanderie fisicamente distinte, in due palazzi diversi, e
+          in un elenco unico "Gruppo A" del Valentino e la macchina della
+          Manica finivano appaiate come se stessero nella stessa stanza —
+          con il rischio di spegnere la macchina sbagliata. */}
+      {laundries.map((l, i) => {
+        const gruppi = gruppiDiLavanderia(l);
+        if (gruppi.length === 0) return null;
+        return (
+          <section key={l.id} style={{ marginBottom: 20 }}>
+            <div style={{
+              display: "flex", alignItems: "baseline", gap: 8, marginBottom: 10,
+              paddingTop: i === 0 ? 0 : 14,
+              borderTop: i === 0 ? "none" : "1px solid var(--border)",
+            }}>
+              <h2 style={{ fontSize: 14, fontWeight: 700 }}>{l.name}</h2>
+              <span style={{ fontSize: 11, ...S.sub }}>
+                camere {l.rooms} · {l.bookings} prenotazioni
+              </span>
+            </div>
 
-            <div style={{ display: "grid", gap: 8, gridTemplateColumns: `repeat(${g.machines.length}, minmax(0, 1fr))` }}>
-              {g.machines.map((m) => (
-                <MacchinaCard
-                  key={m.code}
-                  machine={m}
-                  busy={busy === `${g.laundry.id}-${m.code}`}
-                  onToggle={() => toggle(g.laundry, m)}
-                />
+            {/* auto-fit e non auto-fill: con poche colonne auto-fill lascerebbe
+                piste vuote a destra invece di allargare i gruppi esistenti.
+                230px e' la larghezza sotto cui due schede affiancate iniziano a
+                spezzare "Asciugatrice" a meta'. */}
+            <div style={{
+              display: "grid", gap: 12,
+              gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 230px), 1fr))",
+            }}>
+              {gruppi.map((g) => (
+                <div key={g.chiave} style={{ ...S.card, padding: "12px 10px 14px", minWidth: 0 }}>
+                  <p style={{
+                    fontSize: 13, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase",
+                    textAlign: "center", lineHeight: 1.2, marginBottom: 10,
+                  }}>{g.titolo}</p>
+
+                  <div style={{ display: "grid", gap: 8, gridTemplateColumns: `repeat(${g.machines.length}, minmax(0, 1fr))` }}>
+                    {g.machines.map((m) => (
+                      <MacchinaCard
+                        key={m.code}
+                        machine={m}
+                        busy={busy === `${l.id}-${m.code}`}
+                        onToggle={() => toggle(l, m)}
+                      />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
-          </div>
-        ))}
-      </div>
+          </section>
+        );
+      })}
     </>
   );
 }

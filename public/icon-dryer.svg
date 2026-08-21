@@ -1,15 +1,20 @@
+<!-- Asciugatrice.
+     Le onde di calore escono SOPRA la macchina e rompono la sagoma: e' quello
+     a distinguerla dalla lavatrice a 48px, la dimensione a cui il sistema
+     disegna davvero l'icona di una notifica. La versione precedente cambiava
+     solo tre righine dentro l'oblo', invisibili a quella scala: sul telefono
+     le due notifiche sembravano identiche. Anche il corpo macchina e' piu'
+     basso e tozzo, cosi' le due silhouette differiscono gia' da lontano. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
   <rect width="192" height="192" rx="40" fill="#e11d2a"/>
-  <g fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="48" y="36" width="96" height="120" rx="14"/>
-    <path d="M48 64h96"/>
-    <path d="M66 50h.01"/>
-    <path d="M86 50h.01"/>
-    <circle cx="96" cy="112" r="28"/>
-    <!-- Onde d'aria calda al posto dello sciacquone: distingue l'asciugatrice
-         dalla lavatrice mantenendo lo stesso corpo macchina. -->
-    <path d="M82 102c4-4 8-4 12 0s8 4 12 0"/>
-    <path d="M82 112c4-4 8-4 12 0s8 4 12 0"/>
-    <path d="M82 122c4-4 8-4 12 0s8 4 12 0"/>
+  <g fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Calore che sale: tre onde alte, ben staccate dal corpo -->
+    <path d="M70 42c0-10 10-10 10-20s-10-10-10-20"/>
+    <path d="M96 42c0-10 10-10 10-20s-10-10-10-20"/>
+    <path d="M122 42c0-10 10-10 10-20s-10-10-10-20"/>
+    <!-- Corpo macchina, piu' basso della lavatrice -->
+    <rect x="42" y="62" width="108" height="94" rx="14"/>
+    <path d="M42 88h108"/>
+    <circle cx="96" cy="122" r="24"/>
   </g>
 </svg>
