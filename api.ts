@@ -139,13 +139,44 @@ export async function telegramCode(): Promise<string> {
 
 export const DIREZIONE = "DIREZIONE";
 
+/**
+ * Traccia locale del fatto che su questo dispositivo si è fatto un accesso
+ * amministrativo.
+ *
+ * NON è un'autorizzazione e non viene mai spedita: il cookie di sessione è
+ * httpOnly, sta sul server ed è l'unica cosa di cui il server si fidi.
+ * Scriverci `true` a mano dalla console non dà alcun potere — si otterrebbe
+ * solo una chiamata di rete in più, che è esattamente ciò che questo evita.
+ *
+ * Serve a togliere una richiesta a ogni avvio per il 99% di chi apre l'app.
+ * `adminRole()` girava sempre, e per ogni residente la risposta era "no": una
+ * invocazione serverless per persona per apertura, tutti i giorni, per niente.
+ */
+const ADMIN_HINT = "laundryhub.adminSeen";
+
+export function markAdminSeen(seen: boolean) {
+  try {
+    if (seen) localStorage.setItem(ADMIN_HINT, "1");
+    else localStorage.removeItem(ADMIN_HINT);
+  } catch { /* modalità privata: si torna a chiedere sempre, funziona lo stesso */ }
+}
+
 /** Il ruolo della sessione admin su questo dispositivo, se c'è. */
 export async function adminRole(): Promise<string | null> {
+  // Chi non ha mai fatto accesso qui non ha una sessione da verificare. Se la
+  // traccia si perde (cache pulita, altro browser) non si rompe niente: si
+  // rientra da 1935, e il login riscrive la traccia.
+  try {
+    if (localStorage.getItem(ADMIN_HINT) === null) return null;
+  } catch { /* localStorage inaccessibile: si chiede al server, come prima */ }
+
   try {
     const res = await fetch("/api/admin/auth");
     if (!res.ok) return null;
     const data = await res.json();
-    return data.logged ? (data.role as string) : null;
+    const role = data.logged ? (data.role as string) : null;
+    if (!role) markAdminSeen(false);   // sessione scaduta: non richiederla a ogni avvio
+    return role;
   } catch {
     return null;
   }

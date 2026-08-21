@@ -1828,6 +1828,40 @@ function LoginScreen({ lang, onLogin, onAdmin }: {
   const chip = "var(--secondary)";
   const surf = "var(--card)";
 
+  // I tasti che il tastierino accetta, gli stessi disegnati a schermo.
+  const AMMESSI = /^[0-9abAB-]$/;
+
+  function submit() {
+    if (room.length === 0) return;
+    if (room === ROOM_ADMIN) { setRoom(""); onAdmin(); return; }
+    const regexCamera = /^\d+(?:-?[a-bA-B])?$/;
+    if (!regexCamera.test(room)) {
+      alert("Formato non valido. Esempi validi: 112, 21-b, 112A");
+      return;
+    }
+    onLogin(room);
+  }
+
+  // Da computer si scrive con la tastiera, tastierino numerico compreso: qui
+  // non c'è un campo di testo da mettere a fuoco, quindi i tasti vanno presi
+  // dalla finestra. Non è solo comodità — senza, chi non usa il mouse non
+  // aveva alcun modo di inserire la camera.
+  //
+  // L'effetto si riaggancia a ogni cambio di `room` perché submit() legge il
+  // valore corrente: con [] la chiusura resterebbe ferma alla stringa vuota e
+  // Invio non farebbe mai niente.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;   // scorciatoie del browser
+      if (e.key === "Enter")     { e.preventDefault(); submit(); return; }
+      if (e.key === "Backspace") { e.preventDefault(); setRoom(r=>r.slice(0,-1)); return; }
+      if (e.key === "Escape")    { setRoom(""); return; }
+      if (AMMESSI.test(e.key))   { e.preventDefault(); setRoom(r=>r.length<6?r+e.key:r); }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [room]);
+
   return (
     <div className="flex flex-col items-center justify-center flex-1 px-6">
       <div className="flex flex-col items-center mb-10">
@@ -1862,17 +1896,7 @@ function LoginScreen({ lang, onLogin, onAdmin }: {
         <button onClick={()=>setRoom(r=>r.length<6?r+"0":r)}
           className="rounded-2xl h-14 text-xl font-bold transition-all active:scale-95 col-span-1"
           style={{ background:chip, color:fg }}>0</button>
-        <button onClick={()=>{
-          if (room.length > 0) {
-            if (room === ROOM_ADMIN) { setRoom(""); onAdmin(); return; }
-            const regexCamera = /^\d+(?:-?[a-bA-B])?$/;
-            if (!regexCamera.test(room)) {
-              alert("Formato non valido. Esempi validi: 112, 21-b, 112A");
-              return;
-            }
-            onLogin(room);
-          }
-        }}
+        <button onClick={submit}
           className="rounded-2xl h-14 text-xl font-bold transition-all active:scale-95 text-white col-span-2"
           style={{ background:room.length>0?RED:chip, color:room.length>0?RED_FG:sub }}>→</button>
       </div>
@@ -1883,6 +1907,14 @@ function LoginScreen({ lang, onLogin, onAdmin }: {
         style={{ borderColor:"var(--border)", color:sub, background:"transparent" }}>
         {t.skip}
       </button>
+
+      {/* Solo da schermo grande: su un telefono la tastiera fisica non c'è e
+          la riga sarebbe un'istruzione impossibile da seguire. */}
+      <p className="text-[10px] mt-4 hidden md:block" style={{ color:sub }}>
+        {lang === "it"
+          ? "Puoi anche digitare da tastiera e premere Invio."
+          : "You can also type on your keyboard and press Enter."}
+      </p>
 
       <p className="text-[10px] font-mono mt-6" style={{ color:sub }}>v. {APP_VERSION} (beta)</p>
     </div>
@@ -2597,6 +2629,9 @@ export default function App() {
   // fallirebbe lato server senza che si capisca perché.
   const handleAdminSession = useCallback((r: AdminRole | null) => {
     setAdminRole(r);
+    // Traccia locale: dice ad adminRole() se al prossimo avvio vale la pena
+    // chiedere al server. Vedi il commento in api.ts — non è autorizzazione.
+    api.markAdminSeen(r !== null);
     if (r === null && localStorage.getItem("laundryhub.room") === api.DIREZIONE) {
       try { localStorage.removeItem("laundryhub.room"); } catch {}
       window.location.reload();
@@ -2625,9 +2660,23 @@ export default function App() {
     try { localStorage.setItem("laundryhub.room", room); } catch {}
     window.location.reload();
   }
-  function changeRoom() { 
+  // Cambiare camera chiude anche la sessione amministrativa.
+  //
+  // Prima no, e il risultato era incoerente: "Esci" terminava la sessione,
+  // "Cambia camera" lasciava la modalità amministratore attiva sotto un'altra
+  // identità. Chi lascia la postazione tocca il pulsante che ha davanti, non
+  // quello giusto in teoria — e un dispositivo condiviso restava con i poteri
+  // di chi c'era prima. La sessione vive nel cookie, non nella camera: va
+  // chiusa sul server, non basta dimenticare il numero.
+  async function changeRoom() {
+    if (adminRole !== null) {
+      try {
+        const { adminLogout } = await import("./AdminPanel");
+        await adminLogout();
+      } catch { /* offline: si esce comunque dalla camera */ }
+    }
     try { localStorage.removeItem("laundryhub.room"); } catch {}
-    window.location.reload(); 
+    window.location.reload();
   }
 
   // Un solo punto d'ingresso per tutte e tre le viste: se la camera è
@@ -2696,7 +2745,10 @@ export default function App() {
   // sezioni riservate → pannello amministrativo, nello stesso corpo pagina.
   const isRoom = facility === "cinema" || facility === "music";
   const bodyContent = isAdminFacility(facility)
-    ? <Suspense fallback={null}><AdminScreens tab={facility} onSession={handleAdminSession}/></Suspense>
+    // px-5 come le sezioni della lavanderia: senza, le schede amministrative
+    // toccavano i bordi dello schermo sul telefono — il corpo pagina non ha
+    // padding proprio, se lo mettono le viste.
+    ? <div className="px-5"><Suspense fallback={null}><AdminScreens tab={facility} onSession={handleAdminSession}/></Suspense></div>
     : isRoom
       ? <RoomView room={facility} lang={lang} roomNumber={roomNumber}/>
       : mainContent;

@@ -360,17 +360,51 @@ function Macchine({ laundries, reload }: { laundries: Laundry[]; reload: () => v
 
 // ─── Segnalazioni ────────────────────────────────────────────────────────────
 
-function Segnalazioni() {
+/**
+ * Estrae la macchina da una segnalazione di guasto.
+ *
+ * Il client la scrive come prefisso nel testo — `[GUASTO W-A] Lavatrice A
+ * segnalata non funzionante — nota` (api.ts, reportBroken) — perche' la
+ * tabella feedback ha una sola colonna di testo libero. Qui si smonta: il
+ * codice macchina diventa un dato su cui agire, e cio' che resta e' la frase
+ * che il residente ha davvero scritto.
+ */
+function leggiGuasto(body: string): { machine: string | null; testo: string } {
+  const m = body.match(/^\[GUASTO ([WD]-[A-Z])\]\s*(.*)$/s);
+  if (!m) return { machine: null, testo: body };
+  // "Lavatrice A segnalata non funzionante — nota" → tiene solo la nota, se c'e':
+  // la prima meta' la ripete gia' il badge della macchina.
+  const resto = m[2];
+  const nota = resto.split(" — ").slice(1).join(" — ").trim();
+  return { machine: m[1], testo: nota };
+}
+
+/** "3 ore fa" — in triage conta da quanto aspetta, non la data esatta. */
+function quandoRelativo(iso: string): string {
+  const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (min < 1)    return "adesso";
+  if (min < 60)   return `${min} min fa`;
+  const ore = Math.floor(min / 60);
+  if (ore < 24)   return `${ore} ${ore === 1 ? "ora" : "ore"} fa`;
+  const gg = Math.floor(ore / 24);
+  return `${gg} ${gg === 1 ? "giorno" : "giorni"} fa`;
+}
+
+function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () => void }) {
   const [items, setItems] = useState<Feedback[]>([]);
   const [onlyOpen, setOnlyOpen] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [azione, setAzione] = useState<number | null>(null);
 
+  // Si scarica tutto una volta e si filtra qui. Cosi' il contatore su ogni
+  // scheda e' gratis — ed e' quello che dice se c'e' qualcosa da fare — e
+  // passare da "Da gestire" a "Tutte" non rifa' il giro in rete.
   const load = useCallback(async () => {
     setBusy(true);
-    try { setItems((await call("feedback", { only_open: onlyOpen })).items); }
+    try { setItems((await call("feedback", { only_open: false, limit: 200 })).items); }
     catch (e: any) { alert(e.message); }
     finally { setBusy(false); }
-  }, [onlyOpen]);
+  }, []);
 
   useEffect(() => { load(); }, [load]);
 
@@ -379,50 +413,140 @@ function Segnalazioni() {
     catch (e: any) { alert(e.message); }
   }
 
+  /**
+   * Mette la macchina fuori servizio dalla segnalazione stessa, e nello stesso
+   * gesto segna la segnalazione come gestita.
+   *
+   * E' l'unica cosa che l'amministratore vuole fare quando legge "Lavatrice A
+   * non funziona": prima doveva leggere qui, ricordarsi la sigla, andare in
+   * Macchine e ritrovarla — tre passaggi in cui si perde per strada quale
+   * lavanderia fosse.
+   */
+  async function fuoriServizio(f: Feedback, machine: string, oos: boolean) {
+    const l = laundries.find((x) => x.slug === f.laundry);
+    // set_machine_status risolve la lavanderia dalla camera: quella di chi ha
+    // segnalato va bene, ma una segnalazione anonima non ce l'ha — allora si
+    // usa una camera qualsiasi della lavanderia giusta.
+    const room = f.room || l?.sample_room;
+    if (!room) { alert("Segnalazione senza lavanderia: agisci dalla scheda Macchine."); return; }
+
+    setAzione(f.id);
+    try {
+      await call("setMachineStatus", { room, machine, oos });
+      if (oos && !f.handled) await call("markFeedback", { id: f.id, handled: true });
+      reload();   // le schede Macchine leggono lo stesso stato
+      load();
+    } catch (e: any) { alert(e.message); }
+    finally { setAzione(null); }
+  }
+
+  const daGestire = items.filter((f) => !f.handled);
+  const mostrati  = onlyOpen ? daGestire : items;
+
+  const Scheda = ({ attiva, onClick, label, n }: {
+    attiva: boolean; onClick: () => void; label: string; n: number;
+  }) => (
+    <button onClick={onClick} style={{
+      ...S.btn, display: "flex", alignItems: "center", gap: 7,
+      ...(attiva ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" } : {}),
+    }}>
+      {label}
+      <span style={{
+        fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 99,
+        background: attiva ? "rgba(255,255,255,.25)" : "var(--background)",
+      }}>{n}</span>
+    </button>
+  );
+
   return (
     <>
-      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <button style={{ ...S.btn, ...(onlyOpen ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" } : {}) }}
-          onClick={() => setOnlyOpen(true)}>Da gestire</button>
-        <button style={{ ...S.btn, ...(!onlyOpen ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" } : {}) }}
-          onClick={() => setOnlyOpen(false)}>Tutte</button>
-      </div>
-
-      <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
+      {/* La spiegazione prima dei filtri: stava sotto, quindi si leggeva
+          dopo aver gia' dovuto scegliere fra due pulsanti senza sapere
+          cosa contenessero. */}
+      <p style={{ fontSize: 13, ...S.sub, marginBottom: 14 }}>
         Qui arrivano le segnalazioni dei residenti, comprese quelle di guasto: da quando il fuori servizio
         è riservato agli amministratori, è questo il canale con cui si scopre che una macchina è rotta.
       </p>
 
-      {busy && <p style={{ fontSize: 13, ...S.sub }}>Caricamento…</p>}
-      {!busy && items.length === 0 && (
-        <p style={{ fontSize: 13, ...S.sub }}>Nessuna segnalazione{onlyOpen ? " da gestire" : ""}.</p>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+        <Scheda attiva={onlyOpen}  onClick={() => setOnlyOpen(true)}  label="Da gestire" n={daGestire.length} />
+        <Scheda attiva={!onlyOpen} onClick={() => setOnlyOpen(false)} label="Tutte"      n={items.length} />
+        <button style={{ ...S.btn, marginLeft: "auto" }} disabled={busy} onClick={load}>Aggiorna</button>
+      </div>
+
+      {busy && items.length === 0 && <p style={{ fontSize: 13, ...S.sub }}>Caricamento…</p>}
+      {!busy && mostrati.length === 0 && (
+        <p style={{ fontSize: 13, ...S.sub }}>
+          {onlyOpen ? "Niente da gestire: tutte le segnalazioni sono state chiuse." : "Nessuna segnalazione."}
+        </p>
       )}
 
       <div style={{ display: "grid", gap: 10 }}>
-        {items.map((f) => {
-          const guasto = f.body.startsWith("[GUASTO");
+        {mostrati.map((f) => {
+          const { machine, testo } = leggiGuasto(f.body);
+          const l = laundries.find((x) => x.slug === f.laundry);
+          const stato = machine ? l?.machines.find((m) => m.code === machine) : undefined;
+          const tipo = machine?.startsWith("W") ? "Lavatrice" : "Asciugatrice";
+          const inCorso = azione === f.id;
+
           return (
             <div key={f.id} style={{
               ...S.card, padding: 14,
-              borderColor: guasto && !f.handled ? "var(--destructive-text)" : "var(--border)",
+              borderColor: machine && !f.handled ? "var(--destructive-text)" : "var(--border)",
               opacity: f.handled ? 0.6 : 1,
             }}>
               <div className="adm-feed-head">
-                <span style={{ fontSize: 13, fontWeight: 700 }}>
-                  {f.room ? `Camera ${f.room}` : "Anonimo"}
-                </span>
+                {/* La macchina in testa e non sepolta nel testo: e' il dato su
+                    cui si decide, quindi si legge per primo. */}
+                {machine ? (
+                  <span style={{
+                    fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 99,
+                    background: "color-mix(in srgb, var(--destructive-text) 12%, transparent)",
+                    color: "var(--destructive-text)",
+                  }}>{tipo} {machine.slice(-1)}</span>
+                ) : (
+                  <span style={{ fontSize: 12, fontWeight: 700, ...S.sub }}>Messaggio</span>
+                )}
+                <span style={{ fontSize: 12 }}>{f.room ? `camera ${f.room}` : "anonimo"}</span>
                 {f.laundry && <span style={{ fontSize: 11, ...S.sub }}>{f.laundry}</span>}
-                {guasto && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--destructive-text)" }}>GUASTO</span>}
-                <span className="adm-feed-head__when" style={{ fontSize: 11, ...S.sub }}>
-                  {new Date(f.created_at).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}
+                <span className="adm-feed-head__when" style={{ fontSize: 11, ...S.sub }}
+                      title={new Date(f.created_at).toLocaleString("it-IT")}>
+                  {quandoRelativo(f.created_at)}
                 </span>
               </div>
-              {/* Il testo arriva da chi segnala: senza questo una parola
+
+              {/* overflowWrap: il testo arriva da chi segnala, e una parola
                   lunghissima senza spazi allargherebbe la scheda oltre lo schermo. */}
-              <p style={{ fontSize: 14, marginBottom: 10, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{f.body}</p>
-              <button style={S.btn} onClick={() => mark(f)}>
-                {f.handled ? "Riapri" : "Segna come gestita"}
-              </button>
+              {testo ? (
+                <p style={{ fontSize: 14, marginBottom: 10, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{testo}</p>
+              ) : (
+                <p style={{ fontSize: 13, marginBottom: 10, fontStyle: "italic", ...S.sub }}>
+                  Segnalata non funzionante, senza altri dettagli.
+                </p>
+              )}
+
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {/* L'azione che chiude il caso sta accanto a cio' che lo apre. */}
+                {machine && stato && (
+                  stato.oos ? (
+                    <button style={S.btn} disabled={inCorso}
+                            onClick={() => fuoriServizio(f, machine, false)}>
+                      Rimetti in servizio
+                    </button>
+                  ) : (
+                    <button style={{ ...S.danger, padding: "8px 14px", fontSize: 13 }} disabled={inCorso}
+                            onClick={() => fuoriServizio(f, machine, true)}>
+                      Metti fuori servizio
+                    </button>
+                  )
+                )}
+                {machine && stato?.oos && (
+                  <span style={{ fontSize: 12, alignSelf: "center", ...S.sub }}>Già fuori servizio.</span>
+                )}
+                <button style={S.btn} disabled={inCorso} onClick={() => mark(f)}>
+                  {f.handled ? "Riapri" : "Segna come gestita"}
+                </button>
+              </div>
             </div>
           );
         })}
@@ -858,7 +982,7 @@ export function AdminScreens({ tab, onSession }: {
           navigazione, ma se ci si arriva lo stesso il controllo vero resta sul
           server: nascondere una voce non e' un'autorizzazione. */}
       {tab === "macchine" && <Macchine laundries={laundries} reload={loadOverview} />}
-      {tab === "segnalazioni" && <Segnalazioni />}
+      {tab === "segnalazioni" && <Segnalazioni laundries={laundries} reload={loadOverview} />}
       {tab === "ricorrenti" && (sistemista
         ? laundries.length > 0 && <Ricorrenti laundries={laundries} />
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata al sistemista.</p>)}

@@ -58,21 +58,26 @@
   --status-oos: #ff4757;
   --status-prev: #f59e0b;
 
-  /* ── Varianti accessibili ──────────────────────────────────────────────
-     Token NUOVI, non sostituzioni: la palette sopra resta quella dichiarata,
-     questi si usano SOLO dove il colore rende testo o un'icona che trasmette
-     significato (etichette di stato, triangoli di avviso, testo secondario).
-     Su sfondo bianco le tinte vivaci non reggono il testo: il verde dà 2,3:1,
-     il giallo 1,9:1 (praticamente invisibile), il grigio muted 5,2:1 passa il
-     minimo ma resta faticoso agli 8-11px usati quasi ovunque nell'app.
-     Tutti i valori qui sotto sono verificati contro #ffffff con la formula di
-     luminanza relativa del WCAG, margine minimo 4,9:1 (soglia AA: 4,5:1). */
-  --gray-accessible-text: #5a5a6b;   /* 6,76:1 */
-  --status-free-text:     #14672f;   /* 6,98:1 */
-  --status-inuse-text:    #8a5c07;   /* 5,81:1 */
-  --status-oos-text:      #d11a28;   /* 5,40:1 */
-  --status-prev-text:     #b45309;   /* 5,02:1 */
-  --destructive-text:     #d11a28;   /* 5,40:1 */
+  /* ── Varianti "testo" ─────────────────────────────────────────────────
+     Erano tinte piu' scure, calcolate per superare il 4,5:1 del WCAG AA sul
+     bianco. Su richiesta si e' tornati ai colori di luglio: qui ogni token
+     rimanda alla tinta base, quindi l'app rende esattamente come allora.
+
+     Restano come alias e non sono stati cancellati di proposito. Primo: sono
+     l'unico punto da cui rimettere il contrasto, cambiando cinque righe
+     invece di ricucire una sessantina di riferimenti sparsi nei componenti.
+     Secondo: dicono dove il colore fa testo o icona-che-significa-qualcosa,
+     che e' l'informazione da avere sotto mano se un giorno si rifa' il giro.
+
+     Quanto si perde, misurato sul bianco: verde 2,26:1, giallo 1,85:1
+     (praticamente illeggibile a 8-11px), grigio 5,21:1, rosso 3,76:1. Il
+     minimo AA per il testo normale e' 4,5:1. */
+  --gray-accessible-text: var(--muted-foreground);
+  --status-free-text:     var(--status-free);
+  --status-inuse-text:    var(--status-inuse);
+  --status-oos-text:      var(--status-oos);
+  --status-prev-text:     var(--status-prev);
+  --destructive-text:     var(--destructive);
 
   /* ── Lavatrice / asciugatrice ──────────────────────────────────────────
      Distinguono i due tipi di macchina nel pannello amministrativo, dove
@@ -125,17 +130,18 @@
   --status-oos: #ff4757;
   --status-prev: #f59e0b;
 
-  /* ── Varianti accessibili, tema scuro ──────────────────────────────────
-     Qui i colori brand passano già il minimo AA da soli contro lo sfondo
-     quasi nero (#0c0c0f): la variante "accessibile" coincide con la base,
-     tranne il grigio, che condivideva lo stesso hex del tema chiaro ed era
-     l'unico dei due davvero sotto soglia (3,8:1). Verificati allo stesso modo. */
+  /* Sul tema scuro non c'e' niente da riportare indietro: i colori di stato
+     gia' a luglio erano questi, e contro lo sfondo quasi nero passano il
+     minimo AA da soli. L'unico che divergeva era il grigio, che condivideva
+     l'hex del tema chiaro (#6b6b80, 3,8:1) ed era quindi sotto soglia anche
+     allora — lo si lascia leggibile: non fa parte del "com'era il mese
+     scorso" che si voleva rivedere, riguarda solo il testo secondario. */
   --gray-accessible-text: #9a9ab0;   /* 7,09:1 — era #6b6b80 a 3,8:1 */
-  --status-free-text:     #22c55e;   /* 8,57:1 */
-  --status-inuse-text:    #eab308;   /* 10,18:1 */
-  --status-oos-text:      #ff4757;   /* 5,85:1 */
-  --status-prev-text:     #f59e0b;   /* margine ampio, stessa famiglia dell'oos */
-  --destructive-text:     #ff4757;   /* 5,85:1 */
+  --status-free-text:     var(--status-free);
+  --status-inuse-text:    var(--status-inuse);
+  --status-oos-text:      var(--status-oos);
+  --status-prev-text:     var(--status-prev);
+  --destructive-text:     var(--destructive);
 
   /* Le due tinte del tema chiaro sono scure per reggere il bianco: sul nero
      sparirebbero. Stessa idea (acqua/calore), luminosità ribaltata. */

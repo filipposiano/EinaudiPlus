@@ -89,16 +89,17 @@ export function savePrefs(prefs: AccessibilityPrefs): void {
 //   --status-KEY       la palette dichiarata qui sopra (DEFAULT_COLORS),
 //                       identica in entrambi i temi — quella che questo
 //                       pannello mostra e che l'utente personalizza.
-//   --status-KEY-text  la variante che l'app usa davvero per rendere testo e
-//                       icone, scelta per reggere il contrasto WCAG AA nel
-//                       tema in cui gira (diversa fra chiaro e scuro).
+//   --status-KEY-text  il livello con cui l'app rende testo e icone. Oggi è
+//                       un semplice alias del primo: era una variante più
+//                       scura per il contrasto WCAG, ed è tornato ai colori
+//                       originali su richiesta.
 //
 // Quando l'utente NON ha personalizzato nulla, non si scrive niente qui: è il
 // foglio di stile a decidere entrambi i livelli, ognuno per il proprio tema.
 // Quando personalizza (color picker o preset daltonismo), il valore scelto si
-// scrive su ENTRAMBI i livelli: la personalizzazione dell'utente vale più
-// della correzione automatica di contrasto, e resta visibile ovunque l'app
-// usi lo stato, non solo nell'anteprima di questo pannello.
+// scrive su ENTRAMBI i livelli — necessario finché l'alias esiste, perché
+// scrivere solo la base lascerebbe il livello "testo" fermo al vecchio colore
+// in tutta l'app tranne che nell'anteprima di questo pannello.
 export function applyToDOM(prefs: AccessibilityPrefs): void {
   const s = document.documentElement.style;
 
