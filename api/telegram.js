@@ -37,8 +37,19 @@ export default async function handler(req, res) {
 
   // Telegram rimanda l'header che abbiamo impostato con setWebhook. Senza,
   // chiunque conosca l'URL potrebbe inviare aggiornamenti falsi.
+  //
+  // Se il segreto NON e' configurato si chiude, non si apre. Prima la
+  // condizione era `if (secret && ...)`: senza variabile d'ambiente il
+  // controllo spariva e l'endpoint accettava POST da chiunque. Il caso non e'
+  // teorico — un deployment di preview a cui manchi la variabile e' un webhook
+  // aperto che parla con lo STESSO database di produzione, perche' un database
+  // di staging separato non esiste. Da li' bastava un `/stop` con il chat_id
+  // di qualcun altro per spegnergli i promemoria.
+  //
+  // Fallire chiuso e' anche il comportamento che gia' hanno cron.js e
+  // health.js: questo era l'unico dei tre a divergere.
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET;
-  if (secret && req.headers["x-telegram-bot-api-secret-token"] !== secret) {
+  if (!secret || req.headers["x-telegram-bot-api-secret-token"] !== secret) {
     return json(res, 401, { ok: false });
   }
 

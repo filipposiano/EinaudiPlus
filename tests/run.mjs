@@ -338,13 +338,25 @@ let sysCookie = null;
     // clause"). Dal SQL Editor funzionavano, dal pannello no — e l'errore
     // arrivava mascherato, quindi il pulsante "Azzera tutto" sembrava inerte.
     //
-    // Si usa l'ambito 'ricorrenti' perche' e' l'unico che si puo' svuotare
-    // senza toccare prenotazioni di persone vere.
-    const purge = await call(adminData, { body: { action: "purge", scope: "ricorrenti" }, cookie: sysCookie });
-    check("la pulizia esegue senza errori del server", purge.body?.ok === true,
-      JSON.stringify(purge.body));
-    check("la pulizia riporta i conteggi", purge.body?.cancellati !== undefined,
-      JSON.stringify(purge.body));
+    // DISTRUTTIVO, e va chiesto esplicitamente.
+    //
+    // Il commento qui diceva che 'ricorrenti' era "l'unico ambito che si puo'
+    // svuotare senza toccare niente di vero". Non e' cosi': cancella
+    // `recurring_booking` PER INTERO, cioe' tutte le regole fisse che il
+    // sistemista ha configurato ("ogni lunedi' alle 09:30 la lavatrice B e'
+    // della 101"). Era vero solo finche' la tabella era vuota, ed e' rimasto
+    // scritto dopo. Siccome questi test girano contro il database di
+    // PRODUZIONE — .env.local punta li' e un database di staging non esiste —
+    // ogni `npm test` cancellava in silenzio la configurazione vera.
+    if (process.env.TEST_ALLOW_PURGE === "1") {
+      const purge = await call(adminData, { body: { action: "purge", scope: "ricorrenti" }, cookie: sysCookie });
+      check("la pulizia esegue senza errori del server", purge.body?.ok === true,
+        JSON.stringify(purge.body));
+      check("la pulizia riporta i conteggi", purge.body?.cancellati !== undefined,
+        JSON.stringify(purge.body));
+    } else {
+      console.log("  --    pulizia distruttiva saltata (TEST_ALLOW_PURGE=1 per eseguirla)");
+    }
   }
 }
 
@@ -377,6 +389,15 @@ section("Telegram");
     (await tgSend("/start", { "x-telegram-bot-api-secret-token": "altro" })).status === 401);
   check("webhook con segreto giusto -> 200",
     (await tgSend("/start", { "x-telegram-bot-api-secret-token": "prova" })).status === 200);
+
+  // Il caso che nessun test copriva, ed e' quello che si era rotto: senza la
+  // variabile d'ambiente il controllo spariva del tutto e il webhook accettava
+  // chiunque. Un endpoint che si apre quando manca la configurazione e' peggio
+  // di uno che non funziona, perche' non lo segnala nulla.
+  delete process.env.TELEGRAM_WEBHOOK_SECRET;
+  check("webhook senza variabile configurata -> 401 (non passa)",
+    (await tgSend("/start", {})).status === 401);
+
   if (prev) process.env.TELEGRAM_WEBHOOK_SECRET = prev;
   else delete process.env.TELEGRAM_WEBHOOK_SECRET;
 
