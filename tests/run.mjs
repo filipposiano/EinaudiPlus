@@ -138,6 +138,36 @@ section("Push e segnalazioni");
   check("feedback vuoto respinto", (await call(laundry, { body: { token: TOKEN, action: "feedback", room: "112", text: "  " } })).body?.ok === false);
   check("azione sconosciuta", (await call(laundry, { body: { token: TOKEN, action: "pippo" } })).body?.error === "azione sconosciuta");
   check("metodo non ammesso -> 405", (await call(laundry, { method: "DELETE", query: { token: TOKEN } })).status === 405);
+
+  // Validazione degli ingressi. Prima questi due passavano le guardie SQL e
+  // finivano contro un vincolo NOT NULL: il client riceveva 500 "errore del
+  // server" per un campo scritto male, che e' un invito a insistere.
+  const nonNum = await call(laundry, {
+    body: { token: TOKEN, action: "book", day: "pippo", slot: "x", machine: "W-A", room: "112" },
+  });
+  check("giorno/turno non numerici -> errore chiaro, non 500",
+    nonNum.status === 200 && nonNum.body?.error === "giorno o turno non valido",
+    JSON.stringify(nonNum.body));
+
+  check("turno decimale respinto",
+    (await call(laundry, { body: { token: TOKEN, action: "book", day: 1, slot: 2.5, machine: "W-A", room: "112" } }))
+      .body?.error === "giorno o turno non valido");
+
+  check("camera malformata respinta",
+    (await call(laundry, { body: { token: TOKEN, action: "book", day: 1, slot: 3, machine: "W-A", room: "../etc" } }))
+      .body?.error === "camera non valida");
+
+  // Si poteva scrivere in push_sub qualunque stringa, compreso l'indirizzo dei
+  // metadati cloud. Non veniva mai contattato (sendWebPush ha la sua
+  // allowlist), ma la riga restava in tabella, legata a una camera vera, e la
+  // potatura non l'avrebbe mai tolta.
+  check("endpoint push arbitrario respinto",
+    (await call(laundry, {
+      body: {
+        token: TOKEN, action: "subscribe", room: "112",
+        sub: { endpoint: "http://169.254.169.254/latest/meta-data", keys: { p256dh: "a", auth: "b" } },
+      },
+    })).body?.error === "endpoint di notifica non riconosciuto");
 }
 
 // ─── Sale ────────────────────────────────────────────────────────────────────

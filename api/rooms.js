@@ -6,7 +6,7 @@
 // quella che il client gia' installato usa.
 
 import { rpc } from "./_lib/db.js";
-import { readBody, json, fail, tokenOk, allow, methodOk } from "./_lib/http.js";
+import { readBody, json, fail, tokenOk, allow, methodOk, intero } from "./_lib/http.js";
 
 const SPACES = new Set(["cinema", "music"]);
 
@@ -32,16 +32,27 @@ export default async function handler(req, res) {
     const action = String(req.query.action || body.action || "");
 
     switch (action) {
-      case "book":
+      case "book": {
+        // start sta dentro la giornata; end puo' arrivare a 2880 perche' una
+        // fascia che scavalca la mezzanotte si esprime come "oltre le 24:00"
+        // (vedi 004-oltre-mezzanotte). Il database ricontrolla comunque
+        // durata e sovrapposizioni.
+        const day   = intero(body.day, 0, 6);
+        const start = intero(body.start, 0, 1439);
+        const end   = intero(body.end, 1, 2880);
+        if (day === null || start === null || end === null) {
+          return fail(res, "giorno o orario non valido");
+        }
         return json(res, 200, await rpc("book_space", {
           p_slug: space,
-          p_day: Number(body.day),
-          p_start: Number(body.start),
-          p_end: Number(body.end),
+          p_day: day,
+          p_start: start,
+          p_end: end,
           p_name: String(body.name || ""),
           // `type` esiste solo per il cinema; per la musica il database lo ignora.
-          p_type: body.type ? String(body.type) : null,
+          p_type: body.type === "private" || body.type === "open" ? body.type : null,
         }));
+      }
 
       // 'clear' e' la grafia usata dal client; 'delete' compariva nel refactor
       // non ancora integrato. Le accettiamo entrambe per non creare un bug

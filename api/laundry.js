@@ -10,7 +10,13 @@
 // funzionare senza aggiornarsi.
 
 import { rpc } from "./_lib/db.js";
-import { readBody, json, fail, tokenOk, allow, methodOk } from "./_lib/http.js";
+import { readBody, json, fail, tokenOk, allow, methodOk, intero, camera } from "./_lib/http.js";
+import { endpointAllowed } from "./_lib/push.js";
+
+// 19 turni al giorno, 7 giorni. Il numero vero sta in laundry.n_slots e lo
+// ricontrolla il database: qui serve solo un limite superiore per scartare
+// l'assurdo prima di fare il giro.
+const MAX_SLOT = 18;
 
 export default async function handler(req, res) {
   if (!methodOk(req, res, ["GET", "POST"])) return;
@@ -36,25 +42,34 @@ export default async function handler(req, res) {
       return fail(res, "troppe richieste, riprova fra poco", {}, 429);
     }
 
+    // day e slot valgono per book e clear: si validano una volta sola.
+    const day  = intero(body.day, 0, 6);
+    const slot = intero(body.slot, 0, MAX_SLOT);
+    if ((action === "book" || action === "clear") && (day === null || slot === null)) {
+      return fail(res, "giorno o turno non valido");
+    }
+
     switch (action) {
-      case "book":
+      case "book": {
+        if (!camera(room)) return fail(res, "camera non valida");
         return json(res, 200, await rpc("book_laundry", {
           p_room: room,
-          p_day: Number(body.day),
-          p_slot: Number(body.slot),
+          p_day: day,
+          p_slot: slot,
           p_machine: String(body.machine || ""),
           // Da dove si sta agendo, distinto dall'intestatario: serve a impedire
           // che dalla Manica si prenoti una macchina del Valentino (e
           // viceversa). Assente nei client vecchi, e li' il controllo si
           // disattiva invece di rifiutare prenotazioni valide.
-          p_actor_room: body.actor_room ? String(body.actor_room) : null,
+          p_actor_room: camera(body.actor_room),
         }));
+      }
 
       case "clear":
         return json(res, 200, await rpc("clear_laundry", {
-          p_room: room || null,
-          p_day: Number(body.day),
-          p_slot: Number(body.slot),
+          p_room: camera(room),
+          p_day: day,
+          p_slot: slot,
           p_machine: String(body.machine || ""),
         }));
 
@@ -68,9 +83,25 @@ export default async function handler(req, res) {
       case "subscribe": {
         const sub = body.sub || {};
         const keys = sub.keys || {};
+        const endpoint = String(sub.endpoint || "");
+
+        // Si accettano solo gli endpoint dei servizi push conosciuti.
+        //
+        // sendWebPush() li ricontrolla comunque prima di spedire, quindi non
+        // c'era un rischio di SSRF: ma senza questo si poteva SCRIVERE in
+        // push_sub qualunque stringa — provato in produzione con
+        // `http://169.254.169.254/latest/meta-data`, l'indirizzo dei metadati
+        // cloud, e la riga veniva salvata. Righe simili non sarebbero mai
+        // state potate (la potatura scatta solo sul 404/410 di un servizio
+        // vero) e restavano attaccate alla camera di chiunque.
+        if (!endpointAllowed(endpoint)) {
+          return fail(res, "endpoint di notifica non riconosciuto");
+        }
+        if (!camera(room)) return fail(res, "camera non valida");
+
         return json(res, 200, await rpc("upsert_push_sub", {
           p_room: room,
-          p_endpoint: String(sub.endpoint || ""),
+          p_endpoint: endpoint,
           p_p256dh: String(keys.p256dh || ""),
           p_auth: String(keys.auth || ""),
         }));

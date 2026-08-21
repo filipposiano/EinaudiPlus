@@ -83,6 +83,37 @@ export async function allow(req, name, limit, windowSecs) {
   }
 }
 
+// ─── Validazione degli ingressi ──────────────────────────────────────────────
+//
+// Le funzioni SQL controllano gia' i propri parametri, ma solo DOPO che il
+// valore e' arrivato fin li' con il tipo giusto. `Number("pippo")` da' NaN, che
+// JSON.stringify serializza come `null`: in SQL `null not between 0 and 6` vale
+// NULL, quindi la guardia non scatta, si tira dritto e si sbatte contro il
+// vincolo NOT NULL dell'insert. Il client riceveva 500 "errore del server" per
+// un input semplicemente sbagliato — e un 500 e' un invito a insistere, mentre
+// un messaggio chiaro dice che e' inutile.
+//
+// Qui il valore o e' un intero nell'intervallo, o e' null e la richiesta viene
+// respinta prima di toccare il database.
+
+/** Intero dentro [min, max], oppure null. Rifiuta NaN, decimali e stringhe. */
+export function intero(v, min, max) {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < min || n > max) return null;
+  return n;
+}
+
+/**
+ * Numero di camera nel formato ammesso: cifre, con una lettera a/b finale
+ * facoltativa ("112", "21-b", "112A"). La stessa regex vive nelle funzioni
+ * SQL, che restano l'autorita': questa serve a dare l'errore giusto subito.
+ */
+export function camera(v) {
+  const s = String(v ?? "").trim();
+  return /^[0-9]{1,4}(-?[abAB])?$/.test(s) ? s : null;
+}
+
 /** Applica i metodi ammessi, rispondendo 405 altrimenti. */
 export function methodOk(req, res, methods) {
   if (methods.includes(req.method)) return true;

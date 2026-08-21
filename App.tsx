@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, memo, lazy, Suspense } from "react";
 import {
   Wind, Clock, CalendarDays,
   Plus, CheckCircle2, AlertTriangle,
@@ -926,7 +926,12 @@ function FeedbackModal({ lang, room, onClose }: { lang: Lang; room: string | nul
 
 // ─── Dashboard ─────────────────────────────────────────────────────────────────
 
-function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, onClear, onStatus, isAdmin }: {
+// memo, qui e sulle altre due viste: ricevono prop stabili — `week` e `status`
+// cambiano solo a un caricamento nuovo, i callback sono useCallback in App.
+// Senza, bastava aprire Impostazioni o far comparire un pannello per
+// ridisegnare da capo anche la griglia settimanale, che sono 7x19 celle: lavoro
+// buttato, e su un telefono lento si sente.
+const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, onClear, onStatus, isAdmin }: {
   theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
   favs: Fav[]; onToggleFav: (day:number, slot:number)=>void;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
@@ -1284,7 +1289,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
       <p className="text-center text-[10px] font-mono mt-4" style={{ color: sub }}>v. {APP_VERSION} (beta)</p>
     </div>
   );
-}
+});
 
 function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
   machine: Machine; lang: Lang; isLast: boolean; divColor: string; onBook:()=>void; groupLabel?: string;
@@ -1373,7 +1378,7 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
 
 // ─── Day Schedule ──────────────────────────────────────────────────────────────
 
-function DaySchedule({ lang, week, status, roomNumber: sessionRoom, favs, onToggleFav, onBook, onClear, isAdmin }: {
+const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: sessionRoom, favs, onToggleFav, onBook, onClear, isAdmin }: {
   theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
   favs: Fav[]; onToggleFav: (day:number, slot:number)=>void;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
@@ -1511,7 +1516,7 @@ function DaySchedule({ lang, week, status, roomNumber: sessionRoom, favs, onTogg
       </div>
     </div>
   );
-}
+});
 
 // ─── Slot detail sheet (vista settimanale) ────────────────────────────────────
 
@@ -1609,7 +1614,7 @@ function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify,
 
 // ─── Week Overview ─────────────────────────────────────────────────────────────
 
-function WeekOverview({ lang, week, status, roomNumber: sessionRoom, onBook, onClear, isAdmin }: {
+const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber: sessionRoom, onBook, onClear, isAdmin }: {
   theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
   onClear: (day:number, slot:number, machine:string)=>Promise<void>;
@@ -1771,7 +1776,7 @@ function WeekOverview({ lang, week, status, roomNumber: sessionRoom, onBook, onC
       </div>
     </div>
   );
-}
+});
 
 // ─── Admin sheet (bottom sheet dalla dashboard) ───────────────────────────────
 

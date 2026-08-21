@@ -4,7 +4,7 @@
 // prima di toccare il database.
 
 import { rpc } from "../_lib/db.js";
-import { readBody, json, fail, methodOk } from "../_lib/http.js";
+import { readBody, json, fail, methodOk, intero } from "../_lib/http.js";
 import { currentAdmin, isSysadmin } from "../_lib/auth.js";
 
 // Le azioni che modificano qualcosa finiscono nell'audit log. Le letture no,
@@ -35,6 +35,27 @@ export default async function handler(req, res) {
 
   if (SOLO_SISTEMISTA.has(action) && !isSysadmin(me)) {
     return json(res, 403, { ok: false, error: "riservato al sistemista" });
+  }
+
+  // I campi numerici si controllano tutti qui, una volta, invece che a ogni
+  // `Number(body.x)` sparso nello switch. `Number("pippo")` da' NaN, che
+  // diventa `null` una volta serializzato: le guardie SQL (`not between`) su
+  // NULL valgono NULL, quindi non scattano, e si finisce contro un vincolo
+  // NOT NULL con un 500 addosso. Chi usa il pannello vedeva "errore del
+  // server" per un campo lasciato vuoto.
+  //
+  // Il controllo e' "se c'e', dev'essere valido": i campi assenti restano tali
+  // e ogni azione usa solo i propri.
+  const LIMITI = {
+    id: [1, Number.MAX_SAFE_INTEGER], laundry_id: [1, 9], space_id: [1, 9],
+    day: [0, 6], slot: [0, 18], offset: [-52, 52], limit: [1, 500],
+    start: [0, 1439], end: [1, 2880],
+  };
+  for (const [campo, [min, max]] of Object.entries(LIMITI)) {
+    if (body[campo] === undefined || body[campo] === null) continue;
+    if (intero(body[campo], min, max) === null) {
+      return json(res, 400, { ok: false, error: `campo "${campo}" non valido` });
+    }
   }
 
   try {
