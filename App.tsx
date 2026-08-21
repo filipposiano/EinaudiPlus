@@ -200,7 +200,6 @@ const T = {
       : `Hai superato il limite settimanale di ${WEEKLY_QUOTA} turni (${-n} in più).`,
     altraLavanderia: "Quella camera è dell'altra lavanderia. Puoi prenotare solo le macchine del tuo edificio.",
     noQuota: "senza limite",
-    noQuotaMsg: `Il limite di ${WEEKLY_QUOTA} turni vale per camera: alla Direzione non si applica.`,
     howItWorks: "Come funziona",
     autoWash: (_end: string) => `Lavatrice corrispondente prenotata automaticamente per il turno successivo.`,
     daily:    "Giornaliero", weekly: "Settimana", overview: "Panoramica",
@@ -297,7 +296,6 @@ const T = {
       : `You're over the weekly limit of ${WEEKLY_QUOTA} slots (${-n} extra).`,
     altraLavanderia: "That room belongs to the other laundry. You can only book machines in your own building.",
     noQuota: "no limit",
-    noQuotaMsg: `The ${WEEKLY_QUOTA}-slot limit is per room: it doesn't apply to Direzione.`,
     howItWorks: "How it works",
     autoWash: (_end: string) => `Corresponding dryer auto-reserved for the next slot.`,
     daily:    "Daily", weekly: "Week", overview: "Overview",
@@ -494,7 +492,18 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
     target.machineId !== "?" ? target.machineId : null
   );
   const [room, setRoom] = useState(target.prefillRoom ?? "");
-  const firstStep = target.machineId === "?" ? "pick" : myRoom ? "owner" : "input";
+
+  // `prefillRoom` c'è solo quando si arriva da "Modifica stanza" su una
+  // prenotazione che esiste già. Lì la domanda "per chi è?" è fuori luogo: la
+  // risposta è "per qualcun altro" per definizione — se fosse la tua non
+  // staresti cambiando il numero — e costringeva a un tocco in più per
+  // arrivare al tastierino, che è l'unica cosa che si voleva aprire.
+  const daModifica = target.prefillRoom !== undefined;
+  const firstStep =
+    target.machineId === "?" ? "pick"
+    : daModifica              ? "input"
+    : myRoom                  ? "owner"
+    : "input";
   const [step, setStep] = useState<"pick"|"owner"|"input"|"confirm">(firstStep);
 
   const slot      = TIME_SLOTS[target.slotIdx];
@@ -662,7 +671,11 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
               </p>
             )}
 
-            {(target.machineId === "?" || myRoom) && (
+            {/* Da "Modifica stanza" non c'è un passo precedente a cui tornare:
+                il tastierino è il primo. Indietro qui chiude e basta. */}
+            {daModifica ? (
+              <button onClick={onClose} className="text-xs" style={{ color:sub }}>{t.back}</button>
+            ) : (target.machineId === "?" || myRoom) && (
               <button onClick={()=>setStep(target.machineId==="?"?"pick":myRoom?"owner":"input")} className="text-xs" style={{ color:sub }}>{t.back}</button>
             )}
           </>
@@ -1103,13 +1116,18 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
                 );
               })
             )}
-            <div className="flex items-center gap-2 px-4 py-2.5 border-t"
-              style={{ borderColor:div, background: `color-mix(in srgb, var(--primary) 4%, transparent)` }}>
-              <CalendarDays size={12} style={{ color: senzaQuota || remaining >= 0 ? sub : ORANGE_T, flexShrink:0 }}/>
-              <p className="text-[11px]" style={{ color: senzaQuota || remaining >= 0 ? sub : ORANGE_T }}>
-                {senzaQuota ? t.noQuotaMsg : t.remainingMsg(remaining)}
-              </p>
-            </div>
+            {/* Alla Direzione la riga non compare affatto: spiegare un limite a
+                chi non ce l'ha è solo una riga in più da leggere. La pastiglia
+                "senza limite" qui sopra dice già tutto quel che serve. */}
+            {!senzaQuota && (
+              <div className="flex items-center gap-2 px-4 py-2.5 border-t"
+                style={{ borderColor:div, background: `color-mix(in srgb, var(--primary) 4%, transparent)` }}>
+                <CalendarDays size={12} style={{ color: remaining >= 0 ? sub : ORANGE_T, flexShrink:0 }}/>
+                <p className="text-[11px]" style={{ color: remaining >= 0 ? sub : ORANGE_T }}>
+                  {t.remainingMsg(remaining)}
+                </p>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -2200,9 +2218,9 @@ function FacilitySwitcher({ facility, onChange, lang, adminRole }: {
 // tutto (riaprire l'app ricarica già i dati da sola) e così il selettore
 // manuale del tema, che ora segue sempre quello del telefono — vedi l'effetto
 // che ascolta prefers-color-scheme in cima al componente App.
-function SettingsSheet({ lang, room, adminRole, onLogoutAdmin, onToggleLang, onAccessibility, onClose }: {
+function SettingsSheet({ lang, room, adminRole, onToggleLang, onAccessibility, onClose }: {
   lang: Lang; room: string | null;
-  adminRole: AdminRole | null; onLogoutAdmin: () => void;
+  adminRole: AdminRole | null;
   onToggleLang: () => void; onAccessibility: () => void; onClose: () => void;
 }) {
   const it = lang === "it";
@@ -2279,29 +2297,24 @@ function SettingsSheet({ lang, room, adminRole, onLogoutAdmin, onToggleLang, onA
             onClick={() => { onAccessibility(); onClose(); }}/>
         </div>
 
-        {/* L'accesso amministratore non sta qui: si apre digitando 1935 al
-            posto della camera. Un menu con una voce che il 99% di chi lo apre
-            non può usare sarebbe solo rumore.
-            L'uscita invece sì: dentro le sezioni riservate c'è già, ma un
-            amministratore passa la maggior parte del tempo sulla dashboard
-            normale, e da lì non aveva alcun modo di chiudere la sessione. */}
+        {/* Né l'accesso né l'uscita stanno qui.
+            L'accesso si apre digitando 1935 al posto della camera: una voce di
+            menu che il 99% di chi lo apre non può usare sarebbe solo rumore.
+            L'uscita è il pulsante della camera in alto — toccarlo chiude la
+            sessione e riporta alla scelta della stanza. Un solo posto, quello
+            che si tocca comunque per cambiare identità, invece di tre sparsi
+            fra menu e barre sopra ogni sezione. Qui resta solo la riga che
+            dice a nome di chi si sta prenotando, che è l'informazione facile
+            da perdere di vista. */}
         {adminRole !== null && (
-          <div className="rounded-2xl overflow-hidden border mx-5 mt-4" style={{ borderColor:div }}>
-            <div className="px-4 pt-3 pb-2 flex items-start gap-2">
-              <ShieldCheck size={14} style={{ color:sub, marginTop:2 }}/>
-              <p className="text-[11px] leading-snug" style={{ color:sub }}>
-                {it
-                  ? `Sessione ${adminRole === "sistemista" ? "sistemista" : "FDO"} attiva. Prenoti come Direzione, non come camera.`
-                  : `${adminRole === "sistemista" ? "Sysadmin" : "FDO"} session active. You book as Direzione, not as a room.`}
-              </p>
-            </div>
-            <div style={{ borderTop:`1px solid ${div}` }}>
-              <Row icon={<LogOut size={18}/>}
-                label={it ? "Esci da amministratore" : "Sign out of administration"}
-                sub={it ? "Torni a scegliere una camera" : "Back to picking a room"}
-                onClick={() => { onClose(); onLogoutAdmin(); }}/>
-            </div>
-          </div>
+          <p className="text-[11px] mx-5 mt-4 leading-snug flex items-start gap-2" style={{ color:sub }}>
+            <ShieldCheck size={14} style={{ marginTop:1, flexShrink:0 }}/>
+            <span>
+              {it
+                ? `Sessione ${adminRole === "sistemista" ? "sistemista" : "FDO"} attiva: prenoti come Direzione. Per uscire tocca DIREZIONE in alto.`
+                : `${adminRole === "sistemista" ? "Sysadmin" : "FDO"} session active: you book as Direzione. Tap DIREZIONE at the top to sign out.`}
+            </span>
+          </p>
         )}
       </div>
 
@@ -2693,11 +2706,8 @@ export default function App() {
     }
   }, []);
 
-  const logoutAdmin = useCallback(async () => {
-    const { adminLogout } = await import("./AdminPanel");
-    await adminLogout();
-    handleAdminSession(null);
-  }, [handleAdminSession]);
+  // L'uscita dalla modalità amministratore non ha più un pulsante suo: la fa
+  // changeRoom(), cioè il pulsante della camera in alto. Vedi lì.
 
   // Riallinea in silenzio la subscription push col server.
   //
@@ -2841,7 +2851,7 @@ export default function App() {
   // volta sola invece che copiati in entrambi i rami.
   const settingsSheet = settingsOpen && (
     <SettingsSheet lang={lang} room={roomNumber}
-      adminRole={adminRole} onLogoutAdmin={logoutAdmin}
+      adminRole={adminRole}
       onToggleLang={()=>setLang(l=>l==="it"?"en":"it")}
       onAccessibility={() => setAccessibilityOpen(true)}
       onClose={() => setSettingsOpen(false)} />

@@ -285,6 +285,11 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   const [busy, setBusy]         = useState(false);
   const [bookingRoom, setBookingRoom] = useState(myRoom || "");
 
+  // Gli strumenti non in cuffia si possono usare solo fra le 16 e le 20: la
+  // fascia scelta ne esce se comincia prima delle 16 o finisce dopo le 20.
+  const STRUMENTI_DA = 16 * 60, STRUMENTI_A = 20 * 60;
+  const fuoriFasciaStrumenti = start < STRUMENTI_DA || end > STRUMENTI_A;
+
   // Spostando l'inizio oltre la fine, la fine lo segue di uno step invece di
   // restare su un valore che il selettore non offre più (il campo mostrava
   // ancora "20:00" con inizio alle 23:00, e si scopriva l'errore solo premendo
@@ -463,7 +468,16 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
             </div>
           )}
 
-          {room === "music" && <p className="text-[11px] mb-3" style={{ color: "#f59e0b" }}>{t.musicNote}</p>}
+          {/* L'avviso compare solo se la fascia scelta esce davvero da
+              16:00–20:00. Stampandolo sempre diventava arredamento: chi
+              prenotava dentro la fascia lo leggeva per settimane senza che lo
+              riguardasse, e chi ne usciva non lo notava piu'. */}
+          {room === "music" && fuoriFasciaStrumenti && (
+            <p className="text-[11px] mb-3 flex items-start gap-1.5" style={{ color: "var(--status-prev-text)" }}>
+              <AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 1 }} />
+              {t.musicNote}
+            </p>
+          )}
 
           <button onClick={submit} disabled={busy}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"

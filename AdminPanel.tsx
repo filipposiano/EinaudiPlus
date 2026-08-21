@@ -507,8 +507,10 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
                 ) : (
                   <span style={{ fontSize: 12, fontWeight: 700, ...S.sub }}>Messaggio</span>
                 )}
+                {/* Solo il numero: la lavanderia si ricava dalla camera (sotto
+                    il 100 e' la Manica) e stamparla accanto era una parola in
+                    piu' per riga che non aggiungeva niente. */}
                 <span style={{ fontSize: 12 }}>{f.room ? `camera ${f.room}` : "anonimo"}</span>
-                {f.laundry && <span style={{ fontSize: 11, ...S.sub }}>{f.laundry}</span>}
                 <span className="adm-feed-head__when" style={{ fontSize: 11, ...S.sub }}
                       title={new Date(f.created_at).toLocaleString("it-IT")}>
                   {quandoRelativo(f.created_at)}
@@ -525,26 +527,33 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
                 </p>
               )}
 
+              {/* I pulsanti dicono cosa si sta per decidere, non "gestisci".
+                  Davanti a una segnalazione di guasto le decisioni possibili
+                  sono due — la macchina e' davvero rotta, oppure no — e prima
+                  erano nascoste entrambe dietro un generico "Segna come
+                  gestita" che non diceva quale delle due stavi prendendo.
+
+                  Su un messaggio che non e' un guasto resta un'azione sola:
+                  li' non c'e' niente da decidere, solo da archiviare. */}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {/* L'azione che chiude il caso sta accanto a cio' che lo apre. */}
-                {machine && stato && (
-                  stato.oos ? (
-                    <button style={S.btn} disabled={inCorso}
-                            onClick={() => fuoriServizio(f, machine, false)}>
-                      Rimetti in servizio
-                    </button>
-                  ) : (
-                    <button style={{ ...S.danger, padding: "8px 14px", fontSize: 13 }} disabled={inCorso}
-                            onClick={() => fuoriServizio(f, machine, true)}>
-                      Metti fuori servizio
-                    </button>
-                  )
+                {machine && stato && !stato.oos && (
+                  <button style={{ ...S.danger, padding: "8px 14px", fontSize: 13 }} disabled={inCorso}
+                          onClick={() => fuoriServizio(f, machine, true)}>
+                    Conferma guasto · fuori servizio
+                  </button>
                 )}
                 {machine && stato?.oos && (
-                  <span style={{ fontSize: 12, alignSelf: "center", ...S.sub }}>Già fuori servizio.</span>
+                  <button style={S.btn} disabled={inCorso}
+                          onClick={() => fuoriServizio(f, machine, false)}>
+                    Rimetti in servizio
+                  </button>
                 )}
                 <button style={S.btn} disabled={inCorso} onClick={() => mark(f)}>
-                  {f.handled ? "Riapri" : "Segna come gestita"}
+                  {f.handled
+                    ? "Riapri"
+                    : machine
+                      ? (stato?.oos ? "Archivia" : "Non è guasta · archivia")
+                      : "Archivia"}
                 </button>
               </div>
             </div>
@@ -931,11 +940,9 @@ export function AdminScreens({ tab, onSession }: {
   useEffect(() => { refreshSession(); }, [refreshSession]);
   useEffect(() => { if (logged) loadOverview(); }, [logged, loadOverview]);
 
-  async function logout() {
-    await adminLogout();
-    setLogged(false); setRole(null);
-    onSession(null);
-  }
+  // L'uscita non sta piu' qui: la fa il pulsante della camera nell'app, che
+  // chiude la sessione e riporta al selettore della stanza. `adminLogout()`
+  // resta esportato ed e' quello che App.tsx chiama.
 
   const sistemista = role === "sistemista";
 
@@ -958,25 +965,12 @@ export function AdminScreens({ tab, onSession }: {
 
   return (
     <div style={{ paddingBottom: 40, color: "var(--foreground)" }}>
-      {/* Barra del ruolo: dice con quale account si sta agendo e permette di
-          uscire senza lasciare la sezione. Solo il ruolo, non anche il nome
-          utente: c'e' un account per ruolo e i due valori coincidono ("fdo"
-          col badge FDO), quindi stamparli entrambi dava "sistemistaSISTEMISTA". */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 10, marginBottom: 16,
-        padding: "10px 14px", borderRadius: 14, border: "1px solid var(--border)",
-      }}>
-        <span style={{
-          padding: "2px 8px", borderRadius: 99, fontSize: 10,
-          fontWeight: 700, letterSpacing: 0.5, textTransform: "uppercase",
-          background: "color-mix(in srgb, var(--primary) 15%, transparent)",
-          color: "var(--primary)",
-        }}>{sistemista ? "sistemista" : "FDO"}</span>
-        <span style={{ fontSize: 12, flex: 1, ...S.sub }}>
-          {sistemista ? "Accesso completo." : "Macchine e segnalazioni."}
-        </span>
-        <button style={S.btn} onClick={logout}>Esci</button>
-      </div>
+      {/* Qui c'era una barra col ruolo e il pulsante Esci. Tolta: l'uscita
+          avviene toccando il pulsante della camera ("DIREZIONE") in alto, che
+          chiude la sessione e riporta alla scelta della stanza. Un secondo
+          punto d'uscita, ripetuto su ogni sezione, faceva solo rumore sopra il
+          contenuto — e il ruolo si capisce gia' da quali voci si vedono in
+          navigazione (Ricorrenti e Manutenzione solo da sistemista). */}
 
       {/* Le sezioni riservate al sistemista non compaiono nemmeno nella
           navigazione, ma se ci si arriva lo stesso il controllo vero resta sul

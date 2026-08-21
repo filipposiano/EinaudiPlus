@@ -233,10 +233,32 @@ section("Operazioni admin");
     const s1 = await call(adminData, { body: { action: "setMachineStatus", room: "100", machine: "W-C", oos: true }, cookie });
     check("mette fuori servizio", s1.body?.status?.["W-C"] === "oos");
 
-    // Il punto della modifica richiesta: guasta ma ancora prenotabile.
-    const b = await call(laundry, { body: { token: TOKEN, action: "book", day: 5, slot: SLOT, machine: "W-C", room: ROOM } });
+    // Uno slot LIBERO davvero, letto dalla griglia, invece di uno a caso.
+    //
+    // Questi test girano contro il database di produzione (.env.local punta
+    // li', un database di staging non esiste). Con la settimana piena di
+    // prenotazioni vere, pescare `day: 5, slot: random` finiva regolarmente
+    // addosso a qualcuno — il test falliva con {"error":"occupata","by":"273"}
+    // e sembrava una regressione del codice mentre era solo sfortuna.
+    const griglia = (await call(laundry, { method: "GET", query: { token: TOKEN, room: ROOM } })).body?.week || {};
+    let libero = null;
+    for (let d = 6; d >= 0 && !libero; d--) {
+      for (let sl = 18; sl >= 0; sl--) {
+        if (!griglia?.[d]?.[sl]?.["W-C"]) { libero = { day: d, slot: sl }; break; }
+      }
+    }
+    if (!libero) libero = { day: 5, slot: SLOT };   // settimana piena: si tenta comunque
+
+    const b = await call(laundry, { body: { token: TOKEN, action: "book", day: libero.day, slot: libero.slot, machine: "W-C", room: ROOM } });
     check("una macchina guasta resta prenotabile", b.body?.ok === true, JSON.stringify(b.body).slice(0, 120));
     check("con avviso warning='oos'", b.body?.warning === "oos");
+
+    // La prenotazione di prova si toglie: restava in griglia, e a ogni giro
+    // il test ne lasciava un'altra finche' la settimana non si riempiva di
+    // camere inventate — che poi e' come si era arrivati alle collisioni.
+    if (b.body?.ok) {
+      await call(laundry, { body: { token: TOKEN, action: "clear", day: libero.day, slot: libero.slot, machine: "W-C", room: ROOM } });
+    }
 
     check("rimette in servizio",
       (await call(adminData, { body: { action: "setMachineStatus", room: "100", machine: "W-C", oos: false }, cookie })).body?.status?.["W-C"] === "ok");
@@ -278,15 +300,25 @@ let sysCookie = null;
     check("puo' leggere le regole",
       (await call(adminData, { body: { action: "recurringList" }, cookie: sysCookie })).body?.ok === true);
 
-    // Regola lavanderia: ogni mercoledì, slot fisso, camera fissa.
+    // Regola lavanderia, su un turno mercoledì DAVVERO libero.
+    //
+    // Con uno slot a caso la regola cadeva su una prenotazione vera, e allora
+    // non si materializza (per progetto: una regola non scippa il turno a
+    // nessuno). Il test lo leggeva come un fallimento.
+    const gr = (await call(laundry, { method: "GET", query: { token: TOKEN, room: ROOM } })).body?.week || {};
+    let slotLibero = SLOT;
+    for (let sl = 18; sl >= 0; sl--) {
+      if (!gr?.[2]?.[sl]?.["W-B"]) { slotLibero = sl; break; }
+    }
+
     const add = await call(adminData, {
-      body: { action: "recurringAddLaundry", laundry_id: 1, day: 2, slot: SLOT, machine: "W-B", room: ROOM },
+      body: { action: "recurringAddLaundry", laundry_id: 1, day: 2, slot: slotLibero, machine: "W-B", room: ROOM },
       cookie: sysCookie,
     });
     check("crea una regola ricorrente", add.body?.ok === true, JSON.stringify(add.body));
 
     const dup = await call(adminData, {
-      body: { action: "recurringAddLaundry", laundry_id: 1, day: 2, slot: SLOT, machine: "W-B", room: "999" },
+      body: { action: "recurringAddLaundry", laundry_id: 1, day: 2, slot: slotLibero, machine: "W-B", room: "999" },
       cookie: sysCookie,
     });
     check("due regole sullo stesso turno respinte", dup.body?.ok === false, JSON.stringify(dup.body));
@@ -294,8 +326,8 @@ let sysCookie = null;
     // La regola dev'essere già diventata una prenotazione vera.
     const snap = await call(laundry, { method: "GET", query: { token: TOKEN, room: ROOM } });
     check("la regola è già una prenotazione in griglia",
-      snap.body?.week?.["2"]?.[String(SLOT)]?.["W-B"] === ROOM,
-      JSON.stringify(snap.body?.week?.["2"]?.[String(SLOT)]));
+      snap.body?.week?.["2"]?.[String(slotLibero)]?.["W-B"] === ROOM,
+      JSON.stringify(snap.body?.week?.["2"]?.[String(slotLibero)]));
 
     // Idempotenza: riapplicare non deve duplicare né fallire.
     const again = await call(adminData, { body: { action: "applyRecurring", offset: 0 }, cookie: sysCookie });
@@ -312,6 +344,13 @@ let sysCookie = null;
       check("eliminazione",
         (await call(adminData, { body: { action: "recurringDelete", id: mine.id }, cookie: sysCookie })).body?.ok === true);
     }
+
+    // Cancellare la regola NON cancella la prenotazione che ha gia' creato: e'
+    // il comportamento giusto (documentato in DEPLOY.md), ma in un test vuol
+    // dire lasciare una riga a ogni giro. Ne erano rimaste sedici, una per
+    // slot, che avevano riempito tutto il mercoledi' di W-B e facevano
+    // fallire proprio il controllo qui sopra. Si toglie a mano.
+    await call(laundry, { body: { token: TOKEN, action: "clear", day: 2, slot: slotLibero, machine: "W-B", room: ROOM } });
 
     // Regola sala
     const sp = await call(adminData, {
