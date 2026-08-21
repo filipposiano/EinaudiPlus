@@ -26,7 +26,7 @@ import {
   type WeekData, type StatusData, type Machine, type MachineType,
   type MyBooking, type Fav,
 } from "./modello";
-import { T, errMsg, fmtTime, fmtDay, type Lang } from "./i18n";
+import { T, errMsg, fmtTime, fmtDay, linguaIniziale, salvaLingua, type Lang } from "./i18n";
 import { SettingsSheet, InstallPrompt } from "./pannelli";
 import {
   RED, RED_FG, GREEN, YELLOW, OOS_C, ORANGE,
@@ -160,7 +160,7 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
         <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
         <div className="flex items-center justify-between mb-5">
           <div>
-            <p className="text-xs font-mono mb-0.5" style={{ color:sub }}>{t.days[dayIdx]} {DAYS_DATE[dayIdx]} {monShort(dayIdx, lang)}</p>
+            <p className="text-xs font-mono mb-0.5" style={{ color:sub }}>{t.days[dayIdx]} {DAYS_DATE[dayIdx]} {monShort(dayIdx, t.mesiBrevi)}</p>
             <p className="text-lg font-mono font-bold" style={{ color:fg }}>{slot.start} – {slot.end}</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl" style={{ color:sub, background:chip }}><X size={16}/></button>
@@ -350,7 +350,7 @@ function ModifyModal({ target, lang, onEdit, onDelete, onClose }: {
         <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
         <div className="flex items-center justify-between mb-1">
           <p className="text-xs font-mono" style={{ color:sub }}>
-            {t.days[target.dayIdx]} {DAYS_DATE[target.dayIdx]} {monShort(target.dayIdx, lang)} · Lav. {target.machineId[2]}
+            {t.days[target.dayIdx]} {DAYS_DATE[target.dayIdx]} {monShort(target.dayIdx, t.mesiBrevi)} · Lav. {target.machineId[2]}
           </p>
           <button onClick={onClose} className="p-1.5 rounded-lg" style={{ color:sub, background:chip }}><X size={14}/></button>
         </div>
@@ -730,7 +730,7 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold" style={{ color:fg }}>Lav. {b.mid[2]} · {s.start}–{s.end}</p>
                       <p className="text-[11px] font-mono" style={{ color: cur ? RED : sub }}>
-                        {cur ? t.inProgressNow : `${t.days[b.day]} ${DAYS_DATE[b.day]} ${monShort(b.day, lang)}`}
+                        {cur ? t.inProgressNow : `${t.days[b.day]} ${DAYS_DATE[b.day]} ${monShort(b.day, t.mesiBrevi)}`}
                       </p>
                     </div>
                     {cur && <span className="size-2 rounded-full animate-pulse shrink-0" style={{ background:RED }}/>}
@@ -1181,7 +1181,7 @@ function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify,
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-mono mb-0.5" style={{ color:sub }}>
-                {t.days[target.dayIdx]} {DAYS_DATE[target.dayIdx]} {monShort(target.dayIdx, lang)}
+                {t.days[target.dayIdx]} {DAYS_DATE[target.dayIdx]} {monShort(target.dayIdx, t.mesiBrevi)}
               </p>
               <p className="text-xl font-mono font-bold" style={{ color:fg }}>{slot.start} – {slot.end}</p>
             </div>
@@ -1446,6 +1446,64 @@ function SegnalaGuastoSheet({ lang, status, onStatus, onClose, roomNumber }: {
     catch (e) { setToast(errMsg(e, lang)); }
   }
 
+  /**
+   * Il secondo passo: scelta la macchina, si apre una schermata SUA.
+   *
+   * Prima la nota compariva come una scheda in fondo all'elenco delle
+   * macchine: bisognava accorgersene e scorrere fin laggiù, con la lista
+   * ancora davanti agli occhi a suggerire che ci fosse dell'altro da scegliere.
+   * Qui la lista sparisce e resta una cosa sola da fare — scrivere, se si
+   * vuole, e inviare — con l'indietro per cambiare macchina.
+   */
+  if (nota) {
+    const etichetta = `${nota.m.type === "washer" ? t.washerLabel : t.dryerLabel} ${nota.m.label}`;
+    return (
+      <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
+        {toast && <Toast msg={toast} onClose={() => setToast(null)} />}
+        <div className="w-full rounded-t-3xl pb-8" style={{ background:bg }} onClick={(e)=>e.stopPropagation()}>
+          <div className="px-6 pt-5 pb-4">
+            <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 rounded-xl shrink-0"
+                  style={{ background:`color-mix(in srgb, var(--destructive) 12%, transparent)`, color:OOS_T }}>
+                  {nota.m.type === "washer" ? <WashingMachine size={18}/> : <Wind size={17}/>}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-mono tracking-widest uppercase" style={{ color:sub }}>{t.reportOos}</p>
+                  <p className="text-lg font-bold truncate" style={{ color:fg }}>{etichetta}</p>
+                </div>
+              </div>
+              <button onClick={onClose} className="p-2 rounded-xl shrink-0" style={{ color:sub, background:"var(--secondary)" }}>
+                <X size={16}/>
+              </button>
+            </div>
+          </div>
+
+          <div className="px-5">
+            <p className="text-sm mb-2" style={{ color:fg }}>{t.notaDesc}</p>
+            <textarea
+              value={nota.testo} autoFocus rows={3} maxLength={200}
+              onChange={(e)=>setNota((n)=>n && { ...n, testo:e.target.value })}
+              placeholder={t.notaPlaceholder}
+              className="w-full rounded-2xl px-4 py-3 text-sm outline-none resize-none mb-2"
+              style={{ background:surf, color:fg, border:`1px solid ${div}` }}/>
+            <p className="text-[11px] mb-4" style={{ color:sub }}>{t.notaFacoltativa}</p>
+
+            <button onClick={()=>invia(nota.m, nota.testo)}
+              className="w-full py-3.5 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2 mb-2"
+              style={{ background:RED, color:RED_FG }}>
+              <Send size={15}/>{t.inviaSegnalazione}
+            </button>
+            <button onClick={()=>setNota(null)}
+              className="w-full py-3 rounded-2xl text-sm font-medium"
+              style={{ background:"transparent", color:sub }}>{t.back}</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
       {toast && <Toast msg={toast} onClose={() => setToast(null)} />}
@@ -1482,33 +1540,6 @@ function SegnalaGuastoSheet({ lang, status, onStatus, onClose, roomNumber }: {
           </div>
         </div>
 
-        {/* Nota facoltativa. Si apre dopo aver scelto la macchina, non prima:
-            chiedere "cosa non va?" a chi non ha ancora detto "quale?" e' un
-            passaggio in piu' per il caso normale. Si puo' saltare. */}
-        {nota && (
-          <div className="px-5 mt-5">
-            <div className="rounded-2xl border p-4" style={{ background:surf, borderColor:div }}>
-              <p className="text-sm font-semibold mb-1" style={{ color:fg }}>
-                {nota.m.type === "washer" ? t.washerLabel : t.dryerLabel} {nota.m.label}
-              </p>
-              <p className="text-xs mb-3" style={{ color:sub }}>{t.notaDesc}</p>
-              <textarea
-                value={nota.testo} autoFocus rows={2} maxLength={200}
-                onChange={(e)=>setNota((n)=>n && { ...n, testo:e.target.value })}
-                placeholder={t.notaPlaceholder}
-                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none mb-3"
-                style={{ background:"var(--background)", color:fg, border:`1px solid ${div}` }}/>
-              <div className="flex gap-2">
-                <button onClick={()=>setNota(null)}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
-                  style={{ background:"var(--secondary)", color:fg }}>{t.cancel}</button>
-                <button onClick={()=>invia(nota.m, nota.testo)}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
-                  style={{ background:RED, color:RED_FG }}>{t.reportAction}</button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -1775,13 +1806,13 @@ function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility,
       {/* Navigazione */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto">
         {/* Strutture: Lavanderia / Cinema / Musica */}
-        {showNav && FACILITIES.map(({ id, icon: Icon, label }) => {
+        {showNav && FACILITIES.map(({ id, icon: Icon, chiave }) => {
           const isActive = facility === id;
           return (
             <button key={id} onClick={()=>onFacility(id)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors text-left ${isActive ? "" : "desk-nav"}`}
               style={isActive ? { background:RED, color:RED_FG } : { color:sub }}>
-              <Icon size={18}/>{label[lang]}
+              <Icon size={18}/>{T[lang][chiave]}
             </button>
           );
         })}
@@ -1811,15 +1842,15 @@ function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility,
           <>
             <div className="h-px my-2 mx-2" style={{ background:div }}/>
             <p className="px-3 pb-1 text-[10px] font-bold uppercase tracking-widest" style={{ color:sub }}>
-              {lang === "it" ? "Amministrazione" : "Administration"}
+              {T[lang].amministrazione}
             </p>
-            {adminSectionsFor(adminRole).map(({ id, icon: Icon, label }) => {
+            {adminSectionsFor(adminRole).map(({ id, icon: Icon, chiave }) => {
               const isActive = facility === id;
               return (
                 <button key={id} onClick={()=>onFacility(id)}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors text-left ${isActive ? "" : "desk-nav"}`}
                   style={isActive ? { background:RED, color:RED_FG } : { color:sub }}>
-                  <Icon size={18}/>{label[lang]}
+                  <Icon size={18}/>{T[lang][chiave]}
                 </button>
               );
             })}
@@ -1843,7 +1874,7 @@ function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility,
         <button onClick={onOpenSettings}
           className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors desk-nav"
           style={{ color:fg }}>
-          <Settings size={16} style={{ color:sub }}/>{lang === "it" ? "Impostazioni" : "Settings"}
+          <Settings size={16} style={{ color:sub }}/>{T[lang].impostazioni}
         </button>
         <p className="text-center text-[10px] font-mono pt-1" style={{ color:sub }}>v. {APP_VERSION} (beta)</p>
       </div>
@@ -1864,21 +1895,25 @@ function CenterState({ children }: { isDark?: boolean; children: React.ReactNode
 
 // ─── Selettore struttura (Lavanderia / Cinema / Musica) ───────────────────────
 
-const FACILITIES: { id: Facility; icon: any; label: { it: string; en: string } }[] = [
-  { id: "laundry", icon: WashingMachine, label: { it: "Lavanderia", en: "Laundry" } },
-  { id: "cinema",  icon: Film,           label: { it: "Cinema",     en: "Cinema" } },
-  { id: "music",   icon: Music,          label: { it: "Musica",     en: "Music" } },
+//  e non l'etichetta: i testi stanno tutti in lingue/, e con sei
+// lingue un oggetto { it, en } scritto qui dentro non reggeva piu'.
+const FACILITIES: { id: Facility; icon: any; chiave: "navLavanderia" | "navCinema" | "navMusica" }[] = [
+  { id: "laundry", icon: WashingMachine, chiave: "navLavanderia" },
+  { id: "cinema",  icon: Film,           chiave: "navCinema" },
+  { id: "music",   icon: Music,          chiave: "navMusica" },
 ];
 
 // Le voci riservate al sistemista non compaiono con la sessione FDO, ma il
 // controllo vero resta sul server: nascondere una voce non è un'autorizzazione.
 const ADMIN_SECTIONS: {
-  id: AdminTab; icon: any; label: { it: string; en: string }; sistemistaOnly?: boolean;
+  id: AdminTab; icon: any;
+  chiave: "navMacchine" | "navSegnalazioni" | "navRicorrenti" | "navManutenzione";
+  sistemistaOnly?: boolean;
 }[] = [
-  { id: "macchine",     icon: Wrench,        label: { it: "Macchine",     en: "Machines" } },
-  { id: "segnalazioni", icon: MessageSquare, label: { it: "Segnalazioni", en: "Reports" } },
-  { id: "ricorrenti",   icon: Repeat,        label: { it: "Ricorrenti",   en: "Recurring" },   sistemistaOnly: true },
-  { id: "manutenzione", icon: Eraser,        label: { it: "Manutenzione", en: "Maintenance" }, sistemistaOnly: true },
+  { id: "macchine",     icon: Wrench,        chiave: "navMacchine" },
+  { id: "segnalazioni", icon: MessageSquare, chiave: "navSegnalazioni" },
+  { id: "ricorrenti",   icon: Repeat,        chiave: "navRicorrenti",   sistemistaOnly: true },
+  { id: "manutenzione", icon: Eraser,        chiave: "navManutenzione", sistemistaOnly: true },
 ];
 
 const adminSectionsFor = (role: AdminRole | null) =>
@@ -1905,8 +1940,8 @@ function FacilitySwitcher({ facility, onChange, lang, adminRole }: {
   return (
     <div className="shrink-0">
       <div className="flex gap-1.5 px-5 pt-3 pb-1">
-        {FACILITIES.map(({ id, icon, label }) => (
-          <Chip key={id} id={id} icon={icon} label={label[lang]}/>
+        {FACILITIES.map(({ id, icon, chiave }) => (
+          <Chip key={id} id={id} icon={icon} label={T[lang][chiave]}/>
         ))}
       </div>
 
@@ -1917,8 +1952,8 @@ function FacilitySwitcher({ facility, onChange, lang, adminRole }: {
           oltre il bordo dello schermo e veniva tagliata. */}
       {sections.length > 0 && (
         <div className="grid grid-cols-2 gap-1.5 px-5 pt-1.5">
-          {sections.map(({ id, icon, label }) => (
-            <Chip key={id} id={id} icon={icon} label={label[lang]}/>
+          {sections.map(({ id, icon, chiave }) => (
+            <Chip key={id} id={id} icon={icon} label={T[lang][chiave]}/>
           ))}
         </div>
       )}
@@ -1944,7 +1979,7 @@ export default function App() {
     typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
       ? "dark" : "light"
   );
-  const [lang,   setLang]     = useState<Lang>("it");
+  const [lang,   setLang]     = useState<Lang>(linguaIniziale);
   const [roomNumber] = useState<string | null>(() => {
     try { return localStorage.getItem("laundryhub.room"); } catch { return null; }
   });
@@ -2113,12 +2148,30 @@ export default function App() {
       : await api.book(day, slot, machine, room);
     setWeek(s.week); setStatus(s.status);
   }, []);
-  // clear_laundry è già permissiva per chiunque (nessun controllo di proprietà
-  // lato server, scelta deliberata in assenza di autenticazione): non serve un
-  // percorso amministrativo separato per cancellare, funziona già per tutti.
+  /**
+   * Libera un turno.
+   *
+   * Per i residenti resta permissiva come sempre: senza login la camera è
+   * autodichiarata, quindi un controllo di proprietà si aggirerebbe cambiando
+   * una stringa nel browser.
+   *
+   * L'unica eccezione sono i turni della DIREZIONE, che il server protegge:
+   * lì l'identità è verificata davvero, quindi difenderla ha senso. Chi ha la
+   * sessione passa dal percorso amministrativo e può toglierli; gli altri
+   * ricevono "riservata alla direzione".
+   */
   const handleClear = useCallback(async (day:number, slot:number, machine:string) => {
-    const s = await api.clearBooking(day, slot, machine); setWeek(s.week); setStatus(s.status);
-  }, []);
+    // Il percorso amministrativo si usa SOLO quando serve davvero, cioè su un
+    // turno della Direzione. Per tutto il resto va bene quello pubblico, anche
+    // per un amministratore: così l'unica strada che richiede la migrazione
+    // 006 è quella che quella migrazione introduce, e nient'altro cambia
+    // comportamento nel frattempo.
+    const diChiE = week[day]?.[slot]?.[machine];
+    const s = isAdmin && diChiE === api.DIREZIONE
+      ? await api.clearAsDirezione(day, slot, machine)
+      : await api.clearBooking(day, slot, machine);
+    setWeek(s.week); setStatus(s.status);
+  }, [isAdmin, week]);
   // Il residente segnala il guasto, non cambia lo stato: la segnalazione finisce
   // fra i feedback e un amministratore decide. Lo stato mostrato non cambia
   // subito, ed e' corretto cosi' — cambiera' quando l'admin l'avra' verificato.
@@ -2215,7 +2268,7 @@ export default function App() {
   const settingsSheet = settingsOpen && (
     <SettingsSheet lang={lang} room={roomNumber}
       adminRole={adminRole}
-      onToggleLang={()=>setLang(l=>l==="it"?"en":"it")}
+      onLang={(l)=>{ setLang(l); salvaLingua(l); }}
       onAccessibility={() => setAccessibilityOpen(true)}
       onClose={() => setSettingsOpen(false)} />
   );
@@ -2296,7 +2349,7 @@ export default function App() {
               notifiche, installazione e accessibilità stanno tutte dentro
               Impostazioni, invece di quattro-cinque icone separate. */}
           <button onClick={() => setSettingsOpen(true)} className="p-1.5 rounded-lg" style={{ color:"var(--gray-accessible-text)" }}
-            aria-label={lang==="it" ? "Impostazioni" : "Settings"}>
+            aria-label={T[lang].impostazioni}>
             <Settings size={16}/>
           </button>
         </div>

@@ -14,7 +14,7 @@ const MUTATIONS = new Set([
   "markFeedback", "deleteSpaceBooking",
   "recurringAddLaundry", "recurringAddSpace", "recurringSetActive",
   "recurringDelete", "applyRecurring", "purge",
-  "bookDirezione", "bookSpaceDirezione",
+  "bookDirezione", "bookSpaceDirezione", "clearDirezione",
 ]);
 
 // Riservate al sistemista. La portineria non le vede nel pannello, ma il
@@ -153,6 +153,19 @@ export default async function handler(req, res) {
           p_start: Number(body.start),
           p_end: Number(body.end),
           p_type: body.type ? String(body.type) : null,
+        });
+        break;
+
+      // Liberare un turno, compresi quelli della DIREZIONE che dal percorso
+      // pubblico sono protetti. `p_as_admin: true` si può scrivere qui e solo
+      // qui: currentAdmin() ha già verificato il cookie in cima all'handler.
+      case "clearDirezione":
+        result = await rpc("clear_laundry", {
+          p_room: String(body.room || ""),
+          p_day: Number(body.day),
+          p_slot: Number(body.slot),
+          p_machine: String(body.machine || ""),
+          p_as_admin: true,
         });
         break;
 

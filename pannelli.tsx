@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
-import { T, type Lang } from "./i18n";
+import { T, LINGUE, type Lang } from "./i18n";
 import { RED, RED_FG } from "./tema";
 import type { Role as AdminRole } from "./AdminPanel";
 // ─── Impostazioni ───────────────────────────────────────────────────────────
@@ -23,12 +23,18 @@ import type { Role as AdminRole } from "./AdminPanel";
 // tutto (riaprire l'app ricarica già i dati da sola) e così il selettore
 // manuale del tema, che ora segue sempre quello del telefono — vedi l'effetto
 // che ascolta prefers-color-scheme in cima al componente App.
-export function SettingsSheet({ lang, room, adminRole, onToggleLang, onAccessibility, onClose }: {
+export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, onClose }: {
   lang: Lang; room: string | null;
   adminRole: AdminRole | null;
-  onToggleLang: () => void; onAccessibility: () => void; onClose: () => void;
+  onLang: (l: Lang) => void; onAccessibility: () => void; onClose: () => void;
 }) {
   const it = lang === "it";
+  // Le lingue non sono più due: al posto dell'interruttore c'è un elenco che
+  // si apre. Vive qui e non in un foglio a parte perché è una riga sola che
+  // si espande — aprire un altro pannello sopra questo, per scegliere fra sei
+  // voci, sarebbe stato un livello di troppo.
+  const [lingueAperte, setLingueAperte] = useState(false);
+  const linguaCorrente = LINGUE.find((l) => l.id === lang);
   const fg  = "var(--foreground)";
   const sub = "var(--gray-accessible-text)";
   const div = "var(--border)";
@@ -53,8 +59,8 @@ export function SettingsSheet({ lang, room, adminRole, onToggleLang, onAccessibi
   }
 
   const reminderSub = reminderState === "denied"
-    ? (it ? "Bloccate dal browser" : "Blocked by the browser")
-    : reminderState === "on" ? (it ? "Attive" : "On") : (it ? "Non attive" : "Off");
+    ? T[lang].notificheBloccate
+    : reminderState === "on" ? T[lang].attive : T[lang].nonAttive;
 
   const Row = ({ icon, label, sub: subtext, onClick }: {
     icon: React.ReactNode; label: string; sub?: string; onClick: () => void;
@@ -74,7 +80,7 @@ export function SettingsSheet({ lang, room, adminRole, onToggleLang, onAccessibi
     <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
       <div className="w-full rounded-t-3xl pb-8" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
         <div className="px-6 pt-5 pb-4 flex items-center justify-between">
-          <p className="text-lg font-bold" style={{ color:fg }}>{it ? "Impostazioni" : "Settings"}</p>
+          <p className="text-lg font-bold" style={{ color:fg }}>{T[lang].impostazioni}</p>
           <button onClick={onClose} className="p-2 rounded-xl" style={{ color:sub, background:"var(--secondary)" }}>
             <X size={16}/>
           </button>
@@ -82,23 +88,41 @@ export function SettingsSheet({ lang, room, adminRole, onToggleLang, onAccessibi
 
         <div className="rounded-2xl overflow-hidden border mx-5" style={{ borderColor:div }}>
           <div style={{ borderBottom:`1px solid ${div}` }}>
-            <Row icon={<Globe size={18}/>} label={it ? "Lingua" : "Language"}
-              sub={it ? "Italiano" : "English"} onClick={onToggleLang}/>
+            <Row icon={<Globe size={18}/>} label={T[lang].navLingua}
+              sub={`${linguaCorrente?.bandiera ?? ""} ${linguaCorrente?.etichetta ?? ""}`}
+              onClick={() => setLingueAperte((v) => !v)}/>
+            {lingueAperte && (
+              <div style={{ background:"var(--secondary)" }}>
+                {LINGUE.map((l) => (
+                  <button key={l.id}
+                    onClick={() => { onLang(l.id); setLingueAperte(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left"
+                    style={{
+                      color: l.id === lang ? RED : fg,
+                      fontWeight: l.id === lang ? 600 : 400,
+                    }}>
+                    <span className="text-base">{l.bandiera}</span>
+                    {l.etichetta}
+                    {l.id === lang && <span className="ml-auto">✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           {room && (
             <div style={{ borderBottom:`1px solid ${div}` }}>
               <Row icon={reminderState==="on" ? <BellRing size={18}/> : <Bell size={18}/>}
-                label={it ? "Notifiche turni" : "Shift reminders"} sub={reminderSub}
+                label={T[lang].notificheTurni} sub={reminderSub}
                 onClick={() => setRemindersOpen(true)}/>
             </div>
           )}
           {!standalone && (
             <div style={{ borderBottom:`1px solid ${div}` }}>
-              <Row icon={<Download size={18}/>} label={it ? "Installa l'app" : "Install the app"}
+              <Row icon={<Download size={18}/>} label={T[lang].installaApp}
                 onClick={() => { window.dispatchEvent(new Event("open-install")); onClose(); }}/>
             </div>
           )}
-          <Row icon={<Eye size={18}/>} label={it ? "Accessibilità" : "Accessibility"}
+          <Row icon={<Eye size={18}/>} label={T[lang].accessibilita}
             onClick={() => { onAccessibility(); onClose(); }}/>
         </div>
 
@@ -186,14 +210,14 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
           <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background:"color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
           <div className="flex items-center justify-between mb-1">
             <p className="text-lg font-bold" style={{ color:"var(--foreground)" }}>
-              {it ? "Promemoria turni" : "Shift reminders"}
+              {T[lang].promemoriaTurni}
             </p>
             <button onClick={onClose} className="p-2 rounded-xl" style={{ color:"var(--gray-accessible-text)", background:"var(--secondary)" }}>
               <X size={16}/>
             </button>
           </div>
           <p className="text-xs" style={{ color:"var(--gray-accessible-text)" }}>
-            {it ? "Ti avvisiamo poco prima che inizi il tuo turno." : "We'll ping you shortly before your shift starts."}
+            {T[lang].promemoriaDesc}
           </p>
         </div>
 
@@ -204,14 +228,14 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
               <BellRing size={18} style={{ color: on ? RED : "var(--gray-accessible-text)" }}/>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold" style={{ color:"var(--foreground)" }}>
-                  {it ? "Notifiche del telefono" : "Phone notifications"}
+                  {T[lang].notifichePhone}
                 </p>
                 <p className="text-xs" style={{ color:"var(--gray-accessible-text)" }}>
                   {state === "unsupported"
-                    ? (it ? "Non disponibili su questo dispositivo" : "Not available on this device")
+                    ? T[lang].nonDisponibili
                     : state === "denied"
-                    ? (it ? "Bloccate nelle impostazioni del browser" : "Blocked in browser settings")
-                    : on ? (it ? "Attive" : "On") : (it ? "Non attive" : "Off")}
+                    ? T[lang].bloccateBrowser
+                    : on ? T[lang].attive : T[lang].nonAttive}
                 </p>
               </div>
               {state !== "denied" && state !== "unsupported" && (
@@ -220,7 +244,7 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
                   style={on
                     ? { background:"var(--secondary)", color:"var(--gray-accessible-text)" }
                     : { background:`color-mix(in srgb, ${RED} 12%, transparent)`, color:RED }}>
-                  {busy ? "…" : on ? (it ? "Disattiva" : "Turn off") : (it ? "Attiva" : "Turn on")}
+                  {busy ? "…" : on ? T[lang].disattiva : T[lang].attiva}
                 </button>
               )}
             </div>
@@ -233,19 +257,19 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold" style={{ color:"var(--foreground)" }}>Telegram</p>
                 <p className="text-xs" style={{ color:"var(--gray-accessible-text)" }}>
-                  {it ? "Utile su iPhone, dove le notifiche sono capricciose" : "Handy on iPhone, where push is unreliable"}
+                  {T[lang].telegramDesc}
                 </p>
               </div>
               <button onClick={linkTelegram} disabled={tgBusy || !room}
                 className="rounded-xl px-3 py-2 text-xs font-semibold shrink-0"
                 style={{ background:`color-mix(in srgb, ${RED} 12%, transparent)`, color:RED }}>
-                {tgBusy ? "…" : code ? (it ? "Riapri" : "Reopen") : (it ? "Collega" : "Link")}
+                {tgBusy ? "…" : code ? T[lang].riapri : T[lang].collega}
               </button>
             </div>
 
             {tgErr && (
               <p className="text-xs mt-3" style={{ color:RED }}>
-                {it ? "Non è riuscito. Riprova." : "Didn't work. Try again."}
+                {T[lang].telegramErrore}
               </p>
             )}
 
@@ -263,22 +287,22 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
                     ricopiare "@nome" e poi il codice a mano è l'esatto attrito
                     che il tocco automatico dovrebbe evitare. */}
                 <p className="text-[11px] mt-2 mb-1.5" style={{ color:"var(--gray-accessible-text)" }}>
-                  {it ? "Non si è aperto?" : "Didn't open?"}
+                  {T[lang].nonSiApre}
                 </p>
                 {bot ? (
                   <a href={`https://t.me/${bot}?start=${code}`} target="_blank" rel="noopener noreferrer"
                      className="block text-center text-xs font-semibold py-2.5 rounded-xl"
                      style={{ background:`color-mix(in srgb, ${RED} 12%, transparent)`, color:RED }}>
-                    {it ? "Riprova ad aprire Telegram" : "Try opening Telegram again"}
+                    {T[lang].riprovaTelegram}
                   </a>
                 ) : (
                   <p className="text-[11px]" style={{ color:"var(--gray-accessible-text)" }}>
-                    {it ? "Scrivi al bot questo codice: " : "Message the bot this code: "}
+                    {T[lang].scriviCodice}
                     <span className="font-mono font-bold tracking-wider" style={{ color:"var(--foreground)" }}>{code}</span>
                   </p>
                 )}
                 <p className="text-[11px] mt-2" style={{ color:"var(--gray-accessible-text)" }}>
-                  {it ? "Vale una volta sola e scade in 24 ore." : "Single use, expires in 24 hours."}
+                  {T[lang].codiceUsaEGetta}
                 </p>
               </div>
             )}

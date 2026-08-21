@@ -38,17 +38,20 @@ export const ICON_OPTIONS = ["✓", "✕", "!", "●", "▲", "■"] as const;
 
 // ─── Preset daltonismo ─────────────────────────────────────────────────────────
 
-export const COLORBLIND_PRESETS: Record<string, { label: { it: string; en: string }; colors: Record<StatusKey, string> }> = {
+// L'etichetta e' una stringa sola, non un oggetto per lingua: protanopia,
+// deuteranopia e tritanopia si scrivono uguali in tutte le lingue che l'app
+// parla. Un oggetto { it, en } qui era duplicazione senza traduzione.
+export const COLORBLIND_PRESETS: Record<string, { label: string; colors: Record<StatusKey, string> }> = {
   protanopia: {
-    label: { it: "Protanopia", en: "Protanopia" },
+    label: "Protanopia",
     colors: { free: "#56B4E9", inuse: "#E69F00", oos: "#CC79A7" },
   },
   deuteranopia: {
-    label: { it: "Deuteranopia", en: "Deuteranopia" },
+    label: "Deuteranopia",
     colors: { free: "#56B4E9", inuse: "#F0E442", oos: "#D55E00" },
   },
   tritanopia: {
-    label: { it: "Tritanopia", en: "Tritanopia" },
+    label: "Tritanopia",
     colors: { free: "#009E73", inuse: "#CC79A7", oos: "#D55E00" },
   },
 };

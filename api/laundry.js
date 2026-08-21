@@ -66,6 +66,15 @@ export default async function handler(req, res) {
       }
 
       case "clear":
+        // `p_as_admin` NON si manda da qui, e non è una svista: questo è il
+        // percorso pubblico e il valore di default nella funzione SQL è già
+        // `false`. Ometterlo ha due effetti buoni: un client non può alzarsi i
+        // poteri mandando un campo in più, e la chiamata funziona anche prima
+        // che la migrazione 006 sia applicata — cioè non c'è una finestra in
+        // cui il codice è online e il database ancora no.
+        //
+        // Chi ha una sessione amministrativa passa da /api/admin/data
+        // (azione `clearDirezione`), dove il cookie viene verificato prima.
         return json(res, 200, await rpc("clear_laundry", {
           p_room: camera(room),
           p_day: day,

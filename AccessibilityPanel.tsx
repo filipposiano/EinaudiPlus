@@ -19,7 +19,8 @@ import {
   type AccessibilityPrefs,
 } from "./statusConfig";
 
-type Lang = "it" | "en";
+// Le stesse lingue dell'app: il tipo arriva da i18n.
+import type { Lang } from "./i18n";
 
 const T = {
   it: {
@@ -54,17 +55,82 @@ const T = {
     oosDesc: "Reported as broken.",
     close: "Close",
   },
+  fr: {
+    title: "Accessibilité",
+    subtitle: "Personnalise l'affichage des états",
+    colors: "Couleurs des états",
+    icons: "Icônes des états",
+    preview: "Aperçu",
+    presets: "Préréglages daltonisme",
+    reset: "Rétablir les valeurs par défaut",
+    free: "Libre",
+    inuse: "Occupé",
+    oos: "Hors service",
+    freeDesc: "Disponible à la réservation.",
+    inuseDesc: "Créneau en cours.",
+    oosDesc: "Signalée en panne.",
+    close: "Fermer",
+  },
+  de: {
+    title: "Barrierefreiheit",
+    subtitle: "Passe die Anzeige der Zustände an",
+    colors: "Farben der Zustände",
+    icons: "Symbole der Zustände",
+    preview: "Vorschau",
+    presets: "Voreinstellungen für Farbenblindheit",
+    reset: "Auf Standard zurücksetzen",
+    free: "Frei",
+    inuse: "Belegt",
+    oos: "Außer Betrieb",
+    freeDesc: "Zur Buchung verfügbar.",
+    inuseDesc: "Läuft gerade.",
+    oosDesc: "Als defekt gemeldet.",
+    close: "Schließen",
+  },
+  es: {
+    title: "Accesibilidad",
+    subtitle: "Personaliza cómo se muestran los estados",
+    colors: "Colores de los estados",
+    icons: "Iconos de los estados",
+    preview: "Vista previa",
+    presets: "Ajustes para daltonismo",
+    reset: "Restablecer valores predeterminados",
+    free: "Libre",
+    inuse: "En uso",
+    oos: "Fuera de servicio",
+    freeDesc: "Disponible para reservar.",
+    inuseDesc: "Turno en curso.",
+    oosDesc: "Marcada como averiada.",
+    close: "Cerrar",
+  },
+  nap: {
+    title: "Accessibilità",
+    subtitle: "Aggiusta comme se vedono 'e state",
+    colors: "Culure d''e state",
+    icons: "Icone d''e state",
+    preview: "Anteprima",
+    presets: "Preset pe' 'o daltonismo",
+    reset: "Rimiette comm'era",
+    free: "Libbera",
+    inuse: "Sta 'nfunziona",
+    oos: "Fora servizio",
+    freeDesc: "Se po' prenotà.",
+    inuseDesc: "Turno ca sta jenno.",
+    oosDesc: "Segnalata rotta.",
+    close: "Chiure",
+  },
 } as const;
 
-const STATUS_LABELS: Record<Lang, Record<StatusKey, string>> = {
-  it: { free: "Libera", inuse: "In uso", oos: "Fuori servizio" },
-  en: { free: "Free", inuse: "In use", oos: "Out of service" },
-};
+// Nomi e descrizioni degli stati si ricavano da T invece di stare in due
+// tabelle a parte: erano gli stessi testi scritti due volte, e con sei lingue
+// sarebbero diventate dodici occasioni di divergere.
+type Testi = (typeof T)[Lang];
 
-const STATUS_DESCS: Record<Lang, Record<StatusKey, string>> = {
-  it: { free: "Disponibile per la prenotazione.", inuse: "Turno in corso.", oos: "Segnalato come fuori servizio." },
-  en: { free: "Available for booking.", inuse: "Shift in progress.", oos: "Reported as out of order." },
-};
+const etichettaStato = (t: Testi, k: StatusKey) =>
+  k === "free" ? t.free : k === "inuse" ? t.inuse : t.oos;
+
+const descrizioneStato = (t: Testi, k: StatusKey) =>
+  k === "free" ? t.freeDesc : k === "inuse" ? t.inuseDesc : t.oosDesc;
 
 
 export default function AccessibilityPanel({ lang, prefs, onPrefsChange, onClose }: {
@@ -128,9 +194,9 @@ export default function AccessibilityPanel({ lang, prefs, onPrefsChange, onClose
                       ? <span className="shrink-0 text-[13px] leading-none" style={{ color: prefs.colors[key] }}>{prefs.icons[key]}</span>
                       : <span className="size-2.5 rounded-full shrink-0" style={{ background: prefs.colors[key] }} />
                     }
-                    <p className="text-xs font-semibold" style={{ color: fg }}>{STATUS_LABELS[lang][key]}</p>
+                    <p className="text-xs font-semibold" style={{ color: fg }}>{etichettaStato(t, key)}</p>
                   </div>
-                  <p className="text-xs" style={{ color: "color-mix(in srgb, var(--foreground) 50%, transparent)" }}>{STATUS_DESCS[lang][key]}</p>
+                  <p className="text-xs" style={{ color: "color-mix(in srgb, var(--foreground) 50%, transparent)" }}>{descrizioneStato(t, key)}</p>
                 </div>
               ))}
             </div>
@@ -153,7 +219,7 @@ export default function AccessibilityPanel({ lang, prefs, onPrefsChange, onClose
                     />
                   </label>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold" style={{ color: fg }}>{STATUS_LABELS[lang][key]}</p>
+                    <p className="text-sm font-semibold" style={{ color: fg }}>{etichettaStato(t, key)}</p>
                     <p className="text-[11px] font-mono" style={{ color: sub }}>{prefs.colors[key]}</p>
                   </div>
                 </div>
@@ -178,7 +244,7 @@ export default function AccessibilityPanel({ lang, prefs, onPrefsChange, onClose
                       <span key={k} className="size-4 rounded-full" style={{ background: preset.colors[k] }} />
                     ))}
                   </div>
-                  <span className="text-sm font-semibold" style={{ color: fg }}>{preset.label[lang]}</span>
+                  <span className="text-sm font-semibold" style={{ color: fg }}>{preset.label}</span>
                 </button>
               ))}
             </div>
@@ -191,7 +257,7 @@ export default function AccessibilityPanel({ lang, prefs, onPrefsChange, onClose
               {STATUS_KEYS.map((key, i) => (
                 <div key={key} className="px-4 py-3"
                   style={{ borderBottom: i < STATUS_KEYS.length - 1 ? `1px solid ${div}` : "none" }}>
-                  <p className="text-xs font-semibold mb-2" style={{ color: fg }}>{STATUS_LABELS[lang][key]}</p>
+                  <p className="text-xs font-semibold mb-2" style={{ color: fg }}>{etichettaStato(t, key)}</p>
                   <div className="flex gap-2">
                     {ICON_OPTIONS.map((icon) => {
                       const active = prefs.icons[key] === icon;

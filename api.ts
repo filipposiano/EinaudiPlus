@@ -199,6 +199,17 @@ export async function bookAsDirezione(day: number, slot: number, machine: string
   });
 }
 
-// Non serve un percorso di cancellazione amministrativo: clear_laundry è già
-// permissiva per chiunque (nessun controllo di proprietà lato server), quindi
-// api.clearBooking basta anche per l'admin.
+/**
+ * Libera un turno passando dal percorso amministrativo.
+ *
+ * Serve per i turni della DIREZIONE, che `clear_laundry` protegge quando la
+ * chiamata arriva dal percorso pubblico. Per tutti gli altri turni il
+ * risultato è identico a `clearBooking`: la permissività di sempre.
+ *
+ * È il server a decidere, non questa funzione — `p_as_admin` lo scrive
+ * /api/admin/data dopo aver verificato il cookie. Da qui si sceglie solo quale
+ * porta bussare.
+ */
+export async function clearAsDirezione(day: number, slot: number, machine: string) {
+  return adminAction("clearDirezione", { room: currentRoom(), day, slot, machine });
+}

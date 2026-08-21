@@ -15,7 +15,9 @@ import {
 import * as roomsApi from "./roomsApi";
 import type { RoomKind, RoomBooking, CinemaType } from "./roomsApi";
 
-type Lang = "it" | "en";
+// Le stesse sei lingue dell'app: il tipo arriva da i18n, cosi' non si puo'
+// aggiungere una lingua di la' e dimenticarla di qua.
+import type { Lang } from "./i18n";
 
 const RED = "var(--primary)", RED_FG = "var(--primary-foreground)";
 const OOS = "var(--destructive)";
@@ -125,10 +127,107 @@ const T = {
     overnightPart: "overnight booking",
     resetToMyRoom: "↩ Reset to your room",
   },
+fr: {
+    cinema: "Salle Cinéma", music: "Salle Musique",
+    days: ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"],
+    daysLong: ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"],
+    rules: "Règles", close: "Fermer",
+    free: "Libre toute la journée", occupied: "Réservée",
+    newBooking: "Nouvelle réservation",
+    start: "Début", end: "Fin", name: "Nom", yourName: "Ton nom", roomLabel: "Chambre",
+    type: "Type de projection", priv: "Privée", open: "Ouverte à tous (ex. matchs)",
+    book: "Réserver le créneau", cancel: "Annuler",
+    bookings: "Réservations du jour", none: "Aucune réservation",
+    needName: "Saisis un nom", badRange: "L'heure de fin doit être après le début",
+    overlap: "Chevauche une réservation existante", booked: "Réservé ✓",
+    full: "Journée complète : 6 réservations maximum.",
+    deleted: "Réservation supprimée", errorGeneric: "Erreur, réessaie.",
+    loading: "Chargement…", retry: "Réessayer", netError: "Impossible de joindre le serveur.",
+    rulesTitle: "Règlement", tipsTitle: "Problèmes de connexion",
+    musicNote: "Instruments sans casque : autorisés seulement de 16h00 à 20h00.",
+    overnightPart: "soirée à cheval sur minuit",
+    resetToMyRoom: "↩ Rétablir ta chambre",
+  },
+  de: {
+    cinema: "Kinoraum", music: "Musikraum",
+    days: ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"],
+    daysLong: ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag"],
+    rules: "Regeln", close: "Schließen",
+    free: "Den ganzen Tag frei", occupied: "Belegt",
+    newBooking: "Neue Buchung",
+    start: "Beginn", end: "Ende", name: "Name", yourName: "Dein Name", roomLabel: "Zimmer",
+    type: "Art der Vorführung", priv: "Privat", open: "Für alle offen (z. B. Spiele)",
+    book: "Zeitblock buchen", cancel: "Abbrechen",
+    bookings: "Buchungen des Tages", none: "Keine Buchungen",
+    needName: "Gib einen Namen ein", badRange: "Das Ende muss nach dem Beginn liegen",
+    overlap: "Überschneidet sich mit einer bestehenden Buchung", booked: "Gebucht ✓",
+    full: "Tag ausgebucht: maximal 6 Buchungen.",
+    deleted: "Buchung gelöscht", errorGeneric: "Fehler, versuch es nochmal.",
+    loading: "Wird geladen…", retry: "Nochmal versuchen", netError: "Server nicht erreichbar.",
+    rulesTitle: "Hausordnung", tipsTitle: "Verbindungsprobleme",
+    musicNote: "Instrumente ohne Kopfhörer: nur von 16:00 bis 20:00 erlaubt.",
+    overnightPart: "Abend über Mitternacht",
+    resetToMyRoom: "↩ Dein Zimmer zurücksetzen",
+  },
+  es: {
+    cinema: "Sala de Cine", music: "Sala de Música",
+    days: ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"],
+    daysLong: ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"],
+    rules: "Normas", close: "Cerrar",
+    free: "Libre todo el día", occupied: "Reservada",
+    newBooking: "Nueva reserva",
+    start: "Inicio", end: "Fin", name: "Nombre", yourName: "Tu nombre", roomLabel: "Habitación",
+    type: "Tipo de proyección", priv: "Privada", open: "Abierta a todos (p. ej. partidos)",
+    book: "Reservar bloque", cancel: "Cancelar",
+    bookings: "Reservas del día", none: "Ninguna reserva",
+    needName: "Escribe un nombre", badRange: "La hora de fin debe ser posterior al inicio",
+    overlap: "Se solapa con una reserva existente", booked: "Reservado ✓",
+    full: "Día completo: máximo 6 reservas.",
+    deleted: "Reserva eliminada", errorGeneric: "Error, inténtalo otra vez.",
+    loading: "Cargando…", retry: "Reintentar", netError: "No se puede contactar con el servidor.",
+    rulesTitle: "Reglamento", tipsTitle: "Problemas de conexión",
+    musicNote: "Instrumentos sin auriculares: permitidos solo de 16:00 a 20:00.",
+    overnightPart: "velada que pasa la medianoche",
+    resetToMyRoom: "↩ Restablecer tu habitación",
+  },
+  nap: {
+    cinema: "Sala Cinema", music: "Sala Musica",
+    days: ["Lun", "Mar", "Mer", "Gio", "Ven", "Sab", "Dom"],
+    daysLong: ["Lunnerì", "Marterì", "Miercurì", "Gioverì", "Viernarì", "Sabbato", "Dummeneca"],
+    rules: "Regole", close: "Chiure",
+    free: "Libbera tutt''o juorno", occupied: "Occupata",
+    newBooking: "Prenotazione nova",
+    start: "Accumencia", end: "Fernesce", name: "Nomme", yourName: "'O nomme tuoio", roomLabel: "Cammera",
+    type: "Tipo 'e proiezione", priv: "Privata", open: "Aperta a tuttu quante (es. partite)",
+    book: "Prenòta", cancel: "Lassa sta'",
+    bookings: "Prenotazioni d''a jurnata", none: "Nisciuna prenotazione",
+    needName: "Miette nu nomme", badRange: "L'ora 'e fine adda sta' doppo chella 'e accummenciamento",
+    overlap: "Se 'ntoppa cu n'ata prenotazione", booked: "Prenotato ✓",
+    full: "Juorno chino: massimo 6 prenotazioni.",
+    deleted: "Prenotazione levata", errorGeneric: "Errore, prova n'ata vota.",
+    loading: "Sto' carrecanno…", retry: "Prova n'ata vota", netError: "Nun riesco a parla' cu 'o server.",
+    rulesTitle: "Regulamento", tipsTitle: "Guaje 'e connessione",
+    musicNote: "Strumenti senza cuffie: se ponno sunà sulo 'a 16:00 ê 20:00.",
+    overnightPart: "serata ca passa 'a mezanotte",
+    resetToMyRoom: "↩ Rimiette 'a cammera toia",
+  },
 } as const;
 
 // ─── Testi regolamenti ──────────────────────────────────────────────────────
-const RULES: Record<RoomKind, Record<Lang, { rules: string[]; tips?: string[] }>> = {
+//
+// Solo italiano e inglese, e non è una dimenticanza.
+//
+// Queste non sono stringhe d'interfaccia: sono le REGOLE DELLA CASA, scritte
+// dal collegio. Tradurle è una decisione di chi le ha scritte, non di chi
+// programma — una sfumatura cambiata in traduzione cambia una regola. Chi
+// guarda l'app in francese, tedesco, spagnolo o napoletano vede il regolamento
+// in italiano, che è la lingua in cui vale.
+//
+// Se un giorno la direzione fornisce le versioni tradotte, si aggiungono qui e
+// `regolamentoPer()` le prende da sola.
+type Regolamento = { rules: string[]; tips?: string[] };
+
+const RULES: Record<RoomKind, Partial<Record<Lang, Regolamento>>> = {
   cinema: {
     it: {
       rules: [
@@ -178,9 +277,13 @@ const RULES: Record<RoomKind, Record<Lang, { rules: string[]; tips?: string[] }>
 };
 
 // ─── Rules modal ──────────────────────────────────────────────────────────────
+/** Il regolamento nella lingua richiesta, o in italiano se non c'è. */
+const regolamentoPer = (room: RoomKind, lang: Lang): Regolamento =>
+  RULES[room][lang] ?? RULES[room].it!;
+
 function RulesModal({ room, lang, onClose }: { room: RoomKind; lang: Lang; onClose: () => void }) {
   const t = T[lang];
-  const r = RULES[room][lang];
+  const r = regolamentoPer(room, lang);
   return (
     <div className="absolute inset-0 z-40 flex items-end" style={{ background: "rgba(0,0,0,0.65)" }} onClick={onClose}>
       <div className="w-full rounded-t-3xl pb-8 max-h-[85%] overflow-y-auto" style={{ background: "var(--background)" }} onClick={(e) => e.stopPropagation()}>

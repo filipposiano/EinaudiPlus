@@ -1,20 +1,17 @@
 <!-- Asciugatrice.
-     Le onde di calore escono SOPRA la macchina e rompono la sagoma: e' quello
-     a distinguerla dalla lavatrice a 48px, la dimensione a cui il sistema
-     disegna davvero l'icona di una notifica. La versione precedente cambiava
-     solo tre righine dentro l'oblo', invisibili a quella scala: sul telefono
-     le due notifiche sembravano identiche. Anche il corpo macchina e' piu'
-     basso e tozzo, cosi' le due silhouette differiscono gia' da lontano. -->
+     È il glifo `Wind` di lucide-react, lo STESSO che la dashboard disegna
+     accanto a ogni asciugatrice: chi riceve la notifica ha già visto quella
+     forma nell'app, e riconoscerla non costa niente. Prima era un corpo
+     macchina quasi identico a quello della lavatrice — a 48px, la dimensione
+     a cui il sistema disegna davvero l'icona, le due si confondevano.
+     Percorsi copiati alla lettera da lucide-react 0.300 (licenza ISC),
+     riscalati da 24 a 136px con un margine di 28 per stare nel quadrato. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
   <rect width="192" height="192" rx="40" fill="#e11d2a"/>
-  <g fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Calore che sale: tre onde alte, ben staccate dal corpo -->
-    <path d="M70 42c0-10 10-10 10-20s-10-10-10-20"/>
-    <path d="M96 42c0-10 10-10 10-20s-10-10-10-20"/>
-    <path d="M122 42c0-10 10-10 10-20s-10-10-10-20"/>
-    <!-- Corpo macchina, piu' basso della lavatrice -->
-    <rect x="42" y="62" width="108" height="94" rx="14"/>
-    <path d="M42 88h108"/>
-    <circle cx="96" cy="122" r="24"/>
+  <g transform="translate(28 28) scale(5.667)"
+     fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/>
+    <path d="M9.6 4.6A2 2 0 1 1 11 8H2"/>
+    <path d="M12.6 19.4A2 2 0 1 0 14 16H2"/>
   </g>
 </svg>

@@ -60,7 +60,7 @@ export const TIME_SLOTS = buildSlots();
  */
 export const WEEKLY_QUOTA = 2;
 
-export const APP_VERSION = "0.4.0";
+export const APP_VERSION = "0.9.1";
 
 // ─── "Adesso" ────────────────────────────────────────────────────────────────
 //
@@ -92,16 +92,15 @@ const MONDAY = new Date(NOW.base.getFullYear(), NOW.base.getMonth(), NOW.base.ge
 export const WEEK_DATES = Array.from({ length: 7 }, (_, i) => new Date(MONDAY.getFullYear(), MONDAY.getMonth(), MONDAY.getDate() + i));
 export const DAYS_DATE  = WEEK_DATES.map((d) => d.getDate());
 
-// Il mese abbreviato di un giorno della settimana corrente ("21 ago").
-// Sta qui e non in i18n.ts perché la domanda a cui risponde è "che giorno è il
-// terzo della settimana", cioè una questione di calendario; la traduzione delle
-// tre lettere è la parte piccola.
-const MESI = {
-  it: ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"],
-  en: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
-} as const;
-
-export const monShort = (i: number, lang: "it" | "en") => MESI[lang][WEEK_DATES[i].getMonth()];
+/**
+ * Il mese abbreviato di un giorno della settimana corrente ("21 ago").
+ *
+ * I nomi arrivano da fuori invece di stare qui: il calendario è di questo
+ * file, le parole sono di i18n.ts. Tenerli qui dentro voleva dire che
+ * `modello` doveva conoscere le lingue — e visto che i18n importa già
+ * WEEKLY_QUOTA da qui, sarebbe stato un anello circolare.
+ */
+export const monShort = (i: number, mesi: readonly string[]) => mesi[WEEK_DATES[i].getMonth()];
 
 /** Quando finisce un turno, come Date. */
 export function slotEndDate(slotIdx: number) {
