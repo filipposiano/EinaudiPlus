@@ -27,6 +27,21 @@ const SOLO_SISTEMISTA = new Set([
 export default async function handler(req, res) {
   if (!methodOk(req, res, ["POST"])) return;
 
+  // Header applicativo, contro il CSRF.
+  //
+  // Un modulo HTML da un altro sito puo' fare POST qui portandosi dietro i
+  // cookie, ma NON puo' impostare un header inventato: servirebbe fetch/XHR, e
+  // li' scatta il preflight CORS che questa API non concede. Un header custom
+  // e' quindi una prova che la richiesta viene dal nostro codice.
+  //
+  // La difesa vera resta SameSite=Strict sul cookie di sessione, che da sola
+  // basterebbe. Ma il client questo header lo mandava GIA' — api.ts e
+  // AdminPanel.tsx — e nessuno lo guardava: sembrava una protezione e non lo
+  // era. O si verifica o si toglie; verificarlo costa tre righe.
+  if (req.headers["x-requested-with"] !== "admin") {
+    return json(res, 400, { ok: false, error: "richiesta non riconosciuta" });
+  }
+
   const me = currentAdmin(req);
   if (!me) return json(res, 401, { ok: false, error: "non autenticato" });
 

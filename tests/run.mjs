@@ -48,7 +48,11 @@ function mkRes() {
 }
 
 async function call(fn, { method = "POST", query = {}, body = null, cookie = null, headers = {} } = {}) {
-  const h = { "x-forwarded-for": IP, ...headers };
+  // `x-requested-with` come lo manda il client vero: /api/admin/data lo esige
+  // (e' la prova che la richiesta non arriva da un modulo su un altro sito).
+  // Qui il test fa le veci del client, quindi lo manda anche lui — un test che
+  // parla al server in un modo che nessun client usa non prova granche'.
+  const h = { "x-forwarded-for": IP, "x-requested-with": "admin", ...headers };
   if (cookie) h.cookie = cookie;
   const req = { method, query, body: body == null ? undefined : JSON.stringify(body), headers: h, socket: {} };
   const res = mkRes();
@@ -265,6 +269,12 @@ let cookie = null;
 section("Operazioni admin");
 {
   check("senza cookie -> 401", (await call(adminData, { body: { action: "overview" } })).status === 401);
+
+  // Un modulo HTML da un altro sito puo' fare POST portandosi dietro i cookie,
+  // ma non puo' impostare un header inventato. Prima questo header il client lo
+  // mandava e il server non lo guardava: sembrava una protezione e non lo era.
+  check("senza x-requested-with -> respinta (CSRF)",
+    (await call(adminData, { body: { action: "overview" }, headers: { "x-requested-with": "" } })).status === 400);
   check("cookie contraffatto -> 401", (await call(adminData, { body: { action: "overview" }, cookie: "adm=finto.firma" })).status === 401);
 
   if (!cookie) {
