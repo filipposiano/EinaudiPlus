@@ -110,6 +110,9 @@ const T = {
     overnightPart: "serata a cavallo della mezzanotte",
     resetToMyRoom: "↩ Ripristina la tua stanza",
     giornoSuccessivo: "(del giorno successivo)",
+    aNomeDi: "A nome di",
+    aNomeDiPlaceholder: "Es. Formazione PFP",
+    formatoCamera: "Formato camera non valido!",
   },
   en: {
     cinema: "Cinema Room", music: "Music Room",
@@ -132,6 +135,9 @@ const T = {
     overnightPart: "overnight booking",
     resetToMyRoom: "↩ Reset to your room",
     giornoSuccessivo: "(the next day)",
+    aNomeDi: "On behalf of",
+    aNomeDiPlaceholder: "e.g. PFP Training",
+    formatoCamera: "Invalid room format!",
   },
   fr: {
     cinema: "Salle Cinéma", music: "Salle Musique",
@@ -154,6 +160,9 @@ const T = {
     overnightPart: "soirée à cheval sur minuit",
     resetToMyRoom: "↩ Rétablir ta chambre",
     giornoSuccessivo: "(le lendemain)",
+    aNomeDi: "Au nom de",
+    aNomeDiPlaceholder: "Ex. Formation PFP",
+    formatoCamera: "Format de chambre invalide !",
   },
   de: {
     cinema: "Kinoraum", music: "Musikraum",
@@ -176,6 +185,9 @@ const T = {
     overnightPart: "Abend über Mitternacht",
     resetToMyRoom: "↩ Dein Zimmer zurücksetzen",
     giornoSuccessivo: "(am Folgetag)",
+    aNomeDi: "Im Namen von",
+    aNomeDiPlaceholder: "z. B. PFP-Schulung",
+    formatoCamera: "Ungültiges Zimmerformat!",
   },
   es: {
     cinema: "Sala de Cine", music: "Sala de Música",
@@ -198,6 +210,9 @@ const T = {
     overnightPart: "velada que pasa la medianoche",
     resetToMyRoom: "↩ Restablecer tu habitación",
     giornoSuccessivo: "(del día siguiente)",
+    aNomeDi: "En nombre de",
+    aNomeDiPlaceholder: "P. ej. Formación PFP",
+    formatoCamera: "¡Formato de habitación no válido!",
   },
   nap: {
     cinema: "Sala Cinema", music: "Sala Musica",
@@ -220,6 +235,9 @@ const T = {
     overnightPart: "serata ca passa 'a mezanotte",
     resetToMyRoom: "↩ Rimiette 'a cammera toia",
     giornoSuccessivo: "(o juorno appriesso)",
+    aNomeDi: "A nomme 'e",
+    aNomeDiPlaceholder: "Es. Formazione PFP",
+    formatoCamera: "'O formato d''a cammera nun va buono!",
   },
 } as const;
 
@@ -393,6 +411,10 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   const opts = timeOptions(cfg.winStart, cfg.winEnd, cfg.step);
   const myRoom = (roomNumber || "").trim();   // identità = numero camera (come lavanderia)
 
+  // Chi amministra prenota come DIREZIONE, che non è una camera: qui il campo
+  // diventa testo libero e chiede il nome dell'iniziativa invece del numero.
+  const direzione = myRoom === "DIREZIONE";
+
   const [bookings, setBookings] = useState<RoomBooking[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(false);
@@ -404,7 +426,9 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   const [toast, setToast]       = useState<string | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [busy, setBusy]         = useState(false);
-  const [bookingRoom, setBookingRoom] = useState(myRoom || "");
+  // Per la Direzione si parte vuoto, cosi' il segnaposto suggerisce cosa
+  // scrivere; lasciandolo vuoto la prenotazione risulta comunque "DIREZIONE".
+  const [bookingRoom, setBookingRoom] = useState(direzione ? "" : (myRoom || ""));
 
   // Gli strumenti non in cuffia si possono usare solo fra le 16 e le 20: la
   // fascia scelta ne esce se comincia prima delle 16 o finisce dopo le 20.
@@ -433,15 +457,21 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   async function submit() {
     const who = myRoom ? (bookingRoom.trim() || myRoom) : name.trim();
     if (!who) { setToast(t.needName); return; }
-    
-    // Validazione regex per codice stanza
-    if (myRoom || bookingRoom.trim()) {
+
+    // Il formato camera si controlla solo a chi UNA camera ce l'ha.
+    //
+    // La Direzione non è una camera: prenota per la struttura, e quello che
+    // scrive è il nome dell'iniziativa — "Formazione PFP", "Assemblea", una
+    // proiezione aperta. Prima passava di qui e si beccava "Formato camera non
+    // valido" su "DIREZIONE" stesso, quindi non poteva prenotare le sale
+    // affatto. Il database accetta già testo libero fino a 40 caratteri.
+    if (!direzione) {
       const regexCamera = /^\d+(?:-?[a-bA-B])?$/;
       if (!regexCamera.test(who)) {
-        setToast("Formato camera non valido!"); return;
+        setToast(t.formatoCamera); return;
       }
     }
-    
+
     if (end <= start) { setToast(t.badRange); return; }
 
     // Una fascia che scavalca la mezzanotte occupa due giorni, e vanno
@@ -458,7 +488,9 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
         ? { day: selDay, start, end, name: who, type: ctype }
         : { day: selDay, start, end, name: who };
       setBookings(await roomsApi.bookRoom(room, payload));
-      if (myRoom) setBookingRoom(myRoom); else setName("");
+      if (direzione) setBookingRoom("");
+      else if (myRoom) setBookingRoom(myRoom);
+      else setName("");
       setToast(t.booked);
     } catch (e: any) {
       const msg = String(e?.message);
@@ -547,7 +579,20 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
             </label>
           </div>
 
-          {myRoom ? (
+          {direzione ? (
+            /* Testo libero, non maiuscolo e non monospaziato: qui non si scrive
+               un codice ma il nome di una cosa che succede — "Formazione PFP",
+               "Assemblea di sezione". È quello che comparirà sulla timeline a
+               chi guarda la sala. */
+            <label className="block mb-3">
+              <span className="text-[11px]" style={{ color: sub }}>{t.aNomeDi}</span>
+              <input value={bookingRoom} maxLength={40}
+                onChange={(e) => setBookingRoom(e.target.value)}
+                placeholder={t.aNomeDiPlaceholder}
+                className="w-full mt-1 rounded-xl px-3 py-2.5 text-sm outline-none"
+                style={{ background: chip, color: fg, border: `1px solid ${div}` }} />
+            </label>
+          ) : myRoom ? (
             <label className="block mb-3">
               <span className="text-[11px]" style={{ color: sub }}>{t.roomLabel}</span>
               <input value={bookingRoom} onChange={(e) => setBookingRoom(e.target.value.toUpperCase())} placeholder={myRoom}

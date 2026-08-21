@@ -575,7 +575,15 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
 
                   Su un messaggio che non e' un guasto resta un'azione sola:
                   li' non c'e' niente da decidere, solo da archiviare. */}
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+              {/* Tutte a destra, in fila.
+                  Prima le decisioni sul guasto stavano a sinistra e Archivia
+                  dall'altra parte: due punti da guardare per una riga sola. In
+                  fondo a destra e' dove l'occhio arriva alla fine della scheda,
+                  dopo aver letto di cosa si tratta — ed e' li' che si decide. */}
+              <div style={{
+                display: "flex", gap: 6, flexWrap: "wrap",
+                alignItems: "center", justifyContent: "flex-end",
+              }}>
                 {machine && stato && !stato.oos && (
                   <button style={{ ...S.danger, padding: "6px 12px", fontSize: 12 }} disabled={inCorso}
                           onClick={() => fuoriServizio(f, machine, true)}>
