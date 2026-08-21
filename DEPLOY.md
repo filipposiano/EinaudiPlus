@@ -224,6 +224,28 @@ di prenotazione risolto male, o zero promemoria partiti la prima mattina.
 
 ---
 
+## Note su vercel.json
+
+**Niente commenti dentro il file.** È JSON e Vercel ne valida lo schema: una
+chiave in più — anche `"//"`, la convenzione usuale per commentare il JSON —
+fa fallire il deploy. Non fallisce rumorosamente: la build si ferma, la
+produzione resta ferma all'ultimo deploy riuscito, e da fuori l'app sembra
+solo "non aggiornata". È già successo, ed è costato una decina di commit
+andati su GitHub senza mai arrivare online. Le spiegazioni vanno qui.
+
+**Perché `/assets/(.*)` ha `immutable`.** Vite mette l'hash del contenuto nel
+nome del file, quindi `/assets/index-CQGE75Ki.js` non cambierà mai: a un
+contenuto nuovo corrisponde un nome nuovo. Il default di Vercel è però
+`max-age=0, must-revalidate`, quindi ogni apertura dell'app rifaceva il giro in
+rete per ~270KB di JavaScript. È un'app che le stesse persone aprono ogni
+giorno: qui si guadagna più che altrove.
+
+**`index.html` deve restare revalidato** ed è per questo che sta solo sotto la
+regola generica: è lui a dire quali hash caricare. Congelandolo, un deploy
+nuovo non arriverebbe mai ai telefoni.
+
+---
+
 ## 7. Dopo due settimane di calma
 
 - Togli le voci Google da `connect-src` in [vercel.json](vercel.json)
