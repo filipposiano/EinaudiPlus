@@ -1,65 +1,88 @@
-# Notifiche push — promemoria turni lavanderia
+# Promemoria — Web Push e Telegram
 
-Promemoria ~15 minuti prima dell'inizio del turno, anche ad app chiusa.
+Promemoria dei turni di lavanderia, anche ad app chiusa.
 
-## Architettura (3 pezzi)
+## Quando arrivano
 
-1. **Frontend** (`push.ts`, `public/sw.js`, campanello 🔔 nell'header)
-   registra il Service Worker, chiede il permesso notifiche, crea l'iscrizione
-   push e la manda all'Apps Script insieme al numero di camera.
-2. **Relay su Vercel** (`api/push.js`) firma (VAPID) e invia la push: è la parte
-   crittografica che Apps Script non sa fare.
-3. **Apps Script lavanderia** (`apps-script/laundry-push.gs`) ogni 5 minuti
-   controlla i turni in arrivo e, per ogni camera prenotata, chiama il relay.
+Tre per ogni prenotazione, in entrambe le lavanderie:
+
+| Momento | Testo |
+|---|---|
+| 16 minuti prima dell'inizio | «Il tuo turno inizia tra poco!» |
+| a fine lavaggio | «Sposta i vestiti in asciugatrice!» |
+| a fine asciugatura | «Ritira i tuoi vestiti!» |
+
+I tre condividono lo stesso `tag`, quindi il telefono **sostituisce** il
+precedente invece di accumularli: chi guarda a fine ciclo trova "Ritira i tuoi
+vestiti", non tre avvisi sovrapposti.
+
+Il numero di promemoria è una proprietà della lavanderia
+(`laundry.reminder_mode`), non del codice. Al Valentino fino ad agosto 2026 era
+uno solo — ereditato dal vecchio Apps Script — ed è per quello che sembrava che
+asciugatrice e ritiro fossero rotti.
+
+## Come funzionano
+
+```
+1. push.ts registra il Service Worker, chiede il permesso, crea la
+   subscription e la manda a /api/laundry (azione `subscribe`).
+
+2. pg_cron, DENTRO Supabase, chiama /api/cron ogni minuto.
+   Non Vercel Cron: il piano Hobby limita i cron a una volta al giorno.
+
+3. claim_due_reminders() decide in SQL chi va avvisato adesso, e nello stesso
+   colpo marca i promemoria come inviati. La INSERT ... RETURNING rende il
+   doppio invio impossibile, non solo improbabile: se due tick si sovrappongono
+   il secondo non ottiene nulla.
+
+4. /api/cron firma e spedisce: Web Push (VAPID) e, per chi l'ha collegato,
+   Telegram. Le subscription che rispondono 404/410 vengono potate.
+```
+
+`public/sw.js` sceglie l'icona in base al tipo di promemoria: lavatrice per
+l'inizio turno, asciugatrice per gli altri due.
 
 ## Chiavi VAPID
 
-Chiave **pubblica** (già inserita in `push.ts`, non è segreta):
+La chiave **pubblica** sta in `push.ts` e non è un segreto — finisce comunque
+nel bundle. Deve però essere **identica** a `VAPID_PUBLIC_KEY` fra le variabili
+d'ambiente di Vercel: se divergono le push partono, nessun servizio le accetta,
+e l'utente continua a vedere i promemoria come "attivi". `sameKey()` in
+`push.ts` se ne accorge e rifà la subscription, ma solo al primo avvio.
 
+La chiave **privata** sta solo su Vercel.
+
+> Rigenerarle **uccide tutte le iscrizioni esistenti**: ogni residente smette di
+> ricevere promemoria finché non riapre l'app. Farlo solo per un motivo di
+> sicurezza reale.
+
+## Telegram
+
+Alternativa alle push, per chi le ha bloccate o preferisce.
+
+Dal menu promemoria si genera un codice usa-e-getta e si apre il bot con
+`https://t.me/<bot>?start=<codice>`. Serve un codice e non basta la camera:
+altrimenti chiunque potrebbe scrivere al bot «sono la 112» e ricevere i
+promemoria di un altro. Il codice vale una volta sola e scade in 24 ore.
+
+Serve `VITE_TELEGRAM_BOT` fra le variabili di Vercel. È l'unica delle tre con
+prefisso `VITE_`, quindi Vite la compila **dentro il bundle al momento della
+build**: aggiungerla non basta, serve anche un deploy nuovo.
+
+## Su iPhone
+
+Le push web funzionano **solo** se l'app è aggiunta alla schermata Home
+(Condividi → "Aggiungi a Home"), da iOS 16.4. Aperta da lì, si attivano dal
+menu promemoria. Su Android basta attivarle.
+
+## Provare che funzionino
+
+Prenota un turno che inizi fra ~20 minuti, poi:
+
+```sql
+select booking_id, kind, claimed_at, sent_ok, sent_fail
+from reminder_log order by claimed_at desc limit 10;
 ```
-BLG2P3_gpSsGhGi9vrVKD_Kr2-Ql6S-8bh3xDaB8s5U-aA3o59LMtPjRAoww6DzbJ_Gkl7So00O_o0DOQPSuVWg
-```
 
-La chiave **privata** è segreta: NON è nel repo. È stata generata e va incollata
-solo nelle variabili d'ambiente di Vercel (vedi sotto). Per rigenerarle:
-`npx web-push generate-vapid-keys --json`.
-
-## Setup
-
-### 1. Vercel — variabili d'ambiente
-Project → Settings → Environment Variables (Production), poi **Redeploy**:
-
-| Nome | Valore |
-|------|--------|
-| `VAPID_PUBLIC_KEY` | la chiave pubblica qui sopra |
-| `VAPID_PRIVATE_KEY` | la chiave privata (segreta) |
-| `VAPID_SUBJECT` | `https://einaudi-plus.vercel.app` |
-| `RELAY_SECRET` | una password a tua scelta (segreta) |
-
-La funzione relay sarà su `https://einaudi-plus.vercel.app/api/push`.
-
-### 2. Apps Script lavanderia
-- Sostituisci TUTTO il contenuto del `Code.gs` della lavanderia con
-  `apps-script/laundry-Code.gs` (è il tuo script con le notifiche già integrate;
-  dispatch `subscribe`/`unsubscribe` nel `doPost` e `sendDueReminders` inclusi).
-- In cima al file, nella sezione PUSH, imposta `RELAY_URL` (l'URL Vercel
-  `/api/push`) e `RELAY_SECRET` (uguale a quello su Vercel).
-- Ridistribuisci la Web App (Gestisci distribuzioni → ✏️ → Nuova versione).
-- Crea un **trigger a tempo**: orologio → Aggiungi trigger → funzione
-  `sendDueReminders`, "In base al tempo" → "Timer a minuti" → "Ogni 5 minuti".
-
-> Il vecchio `apps-script/laundry-push.gs` (solo add-on) non serve più: la
-> versione completa è `laundry-Code.gs`.
-
-### 3. iPhone (importante)
-Su iOS le push web funzionano SOLO se l'app è **aggiunta alla schermata Home**
-(Safari → Condividi → "Aggiungi a Home"), iOS 16.4+. Poi apri l'app dalla Home e
-tocca il campanello 🔔 per attivare i promemoria. Su Android/Chrome basta toccare
-il campanello.
-
-## Test
-1. Attiva il campanello (concedi il permesso).
-2. Prenota un turno che inizia tra ~15–20 minuti.
-3. Entro pochi minuti dovresti ricevere la notifica.
-Per un test immediato puoi eseguire `sendDueReminders` a mano dall'editor Apps
-Script dopo aver prenotato un turno imminente.
+`sent_ok = 0` con `sent_fail > 0` vuol dire che il servizio push ha rifiutato:
+quasi sempre è la chiave VAPID che non combacia.

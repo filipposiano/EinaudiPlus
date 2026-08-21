@@ -379,6 +379,26 @@ function leggiGuasto(body: string): { machine: string | null; testo: string } {
   return { machine: m[1], testo: nota };
 }
 
+// Due icone disegnate a mano invece di importare lucide-react: questo file e'
+// caricato in lazy e non tira dentro quella libreria, aggiungerla per due
+// glifi costerebbe piu' del disegno.
+const IconaArchivia = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="3" y="4" width="18" height="4" rx="1" />
+    <path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8" />
+    <path d="M10 12h4" />
+  </svg>
+);
+
+const IconaRiapri = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M3 12a9 9 0 1 0 3-6.7" />
+    <path d="M3 4v5h5" />
+  </svg>
+);
+
 /** "3 ore fa" — in triage conta da quanto aspetta, non la data esatta. */
 function quandoRelativo(iso: string): string {
   const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -491,16 +511,18 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
 
           return (
             <div key={f.id} style={{
-              ...S.card, padding: 14,
+              ...S.card, padding: "10px 12px",
               borderColor: machine && !f.handled ? "var(--destructive)" : "var(--border)",
               opacity: f.handled ? 0.6 : 1,
             }}>
-              <div className="adm-feed-head">
-                {/* La macchina in testa e non sepolta nel testo: e' il dato su
-                    cui si decide, quindi si legge per primo. */}
+              {/* Etichetta e camera sulla prima riga, quando sotto: la data
+                  serve a ordinare le priorita', non a identificare la
+                  segnalazione, quindi non compete per lo spazio con quello che
+                  dice DI COSA si tratta. Le righe si accorciano di conseguenza. */}
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
                 {machine ? (
                   <span style={{
-                    fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 99,
+                    fontSize: 12, fontWeight: 700, padding: "1px 8px", borderRadius: 99,
                     background: "color-mix(in srgb, var(--destructive) 12%, transparent)",
                     color: "var(--destructive-text)",
                   }}>{tipo} {machine.slice(-1)}</span>
@@ -511,20 +533,16 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
                     il 100 e' la Manica) e stamparla accanto era una parola in
                     piu' per riga che non aggiungeva niente. */}
                 <span style={{ fontSize: 12 }}>{f.room ? `camera ${f.room}` : "anonimo"}</span>
-                <span className="adm-feed-head__when" style={{ fontSize: 11, ...S.sub }}
-                      title={new Date(f.created_at).toLocaleString("it-IT")}>
-                  {quandoRelativo(f.created_at)}
-                </span>
               </div>
+              <p style={{ fontSize: 10, marginTop: 1, marginBottom: 6, ...S.sub }}
+                 title={new Date(f.created_at).toLocaleString("it-IT")}>
+                {quandoRelativo(f.created_at)}
+              </p>
 
               {/* overflowWrap: il testo arriva da chi segnala, e una parola
                   lunghissima senza spazi allargherebbe la scheda oltre lo schermo. */}
-              {testo ? (
-                <p style={{ fontSize: 14, marginBottom: 10, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{testo}</p>
-              ) : (
-                <p style={{ fontSize: 13, marginBottom: 10, fontStyle: "italic", ...S.sub }}>
-                  Segnalata non funzionante, senza altri dettagli.
-                </p>
+              {testo && (
+                <p style={{ fontSize: 13, marginBottom: 8, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{testo}</p>
               )}
 
               {/* I pulsanti dicono cosa si sta per decidere, non "gestisci".
@@ -535,25 +553,36 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
 
                   Su un messaggio che non e' un guasto resta un'azione sola:
                   li' non c'e' niente da decidere, solo da archiviare. */}
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                 {machine && stato && !stato.oos && (
-                  <button style={{ ...S.danger, padding: "8px 14px", fontSize: 13 }} disabled={inCorso}
+                  <button style={{ ...S.danger, padding: "6px 12px", fontSize: 12 }} disabled={inCorso}
                           onClick={() => fuoriServizio(f, machine, true)}>
                     Conferma guasto · fuori servizio
                   </button>
                 )}
                 {machine && stato?.oos && (
-                  <button style={S.btn} disabled={inCorso}
+                  <button style={{ ...S.btn, padding: "6px 12px", fontSize: 12 }} disabled={inCorso}
                           onClick={() => fuoriServizio(f, machine, false)}>
                     Rimetti in servizio
                   </button>
                 )}
-                <button style={S.btn} disabled={inCorso} onClick={() => mark(f)}>
-                  {f.handled
-                    ? "Riapri"
-                    : machine
-                      ? (stato?.oos ? "Archivia" : "Non è guasta · archivia")
-                      : "Archivia"}
+                {machine && stato && !stato.oos && !f.handled && (
+                  <button style={{ ...S.btn, padding: "6px 12px", fontSize: 12 }} disabled={inCorso}
+                          onClick={() => mark(f)}>
+                    Non è guasta
+                  </button>
+                )}
+                {/* Archivia diventa un'icona: e' l'azione che si ripete su
+                    ogni riga e non ha bisogno di rileggersi ogni volta, mentre
+                    le decisioni sul guasto restano a parole perche' quelle
+                    vanno lette. Il titolo e l'aria-label tengono il testo per
+                    chi passa col mouse e per i lettori di schermo. */}
+                <button
+                  style={{ ...S.btn, padding: "6px 9px", marginLeft: "auto", lineHeight: 0 }}
+                  disabled={inCorso} onClick={() => mark(f)}
+                  title={f.handled ? "Riapri la segnalazione" : "Archivia"}
+                  aria-label={f.handled ? "Riapri la segnalazione" : "Archivia"}>
+                  {f.handled ? <IconaRiapri /> : <IconaArchivia />}
                 </button>
               </div>
             </div>

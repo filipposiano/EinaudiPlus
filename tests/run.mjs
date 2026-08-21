@@ -178,10 +178,24 @@ section("Sale cinema e musica");
   check("lettura", g.body?.ok === true && Array.isArray(g.body.bookings));
   check("sala inesistente", (await call(rooms, { method: "GET", query: { token: TOKEN, space: "piscina" } })).body?.error === "sala non valida");
 
-  // Giorno e fascia dedicati a questo giro: l'exclude constraint e' reale, e
-  // due esecuzioni sulla stessa fascia si darebbero fastidio a vicenda.
-  const day = Math.floor(Math.random() * 7);
-  const start = 60 + Math.floor(Math.random() * 20) * 60;
+  // Una finestra di tre ore DAVVERO libera, cercata nella griglia.
+  //
+  // Prima si pescava giorno e ora a caso. L'exclude constraint e' reale e il
+  // database e' quello di produzione: appena il cinema si riempie — e si
+  // riempie — il turno pescato cadeva su una prenotazione vera e mezza sezione
+  // falliva, come se fosse una regressione. Servono tre ore consecutive:
+  // il test prenota, verifica la sovrapposizione e poi occupa anche l'ora
+  // adiacente.
+  const occupate = (g.body?.bookings || []);
+  const libero = (d, s) => !occupate.some((b) => b.day === d && s < b.end && b.start < s + 180);
+
+  let day = 0, start = 60;
+  cerca: for (let d = 0; d < 7; d++) {
+    for (let s = 60; s <= 20 * 60; s += 60) {
+      if (libero(d, s)) { day = d; start = s; break cerca; }
+    }
+  }
+
   const tag = "TEST-" + Math.random().toString(36).slice(2, 7);
 
   const b1 = await call(rooms, { query: { token: TOKEN, space: "cinema", action: "book" }, body: { day, start, end: start + 60, name: tag, type: "open" } });

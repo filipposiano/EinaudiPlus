@@ -1,16 +1,19 @@
-# Migrazione a Postgres — istruzioni di deploy
+# Deploy e configurazione
 
 Documento per chi ha accesso all'account Vercel del progetto.
 
-L'app passa da Google Sheets (4 deployment Google Apps Script) a Postgres su
-Supabase. Le risposte scendono da 800ms–3s a 50–150ms, e l'integrità delle
-prenotazioni passa dai controlli applicativi ai vincoli del database.
+L'app gira su Postgres (Supabase) con funzioni serverless su Vercel. Prima
+stava su Google Sheets, letta e scritta da 4 deployment Google Apps Script: le
+risposte sono passate da 800ms–3s a 50–150ms, e l'integrità delle prenotazioni
+dai controlli applicativi ai vincoli del database.
 
-**Il vecchio backend non viene toccato.** I 4 Apps Script restano attivi e
-raggiungibili per tutta la finestra di rollback. Si torna indietro con una
-variabile d'ambiente.
-
-Branch: `independent-db`.
+> **La migrazione è chiusa e il rollback non esiste più.** Il percorso verso
+> Apps Script è stato rimosso dal codice (agosto 2026), insieme al relay
+> `api/push.js`, all'interruttore `VITE_API_BASE=legacy` e alle voci Google
+> nella CSP. Se servisse tornare indietro, la strada è ripristinare quel commit,
+> non una variabile d'ambiente. **I trigger Apps Script devono restare
+> disattivati**: riaccenderli manderebbe promemoria doppi, perché ora li manda
+> `pg_cron`.
 
 ---
 
@@ -72,9 +75,10 @@ vedere i promemoria come "attivi".
 > `sameKey()` in `push.ts` se ne accorge e le rifà, ma solo al primo avvio.
 > Farlo solo se c'è un motivo di sicurezza reale.
 
-Le variabili `RELAY_SECRET` e `VAPID_*` già presenti servono a
-[api/push.js](api/push.js), che resta in piedi per la finestra di rollback:
-i trigger Apps Script devono poter continuare a spedire. **Non rimuoverle.**
+`RELAY_SECRET` **si può togliere**: serviva al relay `api/push.js`, che
+permetteva ad Apps Script di spedire le push. Quel file non esiste più e
+nient'altro legge quella variabile. Le `VAPID_*` invece restano: le usa
+`api/cron.js`.
 
 ### Telegram (opzionale, si può fare dopo)
 
@@ -207,20 +211,20 @@ Sul preview, con un telefono vero.
 
 ---
 
-## 6. Rollback
+## 6. Rollback — non c'è più
 
-1. Su Vercel, aggiungi `VITE_API_BASE` = `legacy`
-2. Redeploy (~2 minuti)
-3. Riattiva i trigger Apps Script
+L'interruttore `VITE_API_BASE=legacy` è stato rimosso ad agosto 2026 insieme a
+tutto il percorso Apps Script. Non c'è più un modo di tornare ai fogli con una
+variabile d'ambiente.
 
-L'app torna a Google Sheets. I fogli sono intatti, i 4 script non sono stati
-toccati.
+Se servisse davvero, la strada è ripristinare il commit precedente alla
+rimozione — e ricordarsi che i dati di allora non ci sono più: da mesi le
+prenotazioni si scrivono su Postgres, i fogli sono fermi al giorno del cutover.
 
-> Non è un interruttore a runtime: Vite compila la scelta nel bundle, quindi
-> serve il redeploy.
-
-**Quando fare rollback**, deciso in anticipo: errori 5xx sopra l'1%, un conflitto
-di prenotazione risolto male, o zero promemoria partiti la prima mattina.
+Per un problema circoscritto, quasi sempre la mossa giusta è un'altra: su
+Vercel, **Deployments → il deploy precedente → Promote to Production**. Torna
+online la versione di prima in una manciata di secondi, senza toccare il
+database.
 
 ---
 
@@ -246,16 +250,18 @@ nuovo non arriverebbe mai ai telefoni.
 
 ---
 
-## 7. Dopo due settimane di calma
+## 7. Pulizia post-migrazione — fatta
 
-- Togli le voci Google da `connect-src` in [vercel.json](vercel.json)
-- Archivia la cartella `apps-script/`
-- Elimina `RELAY_SECRET` e [api/push.js](api/push.js)
-- Revoca il Personal Access Token Supabase usato per le migrazioni
+Agosto 2026, saltando la finestra di osservazione su decisione esplicita:
 
-> Togliere Google dalla CSP **prima** rende il rollback silenziosamente
-> inefficace: l'app si carica, ogni richiesta viene bloccata dal browser, e non
-> compare alcun errore visibile all'utente.
+- ✅ `connect-src` in [vercel.json](vercel.json) ristretto a `'self'`
+- ✅ cartella `apps-script/` rimossa
+- ✅ `api/push.js` rimosso — `RELAY_SECRET` si può togliere da Vercel
+- ✅ interruttore `VITE_API_BASE=legacy` rimosso da `api.ts` e `roomsApi.ts`
+- ⬜ **Revoca il Personal Access Token Supabase** usato per le migrazioni
+  (`SUPABASE_ACCESS_TOKEN` in `.env.local`, si revoca da
+  https://supabase.com/dashboard/account/tokens). È l'unica voce rimasta, e
+  vale la pena farla: quel token può tutto sul progetto.
 
 ---
 

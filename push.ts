@@ -1,9 +1,9 @@
 // push.ts — client per le notifiche Web Push (promemoria turni lavanderia).
 //
 // Flusso: registra il Service Worker → chiede il permesso notifiche → crea la
-// subscription push firmata con la chiave VAPID pubblica → la manda al backend
-// (Apps Script) insieme al numero di camera. Il backend, quando un turno di
-// quella camera sta per iniziare, invia la push tramite il relay su Vercel.
+// subscription push firmata con la chiave VAPID pubblica → la manda a
+// /api/laundry insieme al numero di camera. Poi è `pg_cron` dentro Supabase a
+// chiamare /api/cron ogni minuto, che decide chi avvisare e spedisce.
 
 import * as api from "./api";
 

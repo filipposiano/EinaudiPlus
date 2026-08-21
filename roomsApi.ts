@@ -3,12 +3,10 @@
 // Modello dati: a differenza della lavanderia (turni fissi da 75'), qui ogni
 // prenotazione è un blocco di tempo arbitrario su un giorno della settimana:
 //   { id, day(0=Lun..6=Dom), start, end, name, type? }
-// dove start/end sono MINUTI dalla mezzanotte (es. 14:30 = 870). Le prenotazioni
-// si resettano ogni lunedì notte (gestione lato Apps Script), quindi lo stato è
-// una semplice "settimana corrente" come per la lavanderia.
-//
-// Finché gli endpoint reali non sono configurati (URL "PLACEHOLDER_…"), si usa
-// uno store mock in memoria così la UI è pienamente funzionante in anteprima.
+// dove start/end sono MINUTI dalla mezzanotte (es. 14:30 = 870), e possono
+// superare 1440 quando la fascia scavalca la mezzanotte. Si guarda sempre e
+// solo la settimana corrente: le vecchie le pota `prune_old_weeks` nel
+// database, non c'è più un job che cancella tutto il lunedì notte.
 
 export type RoomKind = "cinema" | "music";
 export type CinemaType = "private" | "open";
@@ -31,41 +29,18 @@ export interface RoomBooking {
 
 const TOKEN = import.meta.env.VITE_SECRET_TOKEN;
 
-// VITE_API_BASE="legacy" riporta tutto agli Apps Script: e' il rollback del
-// cutover, si cambia una variabile d'ambiente senza toccare il codice.
-const LEGACY = import.meta.env.VITE_API_BASE === "legacy";
-
-// I due /exec erano lo STESSO Code.gs deployato due volte, su due spreadsheet
-// distinti. Nel nuovo backend sono un endpoint solo: la sala arriva come ?space=.
-const ENDPOINTS: Record<RoomKind, { url: string; token: string }> = {
-  cinema: { url: "https://script.google.com/macros/s/AKfycbzxr9JEZ5jPAhL0sfPYHwQ61KtpkROZJOSBhF7pn-k2b9Bc5-B4yQf5JBgw_Pox1fSY/exec", token: TOKEN},
-  music:  { url: "https://script.google.com/macros/s/AKfycbxOh1IuTjGDmrQaJfQ-65G2dk7ie3ouwdbF6-GhiRXvem4m0_3K8XPBhOiB-aI_KNXJCw/exec",  token: TOKEN },
-};
+// Le due sale erano lo STESSO Code.gs deployato due volte, su due spreadsheet
+// distinti. Qui sono un endpoint solo: la sala arriva come ?space=.
+//
+// Insieme al percorso Apps Script se n'e' andato anche lo store finto che
+// serviva quando gli URL erano ancora dei segnaposto: non c'e' piu' un caso in
+// cui l'app giri senza backend, e teneva in vita `isMock` — un secondo
+// comportamento possibile per ogni funzione di questo file.
 
 /** URL + query comuni a ogni chiamata, con l'eventuale azione. */
 function url(room: RoomKind, action?: string): string {
-  const base = LEGACY ? ENDPOINTS[room].url : "/api/rooms";
-  const qs = LEGACY
-    ? `?token=${TOKEN}`
-    : `?token=${TOKEN}&space=${room}`;
-  return base + qs + (action ? `&action=${action}` : "");
+  return `/api/rooms?token=${TOKEN}&space=${room}` + (action ? `&action=${action}` : "");
 }
-
-const isPlaceholder = (u: string) => u.startsWith("PLACEHOLDER");
-export const isMock = (room: RoomKind) => LEGACY && isPlaceholder(ENDPOINTS[room].url);
-
-// ─── Store MOCK (in memoria) ────────────────────────────────────────────────
-const uid = () => Math.random().toString(36).slice(2, 9);
-const mockStore: Record<RoomKind, RoomBooking[]> = {
-  cinema: [
-    { id: uid(), day: 5, start: 21 * 60,      end: 23 * 60,      name: "Mario",  type: "open" },
-    { id: uid(), day: 2, start: 18 * 60 + 30, end: 20 * 60,      name: "Giulia", type: "private" },
-  ],
-  music: [
-    { id: uid(), day: 5, start: 16 * 60,      end: 18 * 60,      name: "Band 3B" },
-    { id: uid(), day: 0, start: 10 * 60,      end: 11 * 60 + 30, name: "Luca" },
-  ],
-};
 
 const overlaps = (list: RoomBooking[], b: { day: number; start: number; end: number }) =>
   list.some((x) => x.day === b.day && b.start < x.end && x.start < b.end);
@@ -73,7 +48,6 @@ const overlaps = (list: RoomBooking[], b: { day: number; start: number; end: num
 // ─── API ─────────────────────────────────────────────────────────────────────
 
 export async function getRoomBookings(room: RoomKind): Promise<RoomBooking[]> {
-  if (isMock(room)) return JSON.parse(JSON.stringify(mockStore[room]));
   const res = await fetch(url(room));
   if (!res.ok) throw new Error("network");
   const data = await res.json();
@@ -82,11 +56,6 @@ export async function getRoomBookings(room: RoomKind): Promise<RoomBooking[]> {
 }
 
 export async function bookRoom(room: RoomKind, b: Omit<RoomBooking, "id">): Promise<RoomBooking[]> {
-  if (isMock(room)) {
-    if (overlaps(mockStore[room], b)) throw new Error("overlap");
-    mockStore[room] = [...mockStore[room], { ...b, id: uid() }];
-    return JSON.parse(JSON.stringify(mockStore[room]));
-  }
   const res = await fetch(url(room, "book"), {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -98,10 +67,6 @@ export async function bookRoom(room: RoomKind, b: Omit<RoomBooking, "id">): Prom
 }
 
 export async function clearRoomBooking(room: RoomKind, id: string): Promise<RoomBooking[]> {
-  if (isMock(room)) {
-    mockStore[room] = mockStore[room].filter((x) => x.id !== id);
-    return JSON.parse(JSON.stringify(mockStore[room]));
-  }
   const res = await fetch(url(room, "clear"), {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },

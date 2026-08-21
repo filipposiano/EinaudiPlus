@@ -6,7 +6,7 @@
 //    oraria della sala (Cinema 0–24, Musica 9–23);
 //  • due SELETTORI "Inizio/Fine" (step 30') generano il blocco; un controllo di
 //    sovrapposizione (client + server) impedisce i conflitti;
-//  • il backend (Apps Script su Google Sheet) resetta tutto ogni lunedì notte.
+//  • si vede solo la settimana corrente: le vecchie le pota il database.
 
 import { useState, useEffect, useCallback } from "react";
 import {
@@ -68,8 +68,18 @@ function endOptions(start: number, cfg: { winEnd: number; step: number; overnigh
   return out;
 }
 
-/** "01:00 (+1)" per gli orari che cadono il giorno dopo. */
-const fmtEnd = (m: number) => (m > 24 * 60 ? `${fmtMin(m)} (+1)` : m === 24 * 60 ? "24:00" : fmtMin(m));
+/**
+ * L'orario di fine, dicendo a parole se cade il giorno dopo.
+ *
+ * "01:00 (domani)" e non "01:00 (+1)": la seconda forma è una notazione da
+ * tabella oraria, e chi prenota la sala cinema non la sta leggendo. Fuori da
+ * chi già la conosce, "+1" non si capisce — e qui l'unica cosa che conta è che
+ * sia chiarissimo di quale notte si sta parlando.
+ */
+const fmtEnd = (m: number, lang: Lang = "it") =>
+  m > 24 * 60 ? `${fmtMin(m)} ${lang === "it" ? "(domani)" : "(next day)"}`
+  : m === 24 * 60 ? "24:00"
+  : fmtMin(m);
 
 // ─── i18n ─────────────────────────────────────────────────────────────────────
 const T = {
@@ -88,8 +98,7 @@ const T = {
     overlap: "Si sovrappone a una prenotazione esistente", booked: "Prenotato ✓",
     full: "Giorno pieno: massimo 6 prenotazioni.",
     deleted: "Prenotazione eliminata", errorGeneric: "Errore, riprova.",
-    loading: "Carico…", retry: "Riprova", netError: "Impossibile contattare il foglio.",
-    mockNote: "Modalità demo: i dati non sono ancora salvati sul foglio Google.",
+    loading: "Carico…", retry: "Riprova", netError: "Impossibile contattare il server.",
     rulesTitle: "Regolamento", tipsTitle: "Problemi di connessione",
     musicNote: "Strumenti non in cuffia: consentiti solo 16:00–20:00.",
     overnightPart: "serata a cavallo della mezzanotte",
@@ -110,8 +119,7 @@ const T = {
     overlap: "Overlaps an existing booking", booked: "Booked ✓",
     full: "Day is full: max 6 bookings.",
     deleted: "Booking deleted", errorGeneric: "Error, try again.",
-    loading: "Loading…", retry: "Retry", netError: "Couldn't reach the sheet.",
-    mockNote: "Demo mode: data is not yet saved to the Google sheet.",
+    loading: "Loading…", retry: "Retry", netError: "Couldn't reach the server.",
     rulesTitle: "Rules", tipsTitle: "Connection tips",
     musicNote: "Instruments without headphones: allowed only 16:00–20:00.",
     overnightPart: "overnight booking",
@@ -387,10 +395,6 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
           </button>
         </div>
 
-        {roomsApi.isMock(room) && (
-          <p className="text-[11px] mb-3 rounded-xl px-3 py-2" style={{ background: `color-mix(in srgb, #f59e0b 12%, transparent)`, color: "#f59e0b" }}>{t.mockNote}</p>
-        )}
-
         {/* Selettore giorni */}
         <div className="grid grid-cols-7 gap-1 mb-3">
           {t.days.map((d, i) => {
@@ -425,7 +429,7 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
               <select value={end} onChange={(e) => setEnd(Number(e.target.value))}
                 className="w-full mt-1 rounded-xl px-3 py-2.5 text-sm font-mono outline-none"
                 style={{ background: chip, color: fg, border: `1px solid ${div}` }}>
-                {endOptions(start, cfg).map((m) => <option key={m} value={m}>{fmtEnd(m)}</option>)}
+                {endOptions(start, cfg).map((m) => <option key={m} value={m}>{fmtEnd(m, lang)}</option>)}
               </select>
             </label>
           </div>
@@ -482,7 +486,7 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
           <button onClick={submit} disabled={busy}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
             style={{ background: RED, color: RED_FG, opacity: busy ? 0.6 : 1 }}>
-            <Plus size={15} />{t.book} · {fmtMin(start)}–{fmtEnd(end)}
+            <Plus size={15} />{t.book} · {fmtMin(start)}–{fmtEnd(end, lang)}
           </button>
         </div>
 
@@ -498,7 +502,7 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
               <div key={b.id} className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: i < dayBookings.length - 1 ? `1px solid ${div}` : "none" }}>
                 <div className="w-px h-8 rounded-full shrink-0" style={{ background: b.type === "open" ? RED : (room === "cinema" ? OOS : RED) }} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-mono font-bold" style={{ color: fg }}>{fmtMin(b.start)} – {fmtEnd(b.end)}</p>
+                  <p className="text-sm font-mono font-bold" style={{ color: fg }}>{fmtMin(b.start)} – {fmtEnd(b.end, lang)}</p>
                   <p className="text-[11px] truncate" style={{ color: sub }}>
                     {b.name}{b.type ? ` · ${b.type === "open" ? t.open : t.priv}` : ""}
                     {/* Metà di una serata che scavalca la mezzanotte: senza

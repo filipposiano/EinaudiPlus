@@ -1,24 +1,14 @@
 // api.ts — client per la lavanderia.
 //
-// Punta al nuovo backend su /api/laundry (Postgres). L'interruttore
-// VITE_API_BASE="legacy" fa tornare tutto agli Apps Script: e' il meccanismo di
-// rollback del cutover, si cambia una variabile d'ambiente su Vercel senza
-// toccare il codice.
-//
-// Le firme delle funzioni sono invariate apposta: LaundryView non cambia.
+// Parla solo con /api/laundry (Postgres). Il percorso di rollback verso i
+// vecchi Apps Script è stato rimosso: la migrazione è chiusa e tenere in piedi
+// due backend voleva dire tenere in piedi due comportamenti diversi, ognuno da
+// spiegare a chi legge.
 
 const TOKEN = import.meta.env.VITE_SECRET_TOKEN;
 
 export type WeekData = Record<string, Record<string, Record<string, string>>>;
 export type StatusData = Record<string, string>;
-
-// ─── Rollback ────────────────────────────────────────────────────────────────
-// I due vecchi endpoint Apps Script restano raggiungibili finche' la finestra di
-// osservazione non e' chiusa. Non cancellarli prima.
-const LEGACY = import.meta.env.VITE_API_BASE === "legacy";
-
-const LEGACY_URL = "https://script.google.com/macros/s/AKfycbwDIvaEQB0hbrrXpXVwA94BqkmfBRQQy1ECTP9hvVxwrsXwE9D0opaZFOzBDsN1jgJoMw/exec";
-const LEGACY_URL_NEW = "https://script.google.com/macros/s/AKfycbxErpUn1wYL0af9wtAgqdGYLr-zL8aKvs5BsIoKWu85YIuwfPHc4sKFnVAehN1F8Les9Q/exec";
 
 /** La camera dichiarata su questo dispositivo. */
 function currentRoom(): string {
@@ -29,26 +19,18 @@ function currentRoom(): string {
   }
 }
 
-/**
- * L'endpoint da usare.
- *
- * In modalita' nuova e' sempre lo stesso: quale delle due lavanderie sia lo
- * decide il server con laundry_for_room(). Prima invece lo sceglieva il client
- * leggendo localStorage a ogni chiamata, quindi cambiando camera senza
- * ricaricare si poteva leggere una lavanderia e scrivere sull'altra.
- */
-function endpoint(): string {
-  if (!LEGACY) return "/api/laundry";
-  const match = currentRoom().match(/^(\d+)/);
-  const num = match ? parseInt(match[1], 10) : 0;
-  return num > 0 && num < 100 ? LEGACY_URL_NEW : LEGACY_URL;
-}
+// Un endpoint solo: quale delle due lavanderie sia lo decide il server con
+// laundry_for_room(). Prima lo sceglieva il client leggendo localStorage a ogni
+// chiamata, quindi cambiando camera senza ricaricare si poteva leggere una
+// lavanderia e scrivere sull'altra.
+const ENDPOINT = "/api/laundry";
 
-// Il corpo va come text/plain: serviva a evitare il preflight CORS di Apps
-// Script. Con /api non servirebbe piu', ma lo teniamo perche' in modalita'
-// legacy serve ancora, e cosi' c'e' un solo percorso da mantenere.
+// Il corpo viaggia come text/plain: era il modo di evitare il preflight CORS di
+// Apps Script. Ora sarebbe superfluo, ma /api lo accetta già (readBody fa il
+// parse anche da stringa) e cambiarlo romperebbe le app ancora aperte sui
+// telefoni col bundle precedente. Si toglie quando non ne resta nessuna.
 async function postAction(action: string, payload: Record<string, unknown>) {
-  const res = await fetch(endpoint(), {
+  const res = await fetch(ENDPOINT, {
     method: "POST",
     headers: { "Content-Type": "text/plain;charset=utf-8" },
     body: JSON.stringify({ token: TOKEN, action, ...payload }),
@@ -65,11 +47,8 @@ async function postAction(action: string, payload: Record<string, unknown>) {
 }
 
 export async function getSnapshot(): Promise<{ week: WeekData; status: StatusData }> {
-  const qs = LEGACY
-    ? `?token=${TOKEN}`
-    : `?token=${TOKEN}&room=${encodeURIComponent(currentRoom())}`;
-
-  const res = await fetch(`${endpoint()}${qs}`);
+  const qs = `?token=${TOKEN}&room=${encodeURIComponent(currentRoom())}`;
+  const res = await fetch(`${ENDPOINT}${qs}`);
   if (!res.ok) throw new Error("Errore di rete durante il caricamento");
 
   const data = await res.json();

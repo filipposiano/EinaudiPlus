@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, memo, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useRef, memo, lazy, Suspense } from "react";
 import {
   Wind, Clock, CalendarDays,
   Plus, CheckCircle2, AlertTriangle,
@@ -228,6 +228,10 @@ const T = {
     reportAction:   "Segnala",
     alreadyOos:     "Già segnalata",
     reportSent:     (lbl: string) => `Guasto segnalato per ${lbl}. Un amministratore verificherà.`,
+    washerLabel:    "Lavatrice",
+    dryerLabel:     "Asciugatrice",
+    notaDesc:       "Cosa non va? Facoltativo, ma aiuta a capire chi chiamare.",
+    notaPlaceholder: "Es. non centrifuga, perde acqua…",
     booked:         (lbl: string) => `Lavatrice ${lbl} prenotata!`,
     prevHad:        (r: string) => `La stanza ${r} aveva questo turno prima di te — ha già ritirato il bucato?`,
     legendFree:     "Verde — Libera", legendFreeDesc: "Puoi prenotarla subito.",
@@ -321,6 +325,10 @@ const T = {
     reportAction:   "Report",
     alreadyOos:     "Already reported",
     reportSent:     (lbl: string) => `Fault reported for ${lbl}. An admin will check it.`,
+    washerLabel:    "Washer",
+    dryerLabel:     "Dryer",
+    notaDesc:       "What is wrong? Optional, but it helps decide who to call.",
+    notaPlaceholder: "e.g. will not spin, leaking…",
     reminderSent:   (r: string) => `Reminder sent · Room ${r}`,
     oosSet:         (lbl: string) => `${lbl} marked out of order`,
     oosCleared:     (lbl: string) => `${lbl} restored`,
@@ -531,6 +539,18 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
   const washerOos = selMachine ? oosDi(selMachine) : false;
   const dryerOos  = selMachine ? oosDi("D-" + selMachine[2]) : false;
   const avviso = washerOos || dryerOos;
+
+  // Anche questo tastierino si scrive da tastiera, non solo quello della
+  // schermata camera. Attivo SOLO nel passo "input": negli altri passi i tasti
+  // non hanno un campo dove andare, e Invio finirebbe per confermare qualcosa
+  // che l'utente non sta guardando.
+  useTastieraFisica(
+    step === "input",
+    setRoom,
+    () => { if (room.length > 0 && !altraLavanderia) setStep("confirm"); },
+    4,
+    TASTI_CAMERA,
+  );
 
   return (
     <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.65)" }} onClick={onClose}>
@@ -936,7 +956,7 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
   favs: Fav[]; onToggleFav: (day:number, slot:number)=>void;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
   onClear: (day:number, slot:number, machine:string)=>Promise<void>;
-  onStatus: (machine:string, oos:boolean)=>Promise<void>;
+  onStatus: (machine:string, oos:boolean, nota?:string)=>Promise<void>;
   isAdmin: boolean;
 }) {
   const t = T[lang];
@@ -1300,7 +1320,6 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
   const isFree  = machine.status === "available";
   const isOOO   = machine.status === "out-of-order";
 
-  const dotColor   = isOOO ? OOS_C : isFree ? GREEN   : YELLOW;
   const glifoColor = isOOO ? OOS_T : isFree ? GREEN_T : YELLOW_T;
   const rowBg = isFree ? `color-mix(in srgb, ${GREEN} 6%, transparent)` : "transparent";
 
@@ -1321,25 +1340,29 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
   return (
     <div style={{ borderBottom:isLast?"none":`1px solid ${divColor}`, background:rowBg }}>
       <div className="flex items-center gap-3 px-4 py-2.5">
-        {/* Dot/icona stato + icona macchina */}
-        <div className="flex items-center gap-2.5 shrink-0">
+        {/* Icona macchina.
+            Il pallino colorato che stava qui accanto è sparito: diceva la
+            stessa cosa dell'etichetta di stato subito sotto ("Libera",
+            "Camera 215", "Fuori servizio"), che la dice a parole. Un colore
+            in meno da decifrare, e il nome disteso al posto della sola
+            lettera. Il simbolo resta per chi lo ha scelto in accessibilità:
+            lì il colore da solo non basta, ed è il motivo per cui esiste. */}
+        <div className="flex items-center gap-2 shrink-0" style={{ color:fg }}>
           {(() => {
             const sk = isOOO ? "oos" : isFree ? "free" : "inuse";
             const ci = accessibilityPrefs.icons[sk as "free"|"inuse"|"oos"];
-            // Il simbolo è testo (a 11px, per giunta), il pallino è una
-            // superficie: due livelli di colore diversi. Vedi la legenda.
             return ci !== "●"
               ? <span className="shrink-0 text-[11px] leading-none" style={{ color:glifoColor }}>{ci}</span>
-              : <span className="size-2 rounded-full shrink-0" style={{ background:dotColor }}/>;
+              : null;
           })()}
           {machine.type==="washer" ? <WashingMachine size={18}/> : <Wind size={17}/>}
         </div>
 
         {/* Etichetta + stato, impilati (così non si accavallano su mobile) */}
         <div className="flex-1 min-w-0">
-          {groupLabel
-            ? <p className="text-sm font-semibold leading-tight truncate" style={{ color:fg }}>{groupLabel}</p>
-            : <p className="text-base font-mono font-bold leading-tight" style={{ color:fg }}>{machine.label}</p>}
+          <p className="text-sm font-semibold leading-tight truncate" style={{ color:fg }}>
+            {groupLabel ?? `${machine.type === "washer" ? t.washerLabel : t.dryerLabel} ${machine.label}`}
+          </p>
           <p className="text-xs font-medium leading-tight truncate" style={{ color:statusColor }}>{statusText}</p>
         </div>
 
@@ -1782,10 +1805,12 @@ const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber
 
 function SegnalaGuastoSheet({ lang, status, onStatus, onClose, roomNumber }: {
   theme?: Theme; lang: Lang; status: StatusData; roomNumber: string | null;
-  onStatus: (machine:string, oos:boolean)=>Promise<void>; onClose: () => void;
+  onStatus: (machine:string, oos:boolean, nota?:string)=>Promise<void>; onClose: () => void;
 }) {
   const t = T[lang];
   const [toast, setToast] = useState<string | null>(null);
+  // La macchina per cui si sta scrivendo la nota, se si sta scrivendo.
+  const [nota, setNota] = useState<{ m: Machine; testo: string } | null>(null);
   const bg   = "var(--background)";
   const fg   = "var(--foreground)";
   const sub  = "var(--gray-accessible-text)";
@@ -1800,9 +1825,19 @@ function SegnalaGuastoSheet({ lang, status, onStatus, onClose, roomNumber }: {
   const washers: Machine[] = avail.washers.map((id)=>mk(id,"washer"));
   const dryers:  Machine[] = avail.dryers.map((id)=>mk(id,"dryer"));
 
-  async function toggle(m: Machine) {
-    if (m.status === "out-of-order") return;   // gia' segnalata, niente da fare
-    try { await onStatus(m.id, true); setToast(t.reportSent(m.label)); }
+  /**
+   * Invia la segnalazione, con la nota se c'è.
+   *
+   * La nota è facoltativa ma serve: senza, all'amministratore arrivava solo
+   * "Lavatrice B segnalata non funzionante", che non dice se perde acqua, non
+   * centrifuga o non parte proprio — e la differenza cambia chi si chiama.
+   * Il canale la trasportava già (`reportBroken` accetta una nota da sempre),
+   * ma nessuna schermata la chiedeva: nel pannello si leggeva "senza altri
+   * dettagli" senza che fosse mai stato possibile darne.
+   */
+  async function invia(m: Machine, testo?: string) {
+    setNota(null);
+    try { await onStatus(m.id, true, testo?.trim() || undefined); setToast(t.reportSent(m.label)); }
     catch (e) { setToast(errMsg(e, lang)); }
   }
 
@@ -1828,7 +1863,7 @@ function SegnalaGuastoSheet({ lang, status, onStatus, onClose, roomNumber }: {
           <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.washers}</p>
           <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
             {washers.map((m, i) => (
-              <SegnalaGuastoRow key={m.id} machine={m} lang={lang} isLast={i===washers.length-1} divColor={div} onToggle={()=>toggle(m)} />
+              <SegnalaGuastoRow key={m.id} machine={m} lang={lang} isLast={i===washers.length-1} divColor={div} onToggle={()=>setNota({ m, testo:"" })} />
             ))}
           </div>
         </div>
@@ -1837,10 +1872,38 @@ function SegnalaGuastoSheet({ lang, status, onStatus, onClose, roomNumber }: {
           <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.dryers}</p>
           <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
             {dryers.map((m, i) => (
-              <SegnalaGuastoRow key={m.id} machine={m} lang={lang} isLast={i===dryers.length-1} divColor={div} onToggle={()=>toggle(m)} />
+              <SegnalaGuastoRow key={m.id} machine={m} lang={lang} isLast={i===dryers.length-1} divColor={div} onToggle={()=>setNota({ m, testo:"" })} />
             ))}
           </div>
         </div>
+
+        {/* Nota facoltativa. Si apre dopo aver scelto la macchina, non prima:
+            chiedere "cosa non va?" a chi non ha ancora detto "quale?" e' un
+            passaggio in piu' per il caso normale. Si puo' saltare. */}
+        {nota && (
+          <div className="px-5 mt-5">
+            <div className="rounded-2xl border p-4" style={{ background:surf, borderColor:div }}>
+              <p className="text-sm font-semibold mb-1" style={{ color:fg }}>
+                {nota.m.type === "washer" ? t.washerLabel : t.dryerLabel} {nota.m.label}
+              </p>
+              <p className="text-xs mb-3" style={{ color:sub }}>{t.notaDesc}</p>
+              <textarea
+                value={nota.testo} autoFocus rows={2} maxLength={200}
+                onChange={(e)=>setNota((n)=>n && { ...n, testo:e.target.value })}
+                placeholder={t.notaPlaceholder}
+                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none mb-3"
+                style={{ background:"var(--background)", color:fg, border:`1px solid ${div}` }}/>
+              <div className="flex gap-2">
+                <button onClick={()=>setNota(null)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
+                  style={{ background:"var(--secondary)", color:fg }}>{t.cancel}</button>
+                <button onClick={()=>invia(nota.m, nota.testo)}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold"
+                  style={{ background:RED, color:RED_FG }}>{t.reportAction}</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -1881,6 +1944,68 @@ function SegnalaGuastoRow({ machine, lang, isLast, divColor, onToggle }: {
   );
 }
 
+// ─── Tastiera fisica per i tastierini ─────────────────────────────────────────
+
+// I tasti accettati, gli stessi disegnati a schermo. Costante di modulo e non
+// letterale dentro il componente: una regex scritta nel corpo e' un oggetto
+// NUOVO a ogni render, quindi finirebbe per staccare e riattaccare
+// l'ascoltatore in continuazione — ed e' cosi' che una tastiera "a volte non
+// risponde".
+const TASTI_CAMERA = /^[0-9abAB-]$/;
+
+/**
+ * Rende un tastierino su schermo digitabile anche da tastiera vera.
+ *
+ * Sta in un hook perché i tastierini sono due — quello della schermata camera e
+ * quello dentro il modale di prenotazione — e prima solo il primo rispondeva
+ * alla tastiera. Chi da computer arrivava a "per qualcun altro" si ritrovava a
+ * dover tornare al mouse a metà operazione, senza capire perché lì non
+ * funzionasse più.
+ *
+ * L'ascoltatore sta sulla finestra perché in nessuno dei due c'è un campo da
+ * mettere a fuoco: le cifre le raccolgono i pulsanti disegnati. `attivo` lo
+ * monta e lo smonta insieme al tastierino, così quando il modale è chiuso —
+ * o quando sopra c'è il foglio di accesso amministratore — i tasti non li
+ * intercetta nessuno.
+ *
+ * @param max  quante cifre accetta (6 per la camera, 4 nel modale)
+ */
+function useTastieraFisica(
+  attivo: boolean,
+  set: React.Dispatch<React.SetStateAction<string>>,
+  onInvio: () => void,
+  max: number,
+  ammessi: RegExp,
+) {
+  // In un ref, non fra le dipendenze: `onInvio` è una funzione nuova a ogni
+  // render, e usarla come dipendenza staccherebbe e riattaccherebbe
+  // l'ascoltatore in continuazione.
+  const invio = useRef(onInvio);
+  invio.current = onInvio;
+
+  useEffect(() => {
+    if (!attivo) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;   // scorciatoie del browser
+
+      // Se si sta scrivendo in un campo, i tasti sono suoi e basta. Senza
+      // questo, ogni cifra della password di accesso finiva ANCHE nella
+      // casella della camera e preventDefault ne rubava una parte all'input:
+      // la password si poteva solo incollare.
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" ||
+                t.tagName === "SELECT" || t.isContentEditable)) return;
+
+      if (e.key === "Enter")     { e.preventDefault(); invio.current(); return; }
+      if (e.key === "Backspace") { e.preventDefault(); set((r) => r.slice(0, -1)); return; }
+      if (e.key === "Escape")    { set(""); return; }
+      if (ammessi.test(e.key))   { e.preventDefault(); set((r) => (r.length < max ? r + e.key : r)); }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [attivo, set, max, ammessi]);
+}
+
 // ─── Login screen ─────────────────────────────────────────────────────────────
 
 // Il numero che apre l'accesso amministratore invece di entrare in una camera.
@@ -1899,9 +2024,6 @@ function LoginScreen({ lang, onLogin, onAdmin }: {
   const chip = "var(--secondary)";
   const surf = "var(--card)";
 
-  // I tasti che il tastierino accetta, gli stessi disegnati a schermo.
-  const AMMESSI = /^[0-9abAB-]$/;
-
   function submit() {
     if (room.length === 0) return;
     if (room === ROOM_ADMIN) { setRoom(""); onAdmin(); return; }
@@ -1913,40 +2035,8 @@ function LoginScreen({ lang, onLogin, onAdmin }: {
     onLogin(room);
   }
 
-  // Da computer si scrive con la tastiera, tastierino numerico compreso: qui
-  // non c'è un campo di testo da mettere a fuoco, quindi i tasti vanno presi
-  // dalla finestra. Non è solo comodità — senza, chi non usa il mouse non
-  // aveva alcun modo di inserire la camera.
-  //
-  // L'effetto si riaggancia a ogni cambio di `room` perché submit() legge il
-  // valore corrente: con [] la chiusura resterebbe ferma alla stringa vuota e
-  // Invio non farebbe mai niente.
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;   // scorciatoie del browser
-
-      // Se si sta scrivendo in un campo, i tasti sono suoi e basta.
-      //
-      // L'ascoltatore sta sulla finestra perché in questa schermata non c'è
-      // nessun campo da mettere a fuoco: le cifre le raccoglie il tastierino
-      // disegnato. Ma sopra ci si apre il foglio di accesso amministratore,
-      // che di campi ne ha due — e lì ogni cifra della password finiva ANCHE
-      // nella casella della camera, mentre preventDefault ne rubava una parte
-      // all'input. Risultato: la password non si riusciva a digitare, si
-      // poteva solo incollare. Invio, peggio, faceva partire l'accesso alla
-      // camera invece del login.
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" ||
-                t.tagName === "SELECT" || t.isContentEditable)) return;
-
-      if (e.key === "Enter")     { e.preventDefault(); submit(); return; }
-      if (e.key === "Backspace") { e.preventDefault(); setRoom(r=>r.slice(0,-1)); return; }
-      if (e.key === "Escape")    { setRoom(""); return; }
-      if (AMMESSI.test(e.key))   { e.preventDefault(); setRoom(r=>r.length<6?r+e.key:r); }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [room]);
+  // La tastiera fisica: vale sempre in questa schermata. Vedi useTastieraFisica.
+  useTastieraFisica(true, setRoom, submit, 6, TASTI_CAMERA);
 
   return (
     <div className="flex flex-col items-center justify-center flex-1 px-6">
@@ -2782,8 +2872,8 @@ export default function App() {
   // Il residente segnala il guasto, non cambia lo stato: la segnalazione finisce
   // fra i feedback e un amministratore decide. Lo stato mostrato non cambia
   // subito, ed e' corretto cosi' — cambiera' quando l'admin l'avra' verificato.
-  const handleStatus = useCallback(async (machine:string, _oos:boolean) => {
-    await api.reportBroken(machine);
+  const handleStatus = useCallback(async (machine:string, _oos:boolean, nota?:string) => {
+    await api.reportBroken(machine, nota);
   }, []);
 
   /**
