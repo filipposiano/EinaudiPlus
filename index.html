@@ -11,11 +11,20 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Einaudi Plus" />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <script>
-      // Applica preferenze accessibilità prima del render per evitare flickering
-      try{var p=JSON.parse(localStorage.getItem("einaudiplus.accessibility")||"null");if(p&&p.colors){var s=document.documentElement.style;if(p.colors.free)s.setProperty("--status-free",p.colors.free);if(p.colors.inuse)s.setProperty("--status-inuse",p.colors.inuse);if(p.colors.oos)s.setProperty("--status-oos",p.colors.oos)}}catch(e){}
-    </script>
+    <!--
+      I font sono ospitati da noi: le regole @font-face stanno in style.css.
+      Prima qui c'era un <link> a fonts.googleapis.com, che a ogni apertura
+      mandava a Google l'indirizzo IP di chi apriva l'app.
+
+      Questi due preload sono i sottoinsiemi "latin", gli unici che servono
+      quasi sempre: senza, il browser li scopre solo dopo aver scaricato e
+      letto il CSS, e il testo resta un attimo col font di sistema. `crossorigin`
+      è obbligatorio anche per file nostri — i font si richiedono sempre in
+      modalità anonima, e senza quell'attributo il browser scaricherebbe due
+      volte lo stesso file.
+    -->
+    <link rel="preload" href="/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
   </head>
   <body>
     <div id="root"></div>

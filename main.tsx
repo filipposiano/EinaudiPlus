@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './style.css'
+import { loadPrefs, applyToDOM } from './statusConfig'
 
 // Una sola app, anche per gli amministratori: le schermate riservate si aprono
 // dal menu Impostazioni, non da una pagina /admin separata. Chi non ha una
@@ -27,6 +28,17 @@ import './style.css'
 if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
   document.documentElement.classList.add('dark')
 }
+
+// Stessa storia per i colori scelti nel pannello Accessibilita'.
+//
+// C'era uno <script> inline in index.html che faceva questo, e non ha mai
+// funzionato in produzione: la CSP consente `script-src 'self'` e gli script
+// inline li blocca. Silenziosamente — nessun errore a schermo, solo i colori
+// personalizzati che comparivano un istante dopo il resto.
+//
+// App.tsx li applica comunque in un useEffect, ma quello gira DOPO il primo
+// disegno. Qui si applicano prima, e chi ha scelto una palette la vede subito.
+applyToDOM(loadPrefs())
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
