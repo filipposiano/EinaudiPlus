@@ -40,14 +40,39 @@ const nap: Partial<Testi> = {
   confirm: "Vabbuò",
   cancel:  "Lassa sta'",
 
+  reportSent:     (lbl: string): string => `A uast pe ${lbl} è stat mannat. Gli admìn verificheranno.`,
+
+  notaDesc:       "Qual è o problem? Famm capì",
+  notaPlaceholder: "Es. non centrifuga, perde acqua…",
+  prevHad:        (r: string): string => `A cammera ${r} tenev u turn primm e te — se l'è già pijat?`,
+  legendFree:     "Verde — Libbera", legendFreeDesc: "A può prenotà momò.",
+  legendInUse:    (t: string): string => `Giall — A stann usann — Turno in corso, fine alle ${t}.`,
+  legendPrev:     "Cammera — Turno precedente — Indica chi stava primm e te.",
+  legendOos:      "Russ — Nun funzion — A può pur prenotà, ma nun funzion.",
+  legendAuto:     "Asciugatrice automatica — quann prenuot a lavatrice, se prenota pur l'asciugatrice",
+  lgFree: "Libbera", lgInUse: "In uso", lgOos: "Nun funzion", lgPrev: "Chill primm e te",
+  lgFreeD: "A può prenotà momò.",
+  lgInUseD: (t: string): string => `Turno in corso, fine alle ${t}.`,
+  lgOosD: "U uast è confermat. A può pur prenotà, ma nun funzion.",
+  lgPrevD: "A cammr che stav primm e te.",
+
   washerLabel: "Lavatrice",
   dryerLabel:  "Asciugatrice",
   loading:        "Carico e prenotazioni…",
   netError:       "A computer non funzion. Controlla se piglia.",
 
+  insertRoom:     "Nummr e stanza",
+  back:           "← Arret",
+  changeRoom:     "Cagna camera",
+  retry:          "Riprova",
+  taken:          (r?: string): string => r ? `Già occupata dalla stanza ${r}` : "Già occupata",
+
+
   soloDirezione:  "Sto turno è ra Direzione: statt accort!",
+  navLavanderia: "Lavanderij", navCinema: "O 'Cinema", navMusica: "A' Musica",
 
-
+  navMacchine: "Machin", navSegnalazioni: "Segnalazion",
+  navRicorrenti: "Ricorrent", navManutenzione: "Manutenzion",
   notaFacoltativa: "Facoltativo: a può nvia pur senza scriv nient.",
   inviaSegnalazione: "Invia a segnalazione",
 
