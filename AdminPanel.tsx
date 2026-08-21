@@ -70,7 +70,7 @@ const S = {
   } as const,
   danger: {
     padding: "6px 12px", borderRadius: 10, fontSize: 12, fontWeight: 600, cursor: "pointer",
-    border: "none", background: "color-mix(in srgb, var(--destructive-text) 12%, transparent)",
+    border: "none", background: "color-mix(in srgb, var(--destructive) 12%, transparent)",
     color: "var(--destructive-text)",
   } as const,
   input: {
@@ -492,7 +492,7 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
           return (
             <div key={f.id} style={{
               ...S.card, padding: 14,
-              borderColor: machine && !f.handled ? "var(--destructive-text)" : "var(--border)",
+              borderColor: machine && !f.handled ? "var(--destructive)" : "var(--border)",
               opacity: f.handled ? 0.6 : 1,
             }}>
               <div className="adm-feed-head">
@@ -501,7 +501,7 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
                 {machine ? (
                   <span style={{
                     fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 99,
-                    background: "color-mix(in srgb, var(--destructive-text) 12%, transparent)",
+                    background: "color-mix(in srgb, var(--destructive) 12%, transparent)",
                     color: "var(--destructive-text)",
                   }}>{tipo} {machine.slice(-1)}</span>
                 ) : (
@@ -791,7 +791,7 @@ function Manutenzione() {
           return (
             <div key={scope} style={{
               ...S.card, padding: 14,
-              borderColor: totale || inAttesa ? "var(--destructive-text)" : "var(--border)",
+              borderColor: totale || inAttesa ? "var(--destructive)" : "var(--border)",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>

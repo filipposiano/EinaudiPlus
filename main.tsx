@@ -7,6 +7,27 @@ import './style.css'
 // dal menu Impostazioni, non da una pagina /admin separata. Chi non ha una
 // sessione admin non ne scarica una riga — App.tsx le carica in lazy.
 
+// Il tema si decide PRIMA che React monti.
+//
+// App.tsx applica la classe `dark` in un useEffect, che gira dopo il primo
+// paint: tutto l'albero nasceva quindi sotto `:root` (chiaro) e la classe
+// arrivava dopo. Due conseguenze, la seconda seria:
+//
+//  - un lampo di tema chiaro all'avvio per chi ha il telefono in scuro;
+//  - gli elementi gia' dipinti non ririsolvevano le variabili CSS usate nei
+//    loro stili inline, quindi restavano coi colori del tema chiaro — barra
+//    di navigazione e colore primario compresi — finche' non venivano
+//    ricreati. Verificato: una sonda inserita nello STESSO contenitore dopo
+//    il cambio classe leggeva il valore scuro, i nodi preesistenti no.
+//
+// Qui la classe c'e' gia' al primo render, quindi il problema non si pone.
+// Sta in main.tsx e non in uno <script> dentro index.html perche' la CSP
+// consente solo `script-src 'self'`: uno script inline verrebbe bloccato, e
+// allentare la CSP per un dettaglio di tema non vale il cambio.
+if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+  document.documentElement.classList.add('dark')
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <App />

@@ -123,14 +123,30 @@ const monShort = (i: number, lang: Lang) => MON_SHORT[lang][WEEK_DATES[i].getMon
 
 const RED    = "var(--primary)";
 const RED_FG = "var(--primary-foreground)";
-// Le varianti "-text": --status-inuse ecc. sono la palette dichiarata nel
-// pannello Accessibilità (dev'essere identica a quel che mostra), mentre
-// queste costanti rendono davvero testo e icone di stato nell'app, e devono
-// reggere il contrasto WCAG AA nel tema in cui girano. Vedi style.css.
-const YELLOW = "var(--status-inuse-text)";
-const ORANGE = "var(--status-prev-text)";
-const OOS_C  = "var(--status-oos-text)";
-const GREEN  = "var(--status-free-text)";
+// I colori di stato hanno DUE livelli, e la coppia va scelta in base a cosa
+// dipinge — non è una preferenza estetica, cambia la leggibilità:
+//
+//   GREEN / YELLOW / OOS_C / ORANGE
+//     la tinta vivace, identica a quella dichiarata nel pannello
+//     Accessibilità. Per riempimenti, pastiglie, bordi, pallini, blocchi
+//     della griglia: superfici colorate, dove il vivace si vede benissimo.
+//
+//   GREEN_T / YELLOW_T / OOS_T / ORANGE_T
+//     la stessa famiglia scurita fino a reggere il 4,5:1 del WCAG AA sul
+//     bianco. Per il TESTO e per le icone che da sole vogliono dire qualcosa.
+//
+// Usare le "-T" anche sui riempimenti è l'errore da non rifare: le pastiglie
+// passano da `color-mix(verde 15%)` a un verdolino sporco, che è esattamente
+// l'effetto che si era chiesto di togliere. Vedi style.css.
+const YELLOW = "var(--status-inuse)";
+const ORANGE = "var(--status-prev)";
+const OOS_C  = "var(--status-oos)";
+const GREEN  = "var(--status-free)";
+
+const YELLOW_T = "var(--status-inuse-text)";
+const ORANGE_T = "var(--status-prev-text)";
+const OOS_T    = "var(--status-oos-text)";
+const GREEN_T  = "var(--status-free-text)";
 
 // ─── i18n ─────────────────────────────────────────────────────────────────────
 
@@ -524,9 +540,9 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
         {avviso && step !== "pick" && (
           <div className="rounded-2xl p-3.5 mb-5 flex gap-3"
             style={{ background:`color-mix(in srgb, ${OOS_C} 10%, transparent)`, border:`1px solid ${OOS_C}` }}>
-            <AlertTriangle size={18} className="shrink-0 mt-0.5" style={{ color:OOS_C }}/>
+            <AlertTriangle size={18} className="shrink-0 mt-0.5" style={{ color:OOS_T }}/>
             <div className="min-w-0">
-              <p className="text-sm font-semibold mb-0.5" style={{ color:OOS_C }}>{t.oosWarnTitle}</p>
+              <p className="text-sm font-semibold mb-0.5" style={{ color:OOS_T }}>{t.oosWarnTitle}</p>
               <p className="text-xs leading-snug" style={{ color:fg }}>
                 {washerOos && t.oosWasherWarn(machLabel)}
                 {washerOos && dryerOos && " "}
@@ -556,10 +572,10 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
                       opacity: isTaken ? 0.32 : 1,
                       cursor: isTaken ? "not-allowed" : "pointer",
                     }}>
-                    <WashingMachine size={22} style={{ color:isTaken?sub:rotta?OOS_C:fg }}/>
+                    <WashingMachine size={22} style={{ color:isTaken?sub:rotta?OOS_T:fg }}/>
                     <span className="text-sm font-bold font-mono" style={{ color:isTaken?sub:fg }}>Lav. {id[2]}</span>
                     <span className="text-[10px] flex items-center gap-1"
-                      style={{ color: isTaken ? sub : rotta ? OOS_C : GREEN }}>
+                      style={{ color: isTaken ? sub : rotta ? OOS_T : GREEN_T }}>
                       {rotta && !isTaken && <AlertTriangle size={10}/>}
                       {isTaken ? t.occupied : rotta ? t.oos : t.free}
                     </span>
@@ -640,7 +656,7 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
                 Il rifiuto vero è sul server; qui si dice perché, prima di far
                 battere il numero a vuoto. */}
             {altraLavanderia && (
-              <p className="text-xs mb-3 px-1 flex items-start gap-1.5" style={{ color:OOS_C }}>
+              <p className="text-xs mb-3 px-1 flex items-start gap-1.5" style={{ color:OOS_T }}>
                 <AlertTriangle size={13} style={{ flexShrink:0, marginTop:1 }}/>
                 {t.altraLavanderia}
               </p>
@@ -712,7 +728,7 @@ function ModifyModal({ target, lang, onEdit, onDelete, onClose }: {
           <button onClick={onEdit} className="w-full py-3.5 rounded-2xl text-sm font-semibold" style={{ background:RED, color:RED_FG }}>
             {t.modify}
           </button>
-          <button onClick={onDelete} className="w-full py-3.5 rounded-2xl text-sm font-semibold" style={{ background: "color-mix(in srgb, var(--destructive) 10%, transparent)", color: OOS_C }}>
+          <button onClick={onDelete} className="w-full py-3.5 rounded-2xl text-sm font-semibold" style={{ background: "color-mix(in srgb, var(--destructive) 10%, transparent)", color: OOS_T }}>
             {t.delete}
           </button>
           <button onClick={onClose} className="w-full py-3 rounded-2xl text-sm" style={{ color:sub }}>
@@ -818,7 +834,7 @@ function QuickBookModal({ lang, day, slot, week, status, roomNumber, onBook, onC
                 <WashingMachine size={17} style={{ color:fg }}/>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold leading-tight" style={{ color:fg }}>{t.washer} {w.L}</p>
-                  <p className="text-xs leading-tight truncate" style={{ color: w.oos ? OOS_C : w.free ? GREEN : sub }}>{statusText}</p>
+                  <p className="text-xs leading-tight truncate" style={{ color: w.oos ? OOS_T : w.free ? GREEN_T : sub }}>{statusText}</p>
                 </div>
                 {w.free
                   ? <button onClick={()=>book(w.wid)} disabled={!!busy}
@@ -839,12 +855,12 @@ function QuickBookModal({ lang, day, slot, week, status, roomNumber, onBook, onC
         </div>
 
         {anyOosFree && (
-          <p className="text-xs text-center mb-2 flex items-center justify-center gap-1.5" style={{ color:OOS_C }}>
+          <p className="text-xs text-center mb-2 flex items-center justify-center gap-1.5" style={{ color:OOS_T }}>
             <AlertTriangle size={12} className="shrink-0"/>{t.oosWarnBody}
           </p>
         )}
         {!anyFree && <p className="text-xs text-center" style={{ color:sub }}>{t.noFreeWashers}</p>}
-        {err && <p className="text-xs text-center" style={{ color:OOS_C }}>{err}</p>}
+        {err && <p className="text-xs text-center" style={{ color:OOS_T }}>{err}</p>}
       </div>
     </div>
   );
@@ -875,14 +891,14 @@ function FeedbackModal({ lang, room, onClose }: { lang: Lang; room: string | nul
           <p className="text-lg font-bold" style={{ color:fg }}>{t.feedback}</p>
         </div>
         {done ? (
-          <p className="text-sm py-6 text-center font-medium" style={{ color:GREEN }}>{t.feedbackThanks}</p>
+          <p className="text-sm py-6 text-center font-medium" style={{ color:GREEN_T }}>{t.feedbackThanks}</p>
         ) : (
           <>
             <p className="text-sm mb-3" style={{ color:sub }}>{t.feedbackBody}</p>
             <textarea value={text} onChange={(e)=>setText(e.target.value)} rows={4} placeholder={t.feedbackPlaceholder}
               className="w-full rounded-2xl px-3 py-2.5 text-sm outline-none mb-2 resize-none"
               style={{ background:chip, color:fg, border:`1px solid ${div}` }}/>
-            {err && <p className="text-xs mb-2" style={{ color:OOS_C }}>{t.feedbackError}</p>}
+            {err && <p className="text-xs mb-2" style={{ color:OOS_T }}>{t.feedbackError}</p>}
             <button onClick={send} disabled={!text.trim() || busy}
               className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
               style={{ background:RED, color:RED_FG, opacity:(!text.trim() || busy) ? 0.5 : 1 }}>
@@ -1049,7 +1065,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
                 background: senzaQuota || remaining > 0 ? `color-mix(in srgb, ${GREEN} 15%, transparent)`
                           : remaining === 0 ? "var(--secondary)"
                           : `color-mix(in srgb, ${ORANGE} 18%, transparent)`,
-                color: senzaQuota || remaining > 0 ? GREEN : remaining === 0 ? sub : ORANGE,
+                color: senzaQuota || remaining > 0 ? GREEN_T : remaining === 0 ? sub : ORANGE_T,
               }}>
               {senzaQuota ? t.noQuota : t.remainingChip(remaining)}
             </span>
@@ -1080,7 +1096,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
                     {cur && <span className="size-2 rounded-full animate-pulse shrink-0" style={{ background:RED }}/>}
                     <button onClick={()=>cancelBooking(b)} aria-label={t.delete}
                       className="p-2 rounded-lg shrink-0 transition-all active:scale-90"
-                      style={{ background:`color-mix(in srgb, var(--destructive) 10%, transparent)`, color:OOS_C }}>
+                      style={{ background:`color-mix(in srgb, var(--destructive) 10%, transparent)`, color:OOS_T }}>
                       <Trash2 size={14}/>
                     </button>
                   </div>
@@ -1089,8 +1105,8 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
             )}
             <div className="flex items-center gap-2 px-4 py-2.5 border-t"
               style={{ borderColor:div, background: `color-mix(in srgb, var(--primary) 4%, transparent)` }}>
-              <CalendarDays size={12} style={{ color: senzaQuota || remaining >= 0 ? sub : ORANGE, flexShrink:0 }}/>
-              <p className="text-[11px]" style={{ color: senzaQuota || remaining >= 0 ? sub : ORANGE }}>
+              <CalendarDays size={12} style={{ color: senzaQuota || remaining >= 0 ? sub : ORANGE_T, flexShrink:0 }}/>
+              <p className="text-[11px]" style={{ color: senzaQuota || remaining >= 0 ? sub : ORANGE_T }}>
                 {senzaQuota ? t.noQuotaMsg : t.remainingMsg(remaining)}
               </p>
             </div>
@@ -1101,7 +1117,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
       {/* Turni liberi oggi 
       <section className="px-5 mb-4">
         <div className="rounded-2xl border flex items-center gap-3 px-4 py-3.5" style={{ background:surf, borderColor:div }}>
-          <div className="p-2 rounded-xl shrink-0" style={{ background:`color-mix(in srgb, ${GREEN} 15%, transparent)`, color:GREEN }}>
+          <div className="p-2 rounded-xl shrink-0" style={{ background:`color-mix(in srgb, ${GREEN} 15%, transparent)`, color:GREEN_T }}>
             <LayoutGrid size={16}/>
           </div>
           <div className="flex items-baseline gap-2">
@@ -1124,7 +1140,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
         <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
           {favs.length === 0 ? (
             <div className="flex items-start gap-3 px-4 py-3">
-              <Star size={14} style={{ color:ORANGE, marginTop:1, flexShrink:0 }}/>
+              <Star size={14} style={{ color:ORANGE_T, marginTop:1, flexShrink:0 }}/>
               <p className="text-xs" style={{ color:sub }}>{t.noFavs}</p>
             </div>
           ) : (
@@ -1140,7 +1156,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
                     <p className="text-sm font-mono font-semibold" style={{ color:fg }}>
                       {t.days[f.day]} · {sl.start}–{sl.end}
                     </p>
-                    <p className="text-[11px]" style={{ color: past ? sub : freeMid ? GREEN : sub }}>
+                    <p className="text-[11px]" style={{ color: past ? sub : freeMid ? GREEN_T : sub }}>
                       {past ? t.favPast : freeMid ? t.favFree : t.favFull}
                     </p>
                   </div>
@@ -1148,7 +1164,7 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
                     <button onClick={()=>setQuickTarget({ day:f.day, slot:f.slot })}
                       className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all active:scale-95 shrink-0"
                       style={ freeMid
-                        ? { background:`color-mix(in srgb, ${GREEN} 18%, transparent)`, color:GREEN }
+                        ? { background:`color-mix(in srgb, ${GREEN} 18%, transparent)`, color:GREEN_T }
                         : { background:"var(--secondary)", color:sub } }>
                       <Plus size={12}/>{t.book}
                     </button>
@@ -1196,19 +1212,25 @@ function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, 
         <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.howItWorks}</p>
         <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
           {[
-            { dot:GREEN,  statusKey:"free" as const,  name:t.lgFree,  desc:t.lgFreeD },
-            { dot:YELLOW, statusKey:"inuse" as const, name:t.lgInUse, desc:t.lgInUseD(TIME_SLOTS[CUR_SLOT].end) },
-            { dot:OOS_C,  statusKey:"oos" as const,   name:t.lgOos,   desc:t.lgOosD },
-            { icon:true,  statusKey:undefined,         name:t.lgPrev,  desc:t.lgPrevD },
-          ].map(({ dot, icon, statusKey, name, desc }, i, arr) => (
+            // `dot` dipinge il pallino, `glifo` colora il simbolo che lo
+            // sostituisce quando l'utente sceglie le forme al posto dei colori
+            // nelle impostazioni di accessibilità. Sono due mestieri diversi:
+            // il pallino è una superficie, il simbolo è testo — e chi attiva
+            // quell'opzione lo fa proprio perché il colore da solo non gli
+            // basta, quindi è l'ultimo posto dove servirlo poco leggibile.
+            { dot:GREEN,  glifo:GREEN_T,  statusKey:"free" as const,  name:t.lgFree,  desc:t.lgFreeD },
+            { dot:YELLOW, glifo:YELLOW_T, statusKey:"inuse" as const, name:t.lgInUse, desc:t.lgInUseD(TIME_SLOTS[CUR_SLOT].end) },
+            { dot:OOS_C,  glifo:OOS_T,    statusKey:"oos" as const,   name:t.lgOos,   desc:t.lgOosD },
+            { icon:true,  glifo:ORANGE_T, statusKey:undefined,         name:t.lgPrev,  desc:t.lgPrevD },
+          ].map(({ dot, glifo, icon, statusKey, name, desc }, i, arr) => (
             <div key={name} className="px-4 py-3"
               style={{ borderBottom: i < arr.length - 1 ? `1px solid ${div}` : "none" }}>
               {/* Colore/icona + nome stato sopra */}
               <div className="flex items-center gap-2 mb-1">
                 {icon
-                  ? <History size={13} className="shrink-0" style={{ color:ORANGE }}/>
+                  ? <History size={13} className="shrink-0" style={{ color:ORANGE_T }}/>
                   : statusKey && accessibilityPrefs.icons[statusKey] !== "●"
-                    ? <span className="shrink-0 text-[13px] leading-none" style={{ color:dot }}>{accessibilityPrefs.icons[statusKey]}</span>
+                    ? <span className="shrink-0 text-[13px] leading-none" style={{ color:glifo }}>{accessibilityPrefs.icons[statusKey]}</span>
                     : <span className="size-2.5 rounded-full shrink-0" style={{ background:dot }}/>}
                 <p className="text-xs font-semibold" style={{ color: fg }}>{name}</p>
               </div>
@@ -1255,7 +1277,8 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
   const isFree  = machine.status === "available";
   const isOOO   = machine.status === "out-of-order";
 
-  const dotColor = isOOO ? OOS_C : isFree ? GREEN : YELLOW;
+  const dotColor   = isOOO ? OOS_C : isFree ? GREEN   : YELLOW;
+  const glifoColor = isOOO ? OOS_T : isFree ? GREEN_T : YELLOW_T;
   const rowBg = isFree ? `color-mix(in srgb, ${GREEN} 6%, transparent)` : "transparent";
 
   // Fuori servizio e occupata sono due fatti indipendenti, e prima il primo
@@ -1265,7 +1288,8 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
   const statusText = isOOO
     ? (machine.room ? `${t.oos} · ${t.room} ${machine.room}` : t.oos)
     : isFree ? t.free : `${t.room} ${machine.room}`;
-  const statusColor = isFree ? GREEN : isOOO ? OOS_C : fg;
+  // Finisce su testo (l'etichetta di stato della riga), quindi variante scura.
+  const statusColor = isFree ? GREEN_T : isOOO ? OOS_T : fg;
 
   // Prenotabile: e' una lavatrice e nessuno l'ha ancora presa. Che sia guasta
   // non toglie il diritto di prenotarla, cambia solo il colore del pulsante.
@@ -1279,8 +1303,10 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
           {(() => {
             const sk = isOOO ? "oos" : isFree ? "free" : "inuse";
             const ci = accessibilityPrefs.icons[sk as "free"|"inuse"|"oos"];
+            // Il simbolo è testo (a 11px, per giunta), il pallino è una
+            // superficie: due livelli di colore diversi. Vedi la legenda.
             return ci !== "●"
-              ? <span className="shrink-0 text-[11px] leading-none" style={{ color:dotColor }}>{ci}</span>
+              ? <span className="shrink-0 text-[11px] leading-none" style={{ color:glifoColor }}>{ci}</span>
               : <span className="size-2 rounded-full shrink-0" style={{ background:dotColor }}/>;
           })()}
           {machine.type==="washer" ? <WashingMachine size={18}/> : <Wind size={17}/>}
@@ -1298,7 +1324,7 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
         <div className="flex items-center gap-2 shrink-0">
           {machine.prevRoom && (
             <span className="flex items-center gap-1 rounded-xl px-2 py-1.5"
-              style={{ background:`color-mix(in srgb, ${ORANGE} 12%, transparent)`, color:ORANGE }}
+              style={{ background:`color-mix(in srgb, ${ORANGE} 12%, transparent)`, color:ORANGE_T }}
               title={`${t.lgPrev}: ${machine.prevRoom}`}>
               <History size={13} className="shrink-0"/>
               <span className="text-[11px] font-mono font-semibold">{machine.prevRoom}</span>
@@ -1313,14 +1339,14 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
               className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold shrink-0 transition-all active:scale-95"
               style={isOOO
                 ? { background:OOS_C, color:"var(--destructive-foreground)" }
-                : { background:`color-mix(in srgb, ${GREEN} 18%, transparent)`, color:GREEN }}>
+                : { background:`color-mix(in srgb, ${GREEN} 18%, transparent)`, color:GREEN_T }}>
               {isOOO ? <AlertTriangle size={12}/> : <Plus size={12}/>}
               {isOOO ? t.bookAnyway : t.book}
             </button>
           )}
           {/* Guasta e non prenotabile (asciugatrice, o gia' occupata):
               resta il triangolo come promemoria visivo. */}
-          {isOOO && !canBook && <AlertTriangle size={15} style={{ color:OOS_C }}/>}
+          {isOOO && !canBook && <AlertTriangle size={15} style={{ color:OOS_T }}/>}
         </div>
       </div>
     </div>
@@ -1425,9 +1451,9 @@ function DaySchedule({ lang, week, status, roomNumber: sessionRoom, favs, onTogg
               {isPrev && <div className="absolute left-0 top-0 bottom-0 w-0.5" style={{ background:ORANGE }}/>}
               <div className="w-[56px] shrink-0 py-2 flex items-start gap-1">
                 <div className="min-w-0">
-                  <span className="text-[10px] font-mono tabular-nums block" style={{ color:isCur?RED:isPrev?ORANGE:sub }}>{slot.start}</span>
+                  <span className="text-[10px] font-mono tabular-nums block" style={{ color:isCur?RED:isPrev?ORANGE_T:sub }}>{slot.start}</span>
                   {isCur  && <span className="text-[8px] font-mono" style={{ color:RED }}>{t.now}</span>}
-                  {isPrev && <span className="text-[8px] font-mono" style={{ color:ORANGE }}>{t.prev}</span>}
+                  {isPrev && <span className="text-[8px] font-mono" style={{ color:ORANGE_T }}>{t.prev}</span>}
                 </div>
                 <button onClick={()=>onToggleFav(selDay, si)} className="p-0.5 -mr-1 shrink-0 transition-transform active:scale-90" aria-label="preferito">
                   <Star size={11} style={{ color:isFav?ORANGE:sub, fill:isFav?ORANGE:"none", opacity:isFav?1:0.45 }}/>
@@ -1525,7 +1551,7 @@ function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify,
                   <WashingMachine size={18} style={{ color:room?fg:sub, flexShrink:0 }}/>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold" style={{ color:fg }}>Lavatrice {lbl}</p>
-                    <p className="text-xs font-mono" style={{ color:room?sub:GREEN }}>
+                    <p className="text-xs font-mono" style={{ color:room?sub:GREEN_T }}>
                       {room ? `${t.room} ${room}` : t.free}
                     </p>
                   </div>
@@ -1533,7 +1559,7 @@ function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify,
                     <button
                       onClick={()=>onBook(mid)}
                       className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all active:scale-95 shrink-0"
-                      style={{ background:`color-mix(in srgb, ${GREEN} 12%, transparent)`, color:GREEN }}>
+                      style={{ background:`color-mix(in srgb, ${GREEN} 12%, transparent)`, color:GREEN_T }}>
                       <Plus size={11}/>{t.book}
                     </button>
                   )}
@@ -1549,7 +1575,7 @@ function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify,
                     <button
                       onClick={()=>onDelete(mid)}
                       className="flex-1 rounded-xl py-2 text-xs font-semibold transition-all active:scale-95 border"
-                      style={{ background:"transparent", borderColor:"var(--border)", color:OOS_C }}>
+                      style={{ background:"transparent", borderColor:"var(--border)", color:OOS_T }}>
                       {t.delete}
                     </button>
                   </div>
@@ -1813,7 +1839,7 @@ function SegnalaGuastoRow({ machine, lang, isLast, divColor, onToggle }: {
           {machine.type==="washer" ? <WashingMachine size={16}/> : <Wind size={16}/>}
           <span className="text-base font-mono font-bold">{machine.label}</span>
         </div>
-        <span className="text-xs font-medium ml-1" style={{ color:isOOO?OOS_C:GREEN }}>
+        <span className="text-xs font-medium ml-1" style={{ color:isOOO?OOS_T:GREEN_T }}>
           {isOOO ? t.oos : t.operative}
         </span>
       </div>
@@ -1825,7 +1851,7 @@ function SegnalaGuastoRow({ machine, lang, isLast, divColor, onToggle }: {
         className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold shrink-0 transition-all active:scale-95 disabled:active:scale-100"
         style={isOOO
           ? { background:"var(--secondary)", color:"var(--gray-accessible-text)", cursor:"default" }
-          : { background:`color-mix(in srgb, var(--destructive) 12%, transparent)`, color:OOS_C }}>
+          : { background:`color-mix(in srgb, var(--destructive) 12%, transparent)`, color:OOS_T }}>
         {isOOO ? <><AlertTriangle size={12}/>{t.alreadyOos}</> : <><Wrench size={12}/>{t.reportAction}</>}
       </button>
     </div>
@@ -2771,7 +2797,7 @@ export default function App() {
     </CenterState>
   ) : error ? (
     <CenterState>
-      <AlertTriangle size={28} style={{ color:OOS_C }}/>
+      <AlertTriangle size={28} style={{ color:OOS_T }}/>
       <p className="text-sm">{t.netError}</p>
       <p className="text-xs mt-2" style={{ color: "#888", userSelect: "text" }}>{error}</p>
       <button onClick={()=>{ setLoading(true); refresh(); }}

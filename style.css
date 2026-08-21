@@ -59,25 +59,36 @@
   --status-prev: #f59e0b;
 
   /* ── Varianti "testo" ─────────────────────────────────────────────────
-     Erano tinte piu' scure, calcolate per superare il 4,5:1 del WCAG AA sul
-     bianco. Su richiesta si e' tornati ai colori di luglio: qui ogni token
-     rimanda alla tinta base, quindi l'app rende esattamente come allora.
+     Il secondo livello della palette: stessa famiglia dei colori qui sopra,
+     ma scuriti quanto basta a superare il 4,5:1 del WCAG AA sul bianco.
 
-     Restano come alias e non sono stati cancellati di proposito. Primo: sono
-     l'unico punto da cui rimettere il contrasto, cambiando cinque righe
-     invece di ricucire una sessantina di riferimenti sparsi nei componenti.
-     Secondo: dicono dove il colore fa testo o icona-che-significa-qualcosa,
-     che e' l'informazione da avere sotto mano se un giorno si rifa' il giro.
+     La regola per usarli, e il motivo per cui esistono due livelli:
 
-     Quanto si perde, misurato sul bianco: verde 2,26:1, giallo 1,85:1
-     (praticamente illeggibile a 8-11px), grigio 5,21:1, rosso 3,76:1. Il
-     minimo AA per il testo normale e' 4,5:1. */
-  --gray-accessible-text: var(--muted-foreground);
-  --status-free-text:     var(--status-free);
-  --status-inuse-text:    var(--status-inuse);
-  --status-oos-text:      var(--status-oos);
-  --status-prev-text:     var(--status-prev);
-  --destructive-text:     var(--destructive);
+       riempimenti, pastiglie, bordi, pallini, blocchi della timeline
+         -> tinta BASE, quella vivace, quella dichiarata nel pannello
+            Accessibilita'. Sono superfici colorate, non testo: si vedono
+            benissimo, e scurirle spegne l'app senza far guadagnare niente.
+
+       testo, e icone che da sole trasmettono un significato
+         -> variante qui sotto.
+
+     Distinguere i due casi e' l'intera ragione del giro. Un primo tentativo
+     aveva puntato TUTTE le costanti dei componenti su questi valori, riempimenti
+     compresi: con `color-mix(verde-scuro 15%, transparent)` le pastiglie
+     diventavano verdoline sporche, ed e' quello l'effetto che si era chiesto
+     di togliere — non il contrasto sul testo.
+
+     Le tinte base restano intoccate e coincidono con quelle mostrate nel
+     pannello Accessibilita'. Valori verificati contro #ffffff con la formula di
+     luminanza relativa del WCAG. Per riferimento, i corrispondenti vivaci sul
+     bianco stanno a: verde 2,26:1, giallo 1,85:1, rosso 3,76:1 — sotto soglia,
+     ed e' per questo che non reggono il testo piccolo. */
+  --gray-accessible-text: #5a5a6b;   /* 6,76:1 */
+  --status-free-text:     #14672f;   /* 6,98:1 */
+  --status-inuse-text:    #8a5c07;   /* 5,81:1 */
+  --status-oos-text:      #d11a28;   /* 5,40:1 */
+  --status-prev-text:     #b45309;   /* 5,02:1 */
+  --destructive-text:     #d11a28;   /* 5,40:1 */
 
   /* ── Lavatrice / asciugatrice ──────────────────────────────────────────
      Distinguono i due tipi di macchina nel pannello amministrativo, dove
@@ -130,18 +141,17 @@
   --status-oos: #ff4757;
   --status-prev: #f59e0b;
 
-  /* Sul tema scuro non c'e' niente da riportare indietro: i colori di stato
-     gia' a luglio erano questi, e contro lo sfondo quasi nero passano il
-     minimo AA da soli. L'unico che divergeva era il grigio, che condivideva
-     l'hex del tema chiaro (#6b6b80, 3,8:1) ed era quindi sotto soglia anche
-     allora — lo si lascia leggibile: non fa parte del "com'era il mese
-     scorso" che si voleva rivedere, riguarda solo il testo secondario. */
+  /* Sul tema scuro i due livelli coincidono quasi ovunque, e non e' una
+     scorciatoia: contro lo sfondo quasi nero (#0c0c0f) i colori vivaci passano
+     gia' il minimo AA da soli, quindi scurirli o schiarirli peggiorerebbe e
+     basta. L'unico che divergeva davvero e' il grigio, che condivideva l'hex
+     del tema chiaro (#6b6b80) e li' valeva 3,8:1: sotto soglia. */
   --gray-accessible-text: #9a9ab0;   /* 7,09:1 — era #6b6b80 a 3,8:1 */
-  --status-free-text:     var(--status-free);
-  --status-inuse-text:    var(--status-inuse);
-  --status-oos-text:      var(--status-oos);
-  --status-prev-text:     var(--status-prev);
-  --destructive-text:     var(--destructive);
+  --status-free-text:     var(--status-free);    /* 8,57:1 */
+  --status-inuse-text:    var(--status-inuse);   /* 10,18:1 */
+  --status-oos-text:      var(--status-oos);     /* 5,85:1 */
+  --status-prev-text:     var(--status-prev);    /* margine ampio */
+  --destructive-text:     var(--destructive);    /* 5,85:1 */
 
   /* Le due tinte del tema chiaro sono scure per reggere il bianco: sul nero
      sparirebbero. Stessa idea (acqua/calore), luminosità ribaltata. */
