@@ -182,6 +182,7 @@ const T = {
       : n === 0
       ? `Hai usato entrambi i turni di questa settimana (max ${WEEKLY_QUOTA} a camera).`
       : `Hai superato il limite settimanale di ${WEEKLY_QUOTA} turni (${-n} in più).`,
+    altraLavanderia: "Quella camera è dell'altra lavanderia. Puoi prenotare solo le macchine del tuo edificio.",
     noQuota: "senza limite",
     noQuotaMsg: `Il limite di ${WEEKLY_QUOTA} turni vale per camera: alla Direzione non si applica.`,
     howItWorks: "Come funziona",
@@ -278,6 +279,7 @@ const T = {
       : n === 0
       ? `You've used both your slots this week (max ${WEEKLY_QUOTA} per room).`
       : `You're over the weekly limit of ${WEEKLY_QUOTA} slots (${-n} extra).`,
+    altraLavanderia: "That room belongs to the other laundry. You can only book machines in your own building.",
     noQuota: "no limit",
     noQuotaMsg: `The ${WEEKLY_QUOTA}-slot limit is per room: it doesn't apply to Direzione.`,
     howItWorks: "How it works",
@@ -353,6 +355,7 @@ function errMsg(e: any, lang: Lang) {
   const t = T[lang];
   const msg = String(e?.message ?? e ?? "");
   if (msg.includes("occupata") || msg.toLowerCase().includes("taken")) return t.taken(e?.by);
+  if (msg.includes("altra lavanderia")) return t.altraLavanderia;
   return t.genericError;
 }
 
@@ -490,6 +493,12 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
   // Chi risulta intestatario del turno: una camera, o la Direzione.
   const intestatario = room === api.DIREZIONE ? "Direzione" : `${t.room} ${room}`;
 
+  // Camera digitata che appartiene all'altro edificio. Si valuta solo a numero
+  // completo (>=2 cifre): con una cifra sola "2" sarebbe già "Manica" e
+  // l'avviso lampeggerebbe mentre si sta ancora scrivendo "215".
+  const altraLavanderia =
+    !!myRoom && myRoom !== api.DIREZIONE && room.length >= 2 && !api.sameLaundry(myRoom, room);
+
   // Prenotando una lavatrice si riserva anche l'asciugatrice con la stessa
   // lettera per il turno successivo: se una delle due è segnalata guasta, chi
   // prenota deve saperlo PRIMA, non scoprirlo davanti alla macchina.
@@ -620,10 +629,23 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
               <button onClick={()=>setRoom(r=>r.length<4?r+"0":r)}
                 className="rounded-2xl h-12 text-lg font-bold transition-all active:scale-95"
                 style={{ background:chip, color:fg }}>0</button>
-              <button onClick={()=>room.length>0&&setStep("confirm")}
+              <button onClick={()=>room.length>0&&!altraLavanderia&&setStep("confirm")}
                 className="rounded-2xl h-12 text-lg font-bold transition-all active:scale-95"
-                style={{ background:room.length>0?RED:chip, color:room.length>0?RED_FG:sub }}>→</button>
+                style={{ background:room.length>0&&!altraLavanderia?RED:chip, color:room.length>0&&!altraLavanderia?RED_FG:sub }}>→</button>
             </div>
+
+            {/* Le due lavanderie sono edifici separati: prenotare una macchina
+                dove non si abita non ha senso, e prima corrompeva pure la
+                schermata (si finiva a vedere la griglia dell'altro edificio).
+                Il rifiuto vero è sul server; qui si dice perché, prima di far
+                battere il numero a vuoto. */}
+            {altraLavanderia && (
+              <p className="text-xs mb-3 px-1 flex items-start gap-1.5" style={{ color:OOS_C }}>
+                <AlertTriangle size={13} style={{ flexShrink:0, marginTop:1 }}/>
+                {t.altraLavanderia}
+              </p>
+            )}
+
             {(target.machineId === "?" || myRoom) && (
               <button onClick={()=>setStep(target.machineId==="?"?"pick":myRoom?"owner":"input")} className="text-xs" style={{ color:sub }}>{t.back}</button>
             )}
@@ -1931,7 +1953,14 @@ function BottomNav({ active, onChange, lang }: { active:number; onChange:(i:numb
     { icon:LayoutGrid,   label:t.weekly    },
   ];
   return (
-    <div className="flex shrink-0 border-t" style={{ background:"var(--background)", borderColor:"var(--border)" }}>
+    // paddingBottom con la safe-area: su iPhone l'ultima riga di pulsanti
+    // finiva sotto la barra dell'indicatore home, che la copre a metà. Su
+    // tutto il resto env() vale 0 e non cambia niente.
+    <div className="flex shrink-0 border-t"
+      style={{
+        background:"var(--background)", borderColor:"var(--border)",
+        paddingBottom:"env(safe-area-inset-bottom, 0px)",
+      }}>
       {tabs.map((tab,i)=>{ const Icon=tab.icon; return (
         <button key={i} onClick={()=>onChange(i)} className="flex-1 flex flex-col items-center gap-1 py-3 transition-colors"
           style={{ color:active===i?RED:"var(--gray-accessible-text)" }}>
@@ -2701,7 +2730,26 @@ export default function App() {
     await api.reportBroken(machine);
   }, []);
 
-  const showChrome = roomNumber !== null && !loading && !error;
+  /**
+   * Se mostrare la navigazione (barra in basso, selettore struttura, sidebar).
+   *
+   * Dipende SOLO dall'aver scelto una camera. Prima era
+   * `roomNumber !== null && !loading && !error`, e quel `!error` era il motivo
+   * per cui la barra in basso "spariva ogni tanto":
+   *
+   *   1. l'app è aperta e funziona, poi un refresh fallisce — basta un attimo
+   *      di rete ballerina, un ascensore, il passaggio wifi/dati;
+   *   2. `error` si popola e TUTTA la navigazione si smonta;
+   *   3. se in quel momento eri su Cinema o Musica, il corpo continua a
+   *      mostrare la sala (il ramo d'errore vale solo per la lavanderia),
+   *      quindi restavi su una schermata senza più alcun modo di uscirne.
+   *
+   * Un errore di rete transitorio non è un buon motivo per togliere di mezzo
+   * la navigazione: i dati già caricati sono ancora in `week`/`status` e
+   * restano validi. L'errore va detto nel corpo, dove c'è il pulsante Riprova,
+   * non facendo sparire i comandi.
+   */
+  const showChrome = roomNumber !== null;
   const isDesktop  = useMediaQuery("(min-width: 768px)");
 
   const globalStyle = (

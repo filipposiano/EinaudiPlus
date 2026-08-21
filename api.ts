@@ -79,7 +79,18 @@ export async function getSnapshot(): Promise<{ week: WeekData; status: StatusDat
 }
 
 export async function book(day: number, slot: number, machine: string, room: string) {
-  return postAction("book", { day, slot, machine, room });
+  // `room` è l'intestatario, `actor_room` è chi sta prenotando: coincidono
+  // tranne quando si prenota per qualcun altro. Il server usa la differenza per
+  // impedire prenotazioni fra le due lavanderie — vedi 003-lavanderia-coerente.
+  return postAction("book", { day, slot, machine, room, actor_room: currentRoom() });
+}
+
+/** Le due lavanderie sono separate: 1–99 Manica, dal 100 in su Valentino. */
+export function sameLaundry(a: string, b: string): boolean {
+  const n = (r: string) => { const m = r.match(/^(\d+)/); return m ? Number(m[1]) : NaN; };
+  const x = n(a), y = n(b);
+  if (Number.isNaN(x) || Number.isNaN(y)) return true;   // DIREZIONE o vuoto: non si giudica
+  return (x < 100) === (y < 100);
 }
 
 // La camera va inclusa: serve al server per sapere di quale lavanderia si parla.

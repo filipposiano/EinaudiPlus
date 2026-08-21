@@ -20,6 +20,13 @@ export interface RoomBooking {
   end: number;        // minuti da mezzanotte (> start)
   name: string;
   type?: CinemaType;  // solo Cinema
+  /**
+   * Le due metà di una prenotazione che scavalca la mezzanotte condividono
+   * questo identificativo: giovedì 21:00–24:00 e venerdì 00:00–01:00 sono la
+   * stessa serata, salvate su due giorni perché è così che il vincolo
+   * anti-sovrapposizione riesce a vederle entrambe. Assente per tutte le altre.
+   */
+  group?: string;
 }
 
 const TOKEN = import.meta.env.VITE_SECRET_TOKEN;

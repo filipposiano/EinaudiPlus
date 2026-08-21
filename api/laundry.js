@@ -43,6 +43,11 @@ export default async function handler(req, res) {
           p_day: Number(body.day),
           p_slot: Number(body.slot),
           p_machine: String(body.machine || ""),
+          // Da dove si sta agendo, distinto dall'intestatario: serve a impedire
+          // che dalla Manica si prenoti una macchina del Valentino (e
+          // viceversa). Assente nei client vecchi, e li' il controllo si
+          // disattiva invece di rifiutare prenotazioni valide.
+          p_actor_room: body.actor_room ? String(body.actor_room) : null,
         }));
 
       case "clear":

@@ -28,9 +28,13 @@ const fmtMin = (m: number) => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
 const TODAY = (new Date().getDay() + 6) % 7; // 0 = Lunedì
 
 // Finestra oraria e tipo per ciascuna sala
-const ROOM_CFG: Record<RoomKind, { winStart: number; winEnd: number; step: number }> = {
-  cinema: { winStart: 0,       winEnd: 24 * 60, step: 30 },
-  music:  { winStart: 9 * 60,  winEnd: 23 * 60, step: 30 },
+// `overnight`: se la sala si può tenere oltre la mezzanotte. Vero per il
+// cinema, che è già prenotabile 0–24 e dove una proiezione che finisce all'una
+// è normale. Falso per la musica, che chiude alle 23 — lì una fascia notturna
+// sarebbe una regola nuova, non un limite tecnico da togliere.
+const ROOM_CFG: Record<RoomKind, { winStart: number; winEnd: number; step: number; overnight: boolean }> = {
+  cinema: { winStart: 0,       winEnd: 24 * 60, step: 30, overnight: true },
+  music:  { winStart: 9 * 60,  winEnd: 23 * 60, step: 30, overnight: false },
 };
 
 function timeOptions(winStart: number, winEnd: number, step: number) {
@@ -38,6 +42,34 @@ function timeOptions(winStart: number, winEnd: number, step: number) {
   for (let m = winStart; m <= winEnd; m += step) out.push(m);
   return out;
 }
+
+/**
+ * Gli orari di fine selezionabili, dato un inizio.
+ *
+ * Prima erano gli stessi dell'inizio filtrati per `m > start`: da una sala che
+ * chiude a mezzanotte, partendo alle 21:00, si poteva arrivare al massimo alle
+ * 24:00. Per tenerla dalle 21 all'una bisognava fare due prenotazioni su due
+ * giorni — e ricordarsi di farle entrambe.
+ *
+ * Ora la lista prosegue oltre la mezzanotte, fino a un massimo di 24 ore di
+ * durata (il limite che il database applica comunque). I valori oltre le 24:00
+ * restano espressi in minuti dall'inizio del giorno di partenza: 1500 = l'una
+ * di notte del giorno dopo. È la stessa convenzione che il resto del file usa
+ * già in `endOf()` per disegnare la timeline.
+ */
+function endOptions(start: number, cfg: { winEnd: number; step: number; overnight: boolean }) {
+  const out: number[] = [];
+  for (let m = start + cfg.step; m <= cfg.winEnd; m += cfg.step) out.push(m);
+  if (!cfg.overnight) return out;
+  // La coda notturna si ferma prima di richiudere il cerchio sull'orario di
+  // partenza: una prenotazione di 24 ore esatte non ha senso e il database la
+  // rifiuterebbe comunque.
+  for (let m = 24 * 60 + cfg.step; m < start + 24 * 60; m += cfg.step) out.push(m);
+  return out;
+}
+
+/** "01:00 (+1)" per gli orari che cadono il giorno dopo. */
+const fmtEnd = (m: number) => (m > 24 * 60 ? `${fmtMin(m)} (+1)` : m === 24 * 60 ? "24:00" : fmtMin(m));
 
 // ─── i18n ─────────────────────────────────────────────────────────────────────
 const T = {
@@ -60,6 +92,7 @@ const T = {
     mockNote: "Modalità demo: i dati non sono ancora salvati sul foglio Google.",
     rulesTitle: "Regolamento", tipsTitle: "Problemi di connessione",
     musicNote: "Strumenti non in cuffia: consentiti solo 16:00–20:00.",
+    overnightPart: "serata a cavallo della mezzanotte",
     resetToMyRoom: "↩ Ripristina la tua stanza",
   },
   en: {
@@ -81,6 +114,7 @@ const T = {
     mockNote: "Demo mode: data is not yet saved to the Google sheet.",
     rulesTitle: "Rules", tipsTitle: "Connection tips",
     musicNote: "Instruments without headphones: allowed only 16:00–20:00.",
+    overnightPart: "overnight booking",
     resetToMyRoom: "↩ Reset to your room",
   },
 } as const;
@@ -251,6 +285,14 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   const [busy, setBusy]         = useState(false);
   const [bookingRoom, setBookingRoom] = useState(myRoom || "");
 
+  // Spostando l'inizio oltre la fine, la fine lo segue di uno step invece di
+  // restare su un valore che il selettore non offre più (il campo mostrava
+  // ancora "20:00" con inizio alle 23:00, e si scopriva l'errore solo premendo
+  // Prenota).
+  useEffect(() => {
+    setEnd((e) => (e > start ? e : Math.min(start + cfg.step, cfg.overnight ? start + 24 * 60 - cfg.step : cfg.winEnd)));
+  }, [start, cfg.step, cfg.winEnd, cfg.overnight]);
+
   const refresh = useCallback(async () => {
     try { setBookings(await roomsApi.getRoomBookings(room)); setError(false); }
     catch { setError(true); }
@@ -275,7 +317,15 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
     }
     
     if (end <= start) { setToast(t.badRange); return; }
-    if (roomsApi.hasOverlap(bookings, selDay, start, end)) { setToast(t.overlap); return; }
+
+    // Una fascia che scavalca la mezzanotte occupa due giorni, e vanno
+    // controllati entrambi: il server li divide comunque in due righe, ma
+    // scoprirlo dopo il giro di rete è peggio che dirlo subito.
+    const sforo = end - 24 * 60;
+    const collide =
+      roomsApi.hasOverlap(bookings, selDay, start, Math.min(end, 24 * 60)) ||
+      (sforo > 0 && roomsApi.hasOverlap(bookings, (selDay + 1) % 7, 0, sforo));
+    if (collide) { setToast(t.overlap); return; }
     setBusy(true);
     try {
       const payload: Omit<RoomBooking, "id"> = room === "cinema"
@@ -370,7 +420,7 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
               <select value={end} onChange={(e) => setEnd(Number(e.target.value))}
                 className="w-full mt-1 rounded-xl px-3 py-2.5 text-sm font-mono outline-none"
                 style={{ background: chip, color: fg, border: `1px solid ${div}` }}>
-                {opts.filter((m) => m > start).map((m) => <option key={m} value={m}>{fmtMin(m)}</option>)}
+                {endOptions(start, cfg).map((m) => <option key={m} value={m}>{fmtEnd(m)}</option>)}
               </select>
             </label>
           </div>
@@ -418,7 +468,7 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
           <button onClick={submit} disabled={busy}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
             style={{ background: RED, color: RED_FG, opacity: busy ? 0.6 : 1 }}>
-            <Plus size={15} />{t.book} · {fmtMin(start)}–{fmtMin(end)}
+            <Plus size={15} />{t.book} · {fmtMin(start)}–{fmtEnd(end)}
           </button>
         </div>
 
@@ -434,9 +484,13 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
               <div key={b.id} className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: i < dayBookings.length - 1 ? `1px solid ${div}` : "none" }}>
                 <div className="w-px h-8 rounded-full shrink-0" style={{ background: b.type === "open" ? RED : (room === "cinema" ? OOS : RED) }} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-mono font-bold" style={{ color: fg }}>{fmtMin(b.start)} – {fmtMin(b.end)}</p>
+                  <p className="text-sm font-mono font-bold" style={{ color: fg }}>{fmtMin(b.start)} – {fmtEnd(b.end)}</p>
                   <p className="text-[11px] truncate" style={{ color: sub }}>
                     {b.name}{b.type ? ` · ${b.type === "open" ? t.open : t.priv}` : ""}
+                    {/* Metà di una serata che scavalca la mezzanotte: senza
+                        dirlo sembrerebbero due prenotazioni scollegate, e il
+                        cestino su una cancella comunque tutte e due. */}
+                    {b.group ? ` · ${t.overnightPart}` : ""}
                   </p>
                 </div>
                 <button onClick={() => remove(b.id)} aria-label={t.cancel}
