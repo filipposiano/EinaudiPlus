@@ -15,6 +15,7 @@ const MUTATIONS = new Set([
   "recurringAddLaundry", "recurringAddSpace", "recurringSetActive",
   "recurringDelete", "applyRecurring", "purge",
   "bookDirezione", "bookSpaceDirezione", "clearDirezione",
+  "conferenzaAdd", "conferenzaDelete",
 ]);
 
 // Riservate al sistemista. La portineria non le vede nel pannello, ma il
@@ -65,6 +66,7 @@ export default async function handler(req, res) {
     id: [1, Number.MAX_SAFE_INTEGER], laundry_id: [1, 9], space_id: [1, 9],
     day: [0, 6], slot: [0, 18], offset: [-52, 52], limit: [1, 500],
     start: [0, 1439], end: [1, 2880],
+    giorno: [0, 6],   // sala conferenze: giorno della settimana della regola
   };
   for (const [campo, [min, max]] of Object.entries(LIMITI)) {
     if (body[campo] === undefined || body[campo] === null) continue;
@@ -167,6 +169,33 @@ export default async function handler(req, res) {
           p_machine: String(body.machine || ""),
           p_as_admin: true,
         });
+        break;
+
+      // ── Sala conferenze ─────────────────────────────────────────────────
+      // La programmano solo gli amministratori: i residenti la leggono da
+      // /api/conferenze, che di scrivere non sa proprio.
+      case "conferenzaList":
+        result = await rpc("conference_rules");
+        break;
+
+      case "conferenzaAdd":
+        result = await rpc("conference_add", {
+          p_titolo: String(body.titolo || ""),
+          p_ora_inizio: String(body.inizio || ""),
+          p_ora_fine: String(body.fine || ""),
+          p_dal: String(body.dal || ""),
+          p_al: String(body.al || ""),
+          // null = ogni giorno del periodo, per un convegno di più giorni
+          // consecutivi; un numero = solo quel giorno della settimana.
+          p_giorno_settimana: body.giorno === null || body.giorno === undefined || body.giorno === ""
+            ? null : Number(body.giorno),
+          p_note: body.note ? String(body.note) : null,
+          p_attore: me.u,
+        });
+        break;
+
+      case "conferenzaDelete":
+        result = await rpc("conference_delete", { p_id: Number(body.id) });
         break;
 
       // ── Sistemista: regole ricorrenti ────────────────────────────────────

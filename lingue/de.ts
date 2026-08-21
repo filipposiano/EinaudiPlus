@@ -134,6 +134,18 @@ const de: Testi = {
   riprovaTelegram: "Telegram erneut öffnen",
   scriviCodice: "Schick dem Bot diesen Code: ",
   codiceUsaEGetta: "Einmalig gültig, läuft in 24 Stunden ab.",
+  navConferenze: "Konferenzen",
+  salaConferenze: "Konferenzraum",
+  liberaOra: "Jetzt frei",
+  occupataOra: "Jetzt belegt",
+  liberaDalle: (h: string): string => `Frei ab ${h}`,
+  prossimeOccupazioni: "Nächste Belegungen",
+  nessunaOccupazione: "Nichts geplant.",
+  oggi: "heute",
+  guardaTreMesi: "Nächste drei Monate ansehen",
+  guardaAnno: "Ganzes Jahr ansehen",
+  lavBreve: "WM",
+  navProgrammazione: "Programm",
 };
 
 export default de;

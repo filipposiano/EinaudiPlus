@@ -13,6 +13,23 @@ const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
 const SESSION_HOURS = 12;
 const COOKIE = "adm";
 
+/**
+ * I ruoli riconosciuti.
+ *
+ * `fdo` e `staff` hanno gli stessi poteri: macchine, segnalazioni, prenotazioni
+ * per la Direzione, sala conferenze. Restano due account distinti e non uno
+ * condiviso perche' l'audit log registra CHI ha fatto cosa, e "l'ha fatto la
+ * portineria" e "l'ha fatto lo staff" sono due risposte diverse quando si va a
+ * capire perche' una macchina risulta guasta.
+ *
+ * `sistemista` puo' in piu' le regole ricorrenti e la pulizia dei dati.
+ *
+ * Un token con un ruolo che non e' in questa lista viene rifiutato: e' cosi'
+ * che i vecchi cookie con ruolo "portineria" (il nome di prima) hanno smesso
+ * di valere senza dover alzare la versione del token.
+ */
+const RUOLI = new Set(["fdo", "staff", "sistemista"]);
+
 // ─── Password ────────────────────────────────────────────────────────────────
 
 /** Formato: scrypt$<salt hex>$<hash hex> */
@@ -78,7 +95,7 @@ export function readToken(token) {
     // Un vecchio token con ruolo 'portineria' (nome precedente dell'account
     // FDO) non è più valido qui e va ri-autenticato: non c'è bisogno di
     // alzare la versione, la whitelist stessa lo respinge già.
-    if (claims.r !== "fdo" && claims.r !== "sistemista") return null;
+    if (!RUOLI.has(claims.r)) return null;
     return claims;
   } catch {
     return null;
@@ -126,6 +143,7 @@ export function adminConfigured() {
   return Boolean(
     process.env.ADMIN_SESSION_SECRET &&
     ((process.env.FDO_USER && process.env.FDO_PASSWORD_HASH) ||
+     (process.env.STAFF_USER && process.env.STAFF_PASSWORD_HASH) ||
      (process.env.SYSADMIN_USER && process.env.SYSADMIN_PASSWORD_HASH))
   );
 }
@@ -140,6 +158,7 @@ export function adminConfigured() {
 export function authenticate(username, password) {
   const accounts = [
     { user: process.env.FDO_USER, hash: process.env.FDO_PASSWORD_HASH, role: "fdo" },
+    { user: process.env.STAFF_USER, hash: process.env.STAFF_PASSWORD_HASH, role: "staff" },
     { user: process.env.SYSADMIN_USER, hash: process.env.SYSADMIN_PASSWORD_HASH, role: "sistemista" },
   ];
 

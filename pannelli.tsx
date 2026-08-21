@@ -16,6 +16,10 @@ import * as push from "./push";
 import { T, LINGUE, type Lang } from "./i18n";
 import { RED, RED_FG } from "./tema";
 import type { Role as AdminRole } from "./AdminPanel";
+
+/** Come si chiama un ruolo quando lo si mostra a chi ha fatto l'accesso. */
+export const etichettaRuolo = (r: AdminRole | null) =>
+  r === "sistemista" ? "sistemista" : r === "staff" ? "staff" : "FDO";
 // ─── Impostazioni ───────────────────────────────────────────────────────────
 //
 // Un solo pulsante al posto di quattro-cinque icone sparse nell'header: lingua,
@@ -66,7 +70,7 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
     icon: React.ReactNode; label: string; sub?: string; onClick: () => void;
   }) => (
     <button onClick={onClick}
-      className="w-full flex items-center gap-3 px-4 py-3.5 text-left transition-colors active:scale-[0.99]">
+      className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors active:scale-[0.99]">
       <span style={{ color: sub }}>{icon}</span>
       <span className="flex-1 min-w-0">
         <span className="block text-sm font-semibold" style={{ color: fg }}>{label}</span>
@@ -78,8 +82,8 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
 
   return (
     <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
-      <div className="w-full rounded-t-3xl pb-8" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
-        <div className="px-6 pt-5 pb-4 flex items-center justify-between">
+      <div className="w-full rounded-t-3xl pb-6 max-h-[92%] overflow-y-auto overscroll-contain" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
+        <div className="px-6 pt-4 pb-3 flex items-center justify-between">
           <p className="text-lg font-bold" style={{ color:fg }}>{T[lang].impostazioni}</p>
           <button onClick={onClose} className="p-2 rounded-xl" style={{ color:sub, background:"var(--secondary)" }}>
             <X size={16}/>
@@ -92,18 +96,18 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
               sub={`${linguaCorrente?.bandiera ?? ""} ${linguaCorrente?.etichetta ?? ""}`}
               onClick={() => setLingueAperte((v) => !v)}/>
             {lingueAperte && (
-              <div style={{ background:"var(--secondary)" }}>
+              <div className="grid grid-cols-2 gap-x-1 p-1" style={{ background:"var(--secondary)" }}>
                 {LINGUE.map((l) => (
                   <button key={l.id}
                     onClick={() => { onLang(l.id); setLingueAperte(false); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left"
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left rounded-lg"
                     style={{
                       color: l.id === lang ? RED : fg,
                       fontWeight: l.id === lang ? 600 : 400,
                     }}>
-                    <span className="text-base">{l.bandiera}</span>
-                    {l.etichetta}
-                    {l.id === lang && <span className="ml-auto">✓</span>}
+                    <span className="text-base shrink-0">{l.bandiera}</span>
+                    <span className="truncate">{l.etichetta}</span>
+                    {l.id === lang && <span className="ml-auto shrink-0">✓</span>}
                   </button>
                 ))}
               </div>
@@ -136,12 +140,15 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
             dice a nome di chi si sta prenotando, che è l'informazione facile
             da perdere di vista. */}
         {adminRole !== null && (
-          <p className="text-[11px] mx-5 mt-4 leading-snug flex items-start gap-2" style={{ color:sub }}>
+          <p className="text-[11px] mx-5 mt-3 leading-snug flex items-start gap-2" style={{ color:sub }}>
             <ShieldCheck size={14} style={{ marginTop:1, flexShrink:0 }}/>
             <span>
+              {/* Il ruolo per esteso, non "sistemista oppure FDO": da quando
+                  esiste anche `staff`, quel ternario avrebbe etichettato lo
+                  staff come portineria. */}
               {it
-                ? `Sessione ${adminRole === "sistemista" ? "sistemista" : "FDO"} attiva: prenoti come Direzione. Per uscire tocca DIREZIONE in alto.`
-                : `${adminRole === "sistemista" ? "Sysadmin" : "FDO"} session active: you book as Direzione. Tap DIREZIONE at the top to sign out.`}
+                ? `Sessione ${etichettaRuolo(adminRole)} attiva: prenoti come Direzione. Per uscire tocca DIREZIONE in alto.`
+                : `${etichettaRuolo(adminRole)} session active: you book as Direzione. Tap DIREZIONE at the top to sign out.`}
             </span>
           </p>
         )}
@@ -205,7 +212,7 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
 
   return (
     <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
-      <div className="w-full rounded-t-3xl pb-8" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
+      <div className="w-full rounded-t-3xl pb-8 max-h-[92%] overflow-y-auto overscroll-contain" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
         <div className="px-6 pt-5 pb-4">
           <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background:"color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
           <div className="flex items-center justify-between mb-1">
@@ -366,7 +373,7 @@ export function InstallPrompt({ lang }: { lang: Lang }) {
   const bodyText = mode === "ios" ? t.installIosBody : mode === "manual" ? t.installAndroidBody : t.installBody;
   return (
     <div className="absolute inset-0 z-50 flex items-end animate-toast-in" style={{ background: "rgba(0,0,0,0.55)" }} onClick={close}>
-      <div className="w-full rounded-t-3xl pt-5 pb-7 px-6" style={{ background: "var(--background)" }} onClick={(e)=>e.stopPropagation()}>
+      <div className="w-full rounded-t-3xl pt-5 pb-7 px-6 max-h-[92%] overflow-y-auto overscroll-contain" style={{ background: "var(--background)" }} onClick={(e)=>e.stopPropagation()}>
         <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
         <div className="flex items-center gap-3 mb-3">
           <div className="p-2.5 rounded-2xl" style={{ background: `color-mix(in srgb, var(--primary) 15%, transparent)`, color: RED }}>

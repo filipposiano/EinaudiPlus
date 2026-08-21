@@ -5,11 +5,12 @@ import {
   LayoutGrid, Delete, X, Wrench, Loader2, Star,
   History, Timer, Trash2, Film, Music,
   MessageSquare, Send, LogOut,
-  Settings, Repeat, Eraser,
+  Settings, Repeat, Eraser, Presentation,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
 import RoomView from "./Rooms";
+import Conferenze from "./Conferenze";
 import AccessibilityPanel from "./AccessibilityPanel";
 import { loadPrefs, savePrefs, applyToDOM, type AccessibilityPrefs } from "./statusConfig";
 import type { Role as AdminRole, Tab as AdminTab } from "./AdminPanel";
@@ -42,9 +43,9 @@ const AdminLoginSheet = lazy(() => import("./AdminPanel").then((m) => ({ default
 // Le sezioni amministrative sono destinazioni di navigazione come le altre,
 // non un pannello a parte: chi ha la sessione le trova nella stessa lista di
 // Lavanderia, Cinema e Musica.
-type Facility = "laundry" | "cinema" | "music" | AdminTab;
+type Facility = "laundry" | "cinema" | "music" | "conferenze" | AdminTab;
 
-const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "ricorrenti", "manutenzione"];
+const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "programmazione", "ricorrenti", "manutenzione"];
 const isAdminFacility = (f: Facility): f is AdminTab => (ADMIN_TABS as string[]).includes(f);
 
 /** Etichetta della camera nell'intestazione. Chi amministra è la Direzione. */
@@ -78,11 +79,14 @@ function WashingMachine({ size = 16, style, className }: { size?: number; style?
 function Toast({ msg, onClose }: { msg: string; onClose: () => void }) {
   useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t); }, [onClose]);
   return (
-    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-toast-in pointer-events-none">
-      <div className="flex items-center gap-2.5 rounded-2xl px-4 py-3 shadow-2xl pointer-events-auto border"
+    // Largo al massimo quanto lo schermo meno i margini, e il testo va a capo:
+    // con "whitespace-nowrap" un messaggio lungo (per esempio quello che spiega
+    // che il turno e' della Direzione) usciva dai due lati del telefono.
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-toast-in pointer-events-none px-4 w-full max-w-[26rem]">
+      <div className="flex items-start gap-2.5 rounded-2xl px-4 py-3 shadow-2xl pointer-events-auto border"
             style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-        <CheckCircle2 size={14} style={{ color: RED }}/>
-        <span className="text-sm font-medium whitespace-nowrap" style={{ color: "var(--foreground)" }}>{msg}</span>
+        <CheckCircle2 size={14} className="shrink-0 mt-0.5" style={{ color: RED }}/>
+        <span className="text-sm font-medium leading-snug min-w-0" style={{ color: "var(--foreground)", overflowWrap:"anywhere" }}>{msg}</span>
       </div>
     </div>
   );
@@ -177,7 +181,7 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
 
   return (
     <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.65)" }} onClick={onClose}>
-      <div className="w-full rounded-t-3xl p-6 pb-8" style={{ background:bg }} onClick={(e)=>e.stopPropagation()}>
+      <div className="w-full rounded-t-3xl p-6 pb-8 max-h-[92%] overflow-y-auto overscroll-contain" style={{ background:bg }} onClick={(e)=>e.stopPropagation()}>
         <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
         <div className="flex items-center justify-between mb-5">
           <div>
@@ -225,7 +229,7 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
                       cursor: isTaken ? "not-allowed" : "pointer",
                     }}>
                     <WashingMachine size={22} style={{ color:isTaken?sub:rotta?OOS_T:fg }}/>
-                    <span className="text-sm font-bold font-mono" style={{ color:isTaken?sub:fg }}>Lav. {id[2]}</span>
+                    <span className="text-sm font-bold font-mono" style={{ color:isTaken?sub:fg }}>{t.lavBreve} {id[2]}</span>
                     <span className="text-[10px] flex items-center gap-1"
                       style={{ color: isTaken ? sub : rotta ? OOS_T : GREEN_T }}>
                       {rotta && !isTaken && <AlertTriangle size={10}/>}
@@ -241,7 +245,7 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
         {step === "owner" && myRoom && (
           <>
             <p className="text-sm font-semibold mb-1" style={{ color:fg }}>{t.whoIsIt}</p>
-            <p className="text-xs mb-5" style={{ color:sub }}>Lavatrice {machLabel} · {slot.start} – {slot.end}</p>
+            <p className="text-xs mb-5" style={{ color:sub }}>{t.washer} {machLabel} · {slot.start} – {slot.end}</p>
             <div className="flex flex-col gap-3 mb-2">
               <button
                 onClick={()=>{ setRoom(myRoom); setStep("confirm"); }}
@@ -278,7 +282,7 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
 
         {step === "input" && (
           <>
-            <p className="text-sm font-semibold mb-4" style={{ color:fg }}>Lavatrice {machLabel} · {t.insertRoom}</p>
+            <p className="text-sm font-semibold mb-4" style={{ color:fg }}>{t.washer} {machLabel} · {t.insertRoom}</p>
             <div className="rounded-2xl px-5 py-4 mb-4 flex items-center justify-between" style={{ background:"var(--muted)" }}>
               <span className="text-sm font-mono" style={{ color:sub }}>{t.room}</span>
               <span className="text-3xl font-mono font-bold tabular-nums" style={{ color:room?fg:sub }}>{room||"—"}</span>
@@ -329,12 +333,12 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
             <p className="text-sm font-semibold mb-1" style={{ color:fg }}>{t.confirmBooking}</p>
             {/* "Camera DIREZIONE" non esiste: la Direzione prenota per la
                 struttura, non per una stanza. */}
-            <p className="text-xs mb-4" style={{ color:sub }}>{intestatario} · Lavatrice {machLabel}</p>
+            <p className="text-xs mb-4" style={{ color:sub }}>{intestatario} · {t.washer} {machLabel}</p>
             <div className="rounded-2xl overflow-hidden mb-5 border" style={{ borderColor: "var(--border)" }}>
               <div className="p-4 flex items-center gap-3" style={{ background: "color-mix(in srgb, var(--primary) 12%, transparent)" }}>
                 <div className="p-2.5 rounded-xl" style={{ background:RED, color:RED_FG }}><WashingMachine size={18}/></div>
                 <div>
-                  <p className="text-xs font-mono mb-0.5" style={{ color:sub }}>Lavatrice {machLabel} · {intestatario}</p>
+                  <p className="text-xs font-mono mb-0.5" style={{ color:sub }}>{t.washer} {machLabel} · {intestatario}</p>
                   <p className="text-base font-mono font-bold" style={{ color:fg }}>{slot.start} – {slot.end}</p>
                 </div>
               </div>
@@ -367,11 +371,11 @@ function ModifyModal({ target, lang, onEdit, onDelete, onClose }: {
 
   return (
     <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.65)" }} onClick={onClose}>
-      <div className="w-full rounded-t-3xl p-6 pb-8" style={{ background:bg }} onClick={(e)=>e.stopPropagation()}>
+      <div className="w-full rounded-t-3xl p-6 pb-8 max-h-[92%] overflow-y-auto overscroll-contain" style={{ background:bg }} onClick={(e)=>e.stopPropagation()}>
         <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
         <div className="flex items-center justify-between mb-1">
           <p className="text-xs font-mono" style={{ color:sub }}>
-            {t.days[target.dayIdx]} {DAYS_DATE[target.dayIdx]} {monShort(target.dayIdx, t.mesiBrevi)} · Lav. {target.machineId[2]}
+            {t.days[target.dayIdx]} {DAYS_DATE[target.dayIdx]} {monShort(target.dayIdx, t.mesiBrevi)} · {t.lavBreve} {target.machineId[2]}
           </p>
           <button onClick={onClose} className="p-1.5 rounded-lg" style={{ color:sub, background:chip }}><X size={14}/></button>
         </div>
@@ -471,7 +475,7 @@ function QuickBookModal({ lang, day, slot, week, status, roomNumber, onBook, onC
 
   return (
     <div className="absolute inset-0 z-50 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
-      <div className="w-full rounded-t-3xl pt-5 pb-7 px-6" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
+      <div className="w-full rounded-t-3xl pt-5 pb-7 px-6 max-h-[92%] overflow-y-auto overscroll-contain" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
         <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background:"color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
         <div className="flex items-center justify-between mb-1">
           <p className="text-lg font-bold" style={{ color:fg }}>{t.chooseWasher}</p>
@@ -540,7 +544,7 @@ function FeedbackModal({ lang, room, onClose }: { lang: Lang; room: string | nul
 
   return (
     <div className="absolute inset-0 z-50 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
-      <div className="w-full rounded-t-3xl pt-5 pb-7 px-6" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
+      <div className="w-full rounded-t-3xl pt-5 pb-7 px-6 max-h-[92%] overflow-y-auto overscroll-contain" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
         <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background:"color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
         <div className="flex items-center gap-3 mb-2">
           <div className="p-2.5 rounded-2xl" style={{ background:`color-mix(in srgb, var(--primary) 15%, transparent)`, color:RED }}><MessageSquare size={18}/></div>
@@ -749,7 +753,7 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
                       <WashingMachine size={15}/>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold" style={{ color:fg }}>Lav. {b.mid[2]} · {s.start}–{s.end}</p>
+                      <p className="text-sm font-semibold" style={{ color:fg }}>{t.lavBreve} {b.mid[2]} · {s.start}–{s.end}</p>
                       <p className="text-[11px] font-mono" style={{ color: cur ? RED : sub }}>
                         {cur ? t.inProgressNow : `${t.days[b.day]} ${DAYS_DATE[b.day]} ${monShort(b.day, t.mesiBrevi)}`}
                       </p>
@@ -946,6 +950,11 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
   const isFree  = machine.status === "available";
   const isOOO   = machine.status === "out-of-order";
 
+  // Il pallino dice lo stato con lo stesso colore della legenda qui sotto
+  // (verde libera, giallo in uso, rosso fuori servizio). Era stato tolto
+  // perche' l'etichetta lo ripete a parole, ma cosi' la riga "in uso" non
+  // aveva piu' niente in comune con la voce corrispondente della legenda.
+  const dotColor   = isOOO ? OOS_C : isFree ? GREEN   : YELLOW;
   const glifoColor = isOOO ? OOS_T : isFree ? GREEN_T : YELLOW_T;
   const rowBg = isFree ? `color-mix(in srgb, ${GREEN} 6%, transparent)` : "transparent";
 
@@ -966,20 +975,18 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
   return (
     <div style={{ borderBottom:isLast?"none":`1px solid ${divColor}`, background:rowBg }}>
       <div className="flex items-center gap-3 px-4 py-2.5">
-        {/* Icona macchina.
-            Il pallino colorato che stava qui accanto è sparito: diceva la
-            stessa cosa dell'etichetta di stato subito sotto ("Libera",
-            "Camera 215", "Fuori servizio"), che la dice a parole. Un colore
-            in meno da decifrare, e il nome disteso al posto della sola
-            lettera. Il simbolo resta per chi lo ha scelto in accessibilità:
-            lì il colore da solo non basta, ed è il motivo per cui esiste. */}
-        <div className="flex items-center gap-2 shrink-0" style={{ color:fg }}>
+        {/* Pallino di stato + icona macchina. Chi ha scelto le forme al posto
+            dei colori nelle impostazioni di accessibilità vede il simbolo al
+            posto del pallino. */}
+        <div className="flex items-center gap-2.5 shrink-0" style={{ color:fg }}>
           {(() => {
             const sk = isOOO ? "oos" : isFree ? "free" : "inuse";
             const ci = accessibilityPrefs.icons[sk as "free"|"inuse"|"oos"];
+            // Il simbolo e' testo (a 11px, per giunta), il pallino e' una
+            // superficie: due livelli di colore diversi. Vedi la legenda.
             return ci !== "●"
               ? <span className="shrink-0 text-[11px] leading-none" style={{ color:glifoColor }}>{ci}</span>
-              : null;
+              : <span className="size-2 rounded-full shrink-0" style={{ background:dotColor }}/>;
           })()}
           {machine.type==="washer" ? <WashingMachine size={18}/> : <Wind size={17}/>}
         </div>
@@ -1105,7 +1112,7 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
         {washIds.map((id)=>(
           <div key={id} className="flex-1 flex flex-col items-center gap-0.5">
             <WashingMachine size={11} style={{ color:sub }}/>
-            <span className="text-[9px] font-mono" style={{ color:sub }}>Lav. {id[2]}</span>
+            <span className="text-[9px] font-mono" style={{ color:sub }}>{t.lavBreve} {id[2]}</span>
           </div>
         ))}
       </div>
@@ -1196,7 +1203,7 @@ function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify,
 
   return (
     <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.65)" }} onClick={onClose}>
-      <div className="w-full rounded-t-3xl pb-8" style={{ background:bg }} onClick={(e)=>e.stopPropagation()}>
+      <div className="w-full rounded-t-3xl pb-8 max-h-[92%] overflow-y-auto overscroll-contain" style={{ background:bg }} onClick={(e)=>e.stopPropagation()}>
         <div className="px-6 pt-5 pb-4 border-b" style={{ borderColor:divC }}>
           <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
           <div className="flex items-center justify-between">
@@ -1222,7 +1229,7 @@ function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify,
                 <div className="flex items-center gap-3">
                   <WashingMachine size={18} style={{ color:room?fg:sub, flexShrink:0 }}/>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold" style={{ color:fg }}>Lavatrice {lbl}</p>
+                    <p className="text-sm font-semibold" style={{ color:fg }}>{t.washer} {lbl}</p>
                     <p className="text-xs font-mono" style={{ color:room?sub:GREEN_T }}>
                       {room ? `${t.room} ${room}` : t.free}
                     </p>
@@ -1481,7 +1488,7 @@ function SegnalaGuastoSheet({ lang, status, onStatus, onClose, roomNumber }: {
     return (
       <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
         {toast && <Toast msg={toast} onClose={() => setToast(null)} />}
-        <div className="w-full rounded-t-3xl pb-8" style={{ background:bg }} onClick={(e)=>e.stopPropagation()}>
+        <div className="w-full rounded-t-3xl pb-8 max-h-[92%] overflow-y-auto overscroll-contain" style={{ background:bg }} onClick={(e)=>e.stopPropagation()}>
           <div className="px-6 pt-5 pb-4">
             <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
             <div className="flex items-center justify-between mb-1">
@@ -1918,23 +1925,33 @@ function CenterState({ children }: { isDark?: boolean; children: React.ReactNode
 
 //  e non l'etichetta: i testi stanno tutti in lingue/, e con sei
 // lingue un oggetto { it, en } scritto qui dentro non reggeva piu'.
-const FACILITIES: { id: Facility; icon: any; chiave: "navLavanderia" | "navCinema" | "navMusica" }[] = [
-  { id: "laundry", icon: WashingMachine, chiave: "navLavanderia" },
-  { id: "cinema",  icon: Film,           chiave: "navCinema" },
-  { id: "music",   icon: Music,          chiave: "navMusica" },
+const FACILITIES: {
+  id: Facility; icon: any;
+  chiave: "navLavanderia" | "navCinema" | "navMusica" | "navConferenze";
+}[] = [
+  { id: "laundry",    icon: WashingMachine, chiave: "navLavanderia" },
+  { id: "cinema",     icon: Film,           chiave: "navCinema" },
+  { id: "music",      icon: Music,          chiave: "navMusica" },
+  // La sala conferenze non si prenota: la programma la direzione e qui la si
+  // guarda. Sta comunque fra le strutture perche' la domanda che ci si fa
+  // ("e' libera adesso?") e' la stessa che si fa per le altre.
+  { id: "conferenze", icon: Presentation,   chiave: "navConferenze" },
 ];
 
 // Le voci riservate al sistemista non compaiono con la sessione FDO, ma il
 // controllo vero resta sul server: nascondere una voce non è un'autorizzazione.
 const ADMIN_SECTIONS: {
   id: AdminTab; icon: any;
-  chiave: "navMacchine" | "navSegnalazioni" | "navRicorrenti" | "navManutenzione";
+  chiave: "navMacchine" | "navSegnalazioni" | "navProgrammazione" | "navRicorrenti" | "navManutenzione";
   sistemistaOnly?: boolean;
 }[] = [
-  { id: "macchine",     icon: Wrench,        chiave: "navMacchine" },
-  { id: "segnalazioni", icon: MessageSquare, chiave: "navSegnalazioni" },
-  { id: "ricorrenti",   icon: Repeat,        chiave: "navRicorrenti",   sistemistaOnly: true },
-  { id: "manutenzione", icon: Eraser,        chiave: "navManutenzione", sistemistaOnly: true },
+  { id: "macchine",       icon: Wrench,        chiave: "navMacchine" },
+  { id: "segnalazioni",   icon: MessageSquare, chiave: "navSegnalazioni" },
+  // Aperta a qualunque admin (fdo, staff, sistemista): è il "solo gli admin
+  // possono segnare" della sala conferenze, non una faccenda da sistemista.
+  { id: "programmazione", icon: Presentation,  chiave: "navProgrammazione" },
+  { id: "ricorrenti",     icon: Repeat,        chiave: "navRicorrenti",   sistemistaOnly: true },
+  { id: "manutenzione",   icon: Eraser,        chiave: "navManutenzione", sistemistaOnly: true },
 ];
 
 const adminSectionsFor = (role: AdminRole | null) =>
@@ -1960,7 +1977,7 @@ function FacilitySwitcher({ facility, onChange, lang, adminRole }: {
 
   return (
     <div className="shrink-0">
-      <div className="flex gap-1.5 px-5 pt-3 pb-1">
+      <div className="grid grid-cols-2 gap-1.5 px-5 pt-3 pb-1">
         {FACILITIES.map(({ id, icon, chiave }) => (
           <Chip key={id} id={id} icon={icon} label={T[lang][chiave]}/>
         ))}
@@ -2259,20 +2276,32 @@ export default function App() {
     </>
   );
 
-  // Lavanderia → schermate laundry; Cinema/Musica → sala a fasce libere;
-  // sezioni riservate → pannello amministrativo, nello stesso corpo pagina.
-  const isRoom = facility === "cinema" || facility === "music";
-  const bodyContent = isAdminFacility(facility)
+  // Lavanderia → schermate laundry; Cinema/Musica/Conferenze → sala a corpo
+  // intero; sezioni riservate → pannello amministrativo, nello stesso corpo
+  // pagina. Un if/else unico invece di due booleani (isRoom, isPienaPagina)
+  // derivati dallo stesso confronto ripetuto: quella forma confondeva il
+  // narrowing di TypeScript, che finiva per segnare "conferenze" irraggiungibile.
+  let bodyContent: React.ReactNode;
+  let isPienaPagina: boolean;
+  if (isAdminFacility(facility)) {
+    isPienaPagina = false;
     // px-5 come le sezioni della lavanderia: senza, le schede amministrative
     // toccavano i bordi dello schermo sul telefono — il corpo pagina non ha
     // padding proprio, se lo mettono le viste.
     // pt-4 oltre al px-5: le altre viste cominciano con un'intestazione che
     // porta il suo margine, le sezioni amministrative no e partivano incollate
     // ai selettori qui sopra.
-    ? <div className="px-5 pt-4"><Suspense fallback={null}><AdminScreens tab={facility} onSession={handleAdminSession}/></Suspense></div>
-    : isRoom
-      ? <RoomView room={facility} lang={lang} roomNumber={roomNumber}/>
-      : mainContent;
+    bodyContent = <div className="px-5 pt-4"><Suspense fallback={null}><AdminScreens tab={facility} onSession={handleAdminSession}/></Suspense></div>;
+  } else if (facility === "conferenze") {
+    isPienaPagina = true;
+    bodyContent = <Conferenze lang={lang}/>;
+  } else if (facility === "cinema" || facility === "music") {
+    isPienaPagina = true;
+    bodyContent = <RoomView room={facility} lang={lang} roomNumber={roomNumber}/>;
+  } else {
+    isPienaPagina = false;
+    bodyContent = mainContent;
+  }
 
   // Pannello accessibilità (modale, condiviso tra mobile e desktop)
   const accessibilityModal = accessibilityOpen && (
@@ -2381,7 +2410,7 @@ export default function App() {
           {bodyContent}
         </div>
 
-        {showChrome && !isRoom && !isAdminFacility(facility) && <BottomNav active={screen} onChange={setScreen} theme={theme} lang={lang}/>}
+        {showChrome && !isPienaPagina && !isAdminFacility(facility) && <BottomNav active={screen} onChange={setScreen} theme={theme} lang={lang}/>}
         <div className="pb-2 hidden md:flex justify-center shrink-0">
           <div className="w-28 h-1 rounded-full" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
         </div>

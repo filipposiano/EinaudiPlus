@@ -2,8 +2,14 @@
 /**
  * Genera l'hash di una password admin e lo scrive in .env.local.
  *
- *   node scripts/hash-password.cjs "la-password"              -> FDO_PASSWORD_HASH
- *   node scripts/hash-password.cjs "la-password" sistemista   -> SYSADMIN_PASSWORD_HASH
+ *   node scripts/hash-password.cjs fdo        "la-password"
+ *   node scripts/hash-password.cjs staff      "la-password"
+ *   node scripts/hash-password.cjs sistemista "la-password"
+ *
+ * Il ruolo va detto SEMPRE, e per un motivo pratico: prima era facoltativo e
+ * senza di esso lo script scriveva su FDO_PASSWORD_HASH. Generando l'hash per
+ * un altro account ci si ritrovava la password della portineria sovrascritta —
+ * senza che nulla lo dicesse, finche' non si provava ad entrare.
  *
  * La password non viene mai stampata ne' salvata in chiaro: nel file finisce
  * solo l'hash, che e' quello che va poi copiato nelle env var di Vercel.
@@ -15,11 +21,19 @@ const crypto = require("crypto");
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 64 };
 const ROOT = path.resolve(__dirname, "..");
 
-const password = process.argv[2];
-const target = process.argv[3] === "sistemista" ? "SYSADMIN_PASSWORD_HASH" : "FDO_PASSWORD_HASH";
+const VARIABILE = {
+  fdo:        "FDO_PASSWORD_HASH",
+  staff:      "STAFF_PASSWORD_HASH",
+  sistemista: "SYSADMIN_PASSWORD_HASH",
+};
 
-if (!password) {
-  console.error('uso: node scripts/hash-password.cjs "la-password" [sistemista]');
+const ruolo = process.argv[2];
+const password = process.argv[3];
+const target = VARIABILE[ruolo];
+
+if (!target || !password) {
+  console.error('uso: node scripts/hash-password.cjs <fdo|staff|sistemista> "la-password"');
+  if (ruolo && !target) console.error(`ruolo sconosciuto: "${ruolo}"`);
   process.exit(1);
 }
 

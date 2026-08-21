@@ -144,6 +144,18 @@ const it = {
   riprovaTelegram: "Riprova ad aprire Telegram",
   scriviCodice: "Scrivi al bot questo codice: ",
   codiceUsaEGetta: "Vale una volta sola e scade in 24 ore.",
+  navConferenze: "Conferenze",
+  salaConferenze: "Sala conferenze",
+  liberaOra: "Libera adesso",
+  occupataOra: "Occupata adesso",
+  liberaDalle: (h: string): string => `Si libera alle ${h}`,
+  prossimeOccupazioni: "Prossime occupazioni",
+  nessunaOccupazione: "Nessuna occupazione in programma.",
+  oggi: "oggi",
+  guardaTreMesi: "Guarda i prossimi tre mesi",
+  guardaAnno: "Guarda tutto l'anno",
+  lavBreve: "Lav.",
+  navProgrammazione: "Programmazione",
 };
 
 export default it;

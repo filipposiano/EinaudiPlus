@@ -97,7 +97,7 @@ const T = {
     free: "Libera tutto il giorno", occupied: "Occupata",
     newBooking: "Nuova prenotazione",
     start: "Inizio", end: "Fine", name: "Nome", yourName: "Il tuo nome", roomLabel: "Stanza",
-    type: "Tipo di proiezione", priv: "Privata", open: "Aperta a tutti (es. partite)",
+    type: "Tipo di proiezione", priv: "Privata", open: "Aperta a tutti",
     book: "Prenota blocco", cancel: "Annulla",
     bookings: "Prenotazioni del giorno", none: "Nessuna prenotazione",
     needName: "Inserisci un nome", badRange: "L'orario di fine deve essere dopo l'inizio",
@@ -122,7 +122,7 @@ const T = {
     free: "Free all day", occupied: "Booked",
     newBooking: "New booking",
     start: "Start", end: "End", name: "Name", yourName: "Your name", roomLabel: "Room",
-    type: "Screening type", priv: "Private", open: "Open to all (e.g. matches)",
+    type: "Screening type", priv: "Private", open: "Open to all",
     book: "Book block", cancel: "Cancel",
     bookings: "Bookings for the day", none: "No bookings",
     needName: "Enter a name", badRange: "End time must be after start",
@@ -147,7 +147,7 @@ const T = {
     free: "Libre toute la journée", occupied: "Réservée",
     newBooking: "Nouvelle réservation",
     start: "Début", end: "Fin", name: "Nom", yourName: "Ton nom", roomLabel: "Chambre",
-    type: "Type de projection", priv: "Privée", open: "Ouverte à tous (ex. matchs)",
+    type: "Type de projection", priv: "Privée", open: "Ouverte à tous",
     book: "Réserver le créneau", cancel: "Annuler",
     bookings: "Réservations du jour", none: "Aucune réservation",
     needName: "Saisis un nom", badRange: "L'heure de fin doit être après le début",
@@ -172,7 +172,7 @@ const T = {
     free: "Den ganzen Tag frei", occupied: "Belegt",
     newBooking: "Neue Buchung",
     start: "Beginn", end: "Ende", name: "Name", yourName: "Dein Name", roomLabel: "Zimmer",
-    type: "Art der Vorführung", priv: "Privat", open: "Für alle offen (z. B. Spiele)",
+    type: "Art der Vorführung", priv: "Privat", open: "Für alle offen",
     book: "Zeitblock buchen", cancel: "Abbrechen",
     bookings: "Buchungen des Tages", none: "Keine Buchungen",
     needName: "Gib einen Namen ein", badRange: "Das Ende muss nach dem Beginn liegen",
@@ -197,7 +197,7 @@ const T = {
     free: "Libre todo el día", occupied: "Reservada",
     newBooking: "Nueva reserva",
     start: "Inicio", end: "Fin", name: "Nombre", yourName: "Tu nombre", roomLabel: "Habitación",
-    type: "Tipo de proyección", priv: "Privada", open: "Abierta a todos (p. ej. partidos)",
+    type: "Tipo de proyección", priv: "Privada", open: "Abierta a todos",
     book: "Reservar bloque", cancel: "Cancelar",
     bookings: "Reservas del día", none: "Ninguna reserva",
     needName: "Escribe un nombre", badRange: "La hora de fin debe ser posterior al inicio",
@@ -222,7 +222,7 @@ const T = {
     free: "Libbera tutt''o juorno", occupied: "Occupata",
     newBooking: "Prenotazione nova",
     start: "Accumencia", end: "Fernesce", name: "Nomme", yourName: "'O nomme tuoio", roomLabel: "Cammera",
-    type: "Tipo 'e proiezione", priv: "Privata", open: "Aperta a tuttu quante (es. partite)",
+    type: "Tipo 'e proiezione", priv: "Privata", open: "Aperta a tuttu quante",
     book: "Prenòta", cancel: "Lassa sta'",
     bookings: "Prenotazioni d''a jurnata", none: "Nisciuna prenotazione",
     needName: "Miette nu nomme", badRange: "L'ora 'e fine adda sta' doppo chella 'e accummenciamento",
@@ -243,16 +243,13 @@ const T = {
 
 // ─── Testi regolamenti ──────────────────────────────────────────────────────
 //
-// Solo italiano e inglese, e non è una dimenticanza.
+// Queste non sono stringhe d'interfaccia: sono le REGOLE DELLA CASA. La
+// versione che vale resta quella italiana; le altre sono traduzioni di
+// cortesia, per chi l'italiano non lo legge bene. Se la direzione cambia una
+// regola, si cambia l'italiano e poi le traduzioni — mai il contrario.
 //
-// Queste non sono stringhe d'interfaccia: sono le REGOLE DELLA CASA, scritte
-// dal collegio. Tradurle è una decisione di chi le ha scritte, non di chi
-// programma — una sfumatura cambiata in traduzione cambia una regola. Chi
-// guarda l'app in francese, tedesco, spagnolo o napoletano vede il regolamento
-// in italiano, che è la lingua in cui vale.
-//
-// Se un giorno la direzione fornisce le versioni tradotte, si aggiungono qui e
-// `regolamentoPer()` le prende da sola.
+// Il napoletano non c'è di proposito: `regolamentoPer()` ripiega
+// sull'italiano, che è la lingua in cui le regole sono state scritte.
 type Regolamento = { rules: string[]; tips?: string[] };
 
 const RULES: Record<RoomKind, Partial<Record<Lang, Regolamento>>> = {
@@ -283,6 +280,45 @@ const RULES: Record<RoomKind, Partial<Record<Lang, Regolamento>>> = {
         "To connect the PC to the audio system: enable Bluetooth on the PC, turn on the soundbar, press the remote button with the Bluetooth symbol (*). The soundbar shows \"BT PAIRING\", then look for the soundbar among the PC's devices.",
       ],
     },
+    fr: {
+      rules: [
+        "La salle peut être réservée à tout moment.",
+        "La salle dispose d'un vidéoprojecteur (câble HDMI déjà sur place) et d'une sono (connexion Bluetooth). Pensez à apporter votre ordinateur.",
+        "La personne qui réserve est responsable des éventuels dégâts et du nettoyage de la salle.",
+        "Pour réserver, indiquez l'horaire prévu, votre nom et s'il s'agit d'un usage personnel ou d'une projection ouverte à tous (ex. matchs).",
+        "Les réservations sont remises à zéro chaque lundi dans la nuit.",
+      ],
+      tips: [
+        "Pour connecter l'ordinateur au vidéoprojecteur : allumez-le avec la télécommande, appuyez sur « Source » et choisissez HDMI 2 (la connexion devrait se faire toute seule).",
+        "Pour connecter l'ordinateur à la sono : activez le Bluetooth sur l'ordinateur, allumez la barre de son, appuyez sur la touche de la télécommande portant le symbole Bluetooth (*). L'écran affiche « BT PAIRING » : cherchez alors la barre de son parmi les appareils de l'ordinateur.",
+      ],
+    },
+    de: {
+      rules: [
+        "Der Raum kann jederzeit gebucht werden.",
+        "Der Raum ist mit einem Beamer (HDMI-Kabel liegt bereit) und einer Audioanlage (per Bluetooth) ausgestattet. Denkt daran, euren Laptop mitzubringen.",
+        "Wer bucht, haftet für eventuelle Schäden und für die Sauberkeit des Raums.",
+        "Gebt bei der Buchung die geplante Uhrzeit an, euren Namen und ob es sich um private Nutzung oder um eine für alle offene Vorführung handelt (z. B. Spiele).",
+        "Die Buchungen werden jeden Montag in der Nacht zurückgesetzt.",
+      ],
+      tips: [
+        "Laptop an den Beamer anschließen: Beamer mit der Fernbedienung einschalten, „Source“ wählen und HDMI 2 auswählen (die Verbindung sollte automatisch zustande kommen).",
+        "Laptop an die Audioanlage anschließen: Bluetooth am Laptop einschalten, die Soundbar einschalten, auf der Fernbedienung die Taste mit dem Bluetooth-Symbol (*) drücken. Im Display erscheint „BT PAIRING“; sucht dann die Soundbar unter den Geräten des Laptops.",
+      ],
+    },
+    es: {
+      rules: [
+        "La sala se puede reservar en cualquier momento.",
+        "La sala cuenta con un proyector (cable HDMI ya disponible) y un equipo de audio (conexión por Bluetooth). Acordaos de traer vuestro ordenador.",
+        "Quien reserva es responsable de los posibles daños y de la limpieza de la sala.",
+        "Para reservar indicad la hora prevista, vuestro nombre y si es para uso personal o para una proyección abierta a todos (p. ej. partidos).",
+        "Las reservas se reinician cada lunes por la noche.",
+      ],
+      tips: [
+        "Para conectar el ordenador al proyector: encended el proyector con el mando, pulsad «Source» y elegid HDMI 2 (debería conectarse automáticamente).",
+        "Para conectar el ordenador al equipo de audio: activad el Bluetooth en el ordenador, encended la barra de sonido y pulsad en el mando la tecla con el símbolo de Bluetooth (*). En la pantalla aparecerá «BT PAIRING»; buscad entonces la barra entre los dispositivos del ordenador.",
+      ],
+    },
   },
   music: {
     it: {
@@ -299,6 +335,30 @@ const RULES: Record<RoomKind, Partial<Record<Lang, Regolamento>>> = {
         "It can be used from 9:00 to 23:00 (NOTE: using instruments NOT with headphones is allowed ONLY from 16:00 to 20:00).",
         "Whoever reserves the room is responsible for any damages and the cleaning of the room.",
         "The schedule resets every Monday night.",
+      ],
+    },
+    fr: {
+      rules: [
+        "Vous pouvez la réserver quand vous voulez.",
+        "Elle est utilisable de 9h00 à 23h00 (ATTENTION : les instruments SANS casque ne sont autorisés QUE de 16h00 à 20h00).",
+        "La personne qui réserve est responsable des éventuels dégâts et du nettoyage de la salle.",
+        "Les réservations sont remises à zéro chaque lundi dans la nuit.",
+      ],
+    },
+    de: {
+      rules: [
+        "Ihr könnt ihn buchen, wann ihr wollt.",
+        "Nutzbar von 9:00 bis 23:00 Uhr (ACHTUNG: Instrumente OHNE Kopfhörer sind NUR von 16:00 bis 20:00 Uhr erlaubt).",
+        "Wer bucht, haftet für eventuelle Schäden und für die Sauberkeit des Raums.",
+        "Die Buchungen werden jeden Montag in der Nacht zurückgesetzt.",
+      ],
+    },
+    es: {
+      rules: [
+        "Podéis reservarla cuando queráis.",
+        "Se puede usar de 9:00 a 23:00 (ATENCIÓN: el uso de instrumentos SIN auriculares está permitido SOLO de 16:00 a 20:00).",
+        "Quien reserva es responsable de los posibles daños y de la limpieza de la sala.",
+        "Las reservas se reinician cada lunes por la noche.",
       ],
     },
   },

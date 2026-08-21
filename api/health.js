@@ -43,6 +43,8 @@ export default async function handler(req, res) {
     peek("CRON_SECRET", { prefix: 4 }),
     peek("FDO_USER", { secret: false }),
     peek("FDO_PASSWORD_HASH", { prefix: 7 }),    // deve iniziare per "scrypt$"
+    peek("STAFF_USER", { secret: false }),
+    peek("STAFF_PASSWORD_HASH", { prefix: 7 }),
     peek("ADMIN_SESSION_SECRET", { prefix: 4 }),
     peek("SYSADMIN_USER", { secret: false }),
     peek("SYSADMIN_PASSWORD_HASH", { prefix: 7 }),

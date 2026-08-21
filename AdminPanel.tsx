@@ -23,14 +23,26 @@ type Laundry = {
 };
 type Feedback = { id: number; room: string | null; body: string; laundry: string | null; created_at: string; handled: boolean };
 
+// Una REGOLA della sala conferenze, com'e' stata scritta: "ogni martedi' dalle
+// 14 alle 18, dal 7 ottobre al 30 maggio". Le singole date non esistono da
+// nessuna parte: le calcola il database quando qualcuno legge l'agenda.
+type ConfRule = {
+  id: number; titolo: string; note?: string;
+  inizio: string; fine: string; dal: string; al: string;
+  /** 0 = lunedi' … 6 = domenica. null = tutti i giorni del periodo. */
+  giorno: number | null;
+};
+
 type Recurring = {
   id: number; kind: "laundry" | "space"; day: number; active: boolean; note?: string;
   laundry?: string; laundry_id?: number; slot?: number; machine?: string; room?: string;
   space?: string; space_id?: number; start?: number; end?: number; name?: string; type?: string;
 };
 
-export type Role = "fdo" | "sistemista";
-export type Tab = "macchine" | "segnalazioni" | "ricorrenti" | "manutenzione";
+// `staff` ha gli stessi poteri di `fdo`; solo `sistemista` puo' di piu'.
+// Restano account distinti perche' l'audit log registra chi ha fatto cosa.
+export type Role = "fdo" | "staff" | "sistemista";
+export type Tab = "macchine" | "segnalazioni" | "programmazione" | "ricorrenti" | "manutenzione";
 
 // ─── Chiamate ────────────────────────────────────────────────────────────────
 
@@ -281,7 +293,7 @@ function gruppiDiLavanderia(l: Laundry): Gruppo[] {
 
   return lettere.map((lettera) => ({
     chiave: `${l.id}-${lettera}`,
-    titolo: lettere.length === 1 ? "Unica macchina" : `Gruppo ${lettera}`,
+    titolo: `Gruppo ${lettera}`,
     machines: per.get(lettera)!.sort(
       (a, b) => (a.kind === b.kind ? 0 : a.kind === "washer" ? -1 : 1)
     ),
@@ -803,6 +815,136 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
   );
 }
 
+// ─── Sala conferenze ─────────────────────────────────────────────────────────
+//
+// L'unica sala che i residenti non prenotano: la programma la direzione e loro
+// la guardano. Qui si scrivono le REGOLE, non le singole date — "ogni martedi'
+// fino al 30 maggio" e' UNA riga, e correggerne l'orario le corregge tutte
+// insieme invece che quaranta volte.
+
+const oggiISO = () => new Date().toLocaleDateString("sv-SE");
+
+/** "7 ott 2026" — compatta, per le righe dell'elenco. */
+const dataBreve = (iso: string) =>
+  new Date(iso + "T00:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" });
+
+function SalaConferenze() {
+  const [items, setItems] = useState<ConfRule[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  // "Corsi PFP" e' il caso per cui la sala esiste: sta gia' scritto e si cambia
+  // solo quando serve altro.
+  const [titolo, setTitolo] = useState("Corsi PFP");
+  const [giorno, setGiorno] = useState<string>("1");   // "" = tutti i giorni
+  const [inizio, setInizio] = useState("14:00");
+  const [fine, setFine]     = useState("18:00");
+  const [dal, setDal]       = useState(oggiISO());
+  const [al, setAl]         = useState(oggiISO());
+  const [note, setNote]     = useState("");
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    try { setItems((await call("conferenzaList")).items); }
+    catch (e: any) { setMsg(e.message); }
+    finally { setBusy(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function aggiungi() {
+    if (!titolo.trim()) { setMsg("Indica un titolo."); return; }
+    setBusy(true); setMsg(null);
+    try {
+      await call("conferenzaAdd", {
+        titolo: titolo.trim(), inizio, fine, dal, al,
+        giorno: giorno === "" ? null : Number(giorno),
+        note: note.trim() || null,
+      });
+      setMsg("Programmazione aggiunta.");
+      setNote("");
+      load();
+    } catch (e: any) {
+      // Il database rifiuta le sovrapposizioni: ripetere il messaggio qui evita
+      // di far cercare all'utente quale riga dell'elenco gli sta contro.
+      setMsg(e.message === "sovrapposto" ? "Si sovrappone a una programmazione già presente." : e.message);
+    }
+    finally { setBusy(false); }
+  }
+
+  async function elimina(r: ConfRule) {
+    if (!confirm(`Eliminare "${r.titolo}"?\n\nSparisce da tutte le date in cui compare.`)) return;
+    setBusy(true);
+    try { await call("conferenzaDelete", { id: r.id }); load(); }
+    catch (e: any) { setMsg(e.message); }
+    finally { setBusy(false); }
+  }
+
+  /** "ogni martedì, 7 ott 2026 → 30 mag 2027", o la sola data se e' un giorno solo. */
+  const quando = (r: ConfRule) => {
+    if (r.dal === r.al) return dataBreve(r.dal);
+    const cadenza = r.giorno === null ? "tutti i giorni" : `ogni ${DAYS[r.giorno].toLowerCase()}`;
+    return `${cadenza}, ${dataBreve(r.dal)} → ${dataBreve(r.al)}`;
+  };
+
+  return (
+    <>
+      <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
+        La sala conferenze non si prenota: la programma la direzione, i residenti la
+        vedono in sola lettura con l'agenda fino a un anno avanti. Una riga qui è una{" "}
+        <strong>regola</strong>: "ogni martedì fino al 30 maggio" occupa tutti i martedì
+        di quel periodo, e cancellarla li libera tutti insieme.
+      </p>
+
+      {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
+
+      <div style={{ ...S.card, padding: 18, marginBottom: 16 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Nuova programmazione</h2>
+        <div className="adm-form">
+          <input style={S.input} placeholder="Titolo (es. Corsi PFP)" value={titolo}
+                 maxLength={60} onChange={(e) => setTitolo(e.target.value)} />
+          <select style={S.input} value={giorno} onChange={(e) => setGiorno(e.target.value)}>
+            {DAYS.map((d, i) => <option key={i} value={String(i)}>Ogni {d.toLowerCase()}</option>)}
+            {/* Per un convegno di giorni consecutivi: nessuna cadenza
+                settimanale, occupa ogni giorno del periodo. */}
+            <option value="">Tutti i giorni del periodo</option>
+          </select>
+          <input style={S.input} type="time" value={inizio} onChange={(e) => setInizio(e.target.value)} />
+          <input style={S.input} type="time" value={fine} onChange={(e) => setFine(e.target.value)} />
+          <input style={S.input} type="date" value={dal} onChange={(e) => setDal(e.target.value)} />
+          <input style={S.input} type="date" value={al} onChange={(e) => setAl(e.target.value)} />
+          <input style={S.input} placeholder="Note (facoltative)" value={note}
+                 maxLength={300} onChange={(e) => setNote(e.target.value)} />
+          <button style={{ ...S.btn, background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
+                  disabled={busy} onClick={aggiungi}>Aggiungi</button>
+        </div>
+        <p style={{ fontSize: 12, ...S.sub, marginTop: 10 }}>
+          Per un evento di un giorno solo metti la stessa data in "dal" e "al".
+        </p>
+      </div>
+
+      <div style={{ ...S.card, padding: 18 }}>
+        <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>In programma ({items.length})</h2>
+        {items.length === 0 && <p style={{ fontSize: 13, ...S.sub }}>Niente in programma.</p>}
+        <div style={{ display: "grid", gap: 6 }}>
+          {items.map((r) => (
+            <div key={r.id} className="adm-rule">
+              <span style={{ fontSize: 13, fontWeight: 700 }}>{r.inizio}–{r.fine}</span>
+              <span className="adm-rule__what">
+                {r.titolo} · {quando(r)}
+                {r.note && <span style={{ display: "block", fontSize: 12, ...S.sub }}>{r.note}</span>}
+              </span>
+              <span className="adm-rule__act">
+                <button style={S.danger} disabled={busy} onClick={() => elimina(r)}>Elimina</button>
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Manutenzione (sistemista) ───────────────────────────────────────────────
 
 const AMBITI: [string, string, string][] = [
@@ -1041,6 +1183,7 @@ export function AdminScreens({ tab, onSession }: {
           server: nascondere una voce non e' un'autorizzazione. */}
       {tab === "macchine" && <Macchine laundries={laundries} reload={loadOverview} />}
       {tab === "segnalazioni" && <Segnalazioni laundries={laundries} reload={loadOverview} />}
+      {tab === "programmazione" && <SalaConferenze />}
       {tab === "ricorrenti" && (sistemista
         ? laundries.length > 0 && <Ricorrenti laundries={laundries} />
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata al sistemista.</p>)}

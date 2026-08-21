@@ -33,7 +33,7 @@ const fr: Testi = {
   oosWarnBody:  "L'administration l'a vérifiée et signalée comme en panne. Tu peux quand même la réserver, mais elle ne marchera probablement pas.",
   oosDryerWarn: (m: string) => `Le sèche-linge ${m} est hors service : tu devras peut-être étendre ton linge.`,
   oosWasherWarn:(m: string) => `Le lave-linge ${m} est hors service : il risque de ne pas démarrer.`,
-  currentSlot: "Créneau en cours", prevSlot: "Créneau précédent", now: "maintenant", prev: "préc.",
+  currentSlot: "Créneau en cours", prevSlot: "Créneau précédent", now: "maint.", prev: "préc.",
   yourBookings: "Tes réservations",
   inProgressNow: "En cours",
   noActiveBookings: "Aucune réservation en cours",
@@ -134,6 +134,18 @@ const fr: Testi = {
   riprovaTelegram: "Réessayer d'ouvrir Telegram",
   scriviCodice: "Envoie ce code au bot : ",
   codiceUsaEGetta: "Utilisable une seule fois, expire dans 24 heures.",
+  navConferenze: "Conférences",
+  salaConferenze: "Salle de conférences",
+  liberaOra: "Libre maintenant",
+  occupataOra: "Occupée maintenant",
+  liberaDalle: (h: string): string => `Libre à partir de ${h}`,
+  prossimeOccupazioni: "Prochaines occupations",
+  nessunaOccupazione: "Rien de prévu.",
+  oggi: "aujourd'hui",
+  guardaTreMesi: "Voir les trois prochains mois",
+  guardaAnno: "Voir toute l'année",
+  lavBreve: "Lav.",
+  navProgrammazione: "Programmation",
 };
 
 export default fr;

@@ -134,6 +134,18 @@ const en: Testi = {
   riprovaTelegram: "Try opening Telegram again",
   scriviCodice: "Message the bot this code: ",
   codiceUsaEGetta: "Single use, expires in 24 hours.",
+  navConferenze: "Conference",
+  salaConferenze: "Conference room",
+  liberaOra: "Free right now",
+  occupataOra: "In use right now",
+  liberaDalle: (h: string): string => `Free from ${h}`,
+  prossimeOccupazioni: "Upcoming bookings",
+  nessunaOccupazione: "Nothing scheduled.",
+  oggi: "today",
+  guardaTreMesi: "See the next three months",
+  guardaAnno: "See the whole year",
+  lavBreve: "Wash.",
+  navProgrammazione: "Scheduling",
 };
 
 export default en;
