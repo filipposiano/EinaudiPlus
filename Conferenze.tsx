@@ -1,48 +1,71 @@
-// Conferenze.tsx — la sala polivalente.
+// Conferenze.tsx — la sala polivalente, come un calendario.
 //
 // A differenza di cinema e musica qui i residenti non prenotano: la sala la
-// programma la direzione. Quindi per loro la schermata risponde a una domanda
-// sola, e la mette in cima grande: **adesso è libera?**
+// programma la direzione. In cima, la risposta alla domanda con cui si apre
+// questa pagina — **è libera adesso?** — e sotto un calendario mensile: ogni
+// giorno con un impegno ha un puntino, si tocca il giorno per vederne i
+// dettagli. Prima c'era un elenco piatto raggruppato per data: un calendario
+// vero si scorre e si legge a colpo d'occhio, un elenco no.
 //
-// Sotto, il calendario dei prossimi impegni. La programmazione può arrivare
-// a un anno, quindi si guarda un mese per volta e si può allungare.
-//
-// Chi ha una sessione admin (fdo, staff o sistemista) trova qui sotto anche
-// il modulo per programmarla: prima viveva in una scheda a sé nel pannello
-// amministrativo ("Programmazione"), separata dalla pagina che chiunque
-// guarda per sapere se la sala è libera — due posti per la stessa sala.
-// `SalaConferenze` e' importata in lazy dal pannello admin: chi non ha una
-// sessione (la stragrande maggioranza di chi apre questa pagina) non la
-// scarica.
+// Chi ha una sessione admin (fdo, staff o sistemista), toccando un giorno,
+// trova anche il modulo per aggiungere o togliere un evento — `GiornoSheetAdmin`
+// è importato in lazy dal pannello admin: chi non ha una sessione (la
+// stragrande maggioranza di chi apre questa pagina) non lo scarica.
 import { useState, useEffect, useCallback, lazy, Suspense } from "react";
-import { Loader2, AlertTriangle, CalendarDays } from "lucide-react";
+import { Loader2, AlertTriangle, ChevronLeft, ChevronRight, X } from "lucide-react";
 import * as conferenze from "./conferenzeApi";
-import type { Occorrenza } from "./conferenzeApi";
+import type { Occorrenza, Agenda } from "./conferenzeApi";
 import { T, type Lang } from "./i18n";
-import { RED, GREEN, GREEN_T, OOS_C, OOS_T, FG, SUB, DIV, SURF } from "./tema";
+import { RED, GREEN, GREEN_T, OOS_C, OOS_T, FG, SUB, DIV, SURF, CHIP } from "./tema";
 import type { Role as AdminRole } from "./AdminPanel";
 
-const SalaConferenzeAdmin = lazy(() => import("./AdminPanel").then((m) => ({ default: m.SalaConferenze })));
+const GiornoSheetAdmin = lazy(() => import("./AdminPanel").then((m) => ({ default: m.GiornoSheetAdmin })));
 const CambiaPasswordObbligata = lazy(() => import("./AdminPanel").then((m) => ({ default: m.CambiaPasswordObbligata })));
-
-/** "lun 7 ott" — data breve, nella lingua scelta. */
-function dataBreve(iso: string, lang: Lang) {
-  const d = new Date(iso + "T00:00:00");
-  const t = T[lang];
-  const giorno = t.days[(d.getDay() + 6) % 7];
-  return `${giorno} ${d.getDate()} ${t.mesiBrevi[d.getMonth()]}`;
-}
 
 const oggiISO = () => new Date().toLocaleDateString("sv-SE");   // "2026-10-07"
 
+/** "lun 7 ott 2026" — intestazione del foglio giorno. */
+function dataLunga(iso: string, lang: Lang) {
+  const d = new Date(iso + "T00:00:00");
+  const t = T[lang];
+  const giorno = t.days[(d.getDay() + 6) % 7];
+  return `${giorno} ${d.getDate()} ${t.mesiBrevi[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+const LOCALE_PER_LINGUA: Record<Lang, string> = {
+  it: "it-IT", en: "en-GB", fr: "fr-FR", de: "de-DE", es: "es-ES", nap: "it-IT",
+};
+
+/**
+ * Le celle del mese, in ordine di calendario (lunedì–domenica).
+ *
+ * `null` prima del giorno 1 e dopo l'ultimo: così ogni riga della griglia è
+ * sempre una settimana completa di 7 celle, invece di dover calcolare a mano
+ * dove va a capo.
+ */
+function griglia(anno: number, mese: number): (string | null)[] {
+  const primo = new Date(anno, mese, 1);
+  const offset = (primo.getDay() + 6) % 7;   // lun=0 … dom=6
+  const giorniNelMese = new Date(anno, mese + 1, 0).getDate();
+  const celle: (string | null)[] = [];
+  for (let i = 0; i < offset; i++) celle.push(null);
+  for (let g = 1; g <= giorniNelMese; g++) {
+    celle.push(`${anno}-${String(mese + 1).padStart(2, "0")}-${String(g).padStart(2, "0")}`);
+  }
+  while (celle.length % 7 !== 0) celle.push(null);
+  return celle;
+}
+
 export default function Conferenze({ lang, adminRole }: { lang: Lang; adminRole: AdminRole | null }) {
   const t = T[lang];
-  const [agenda, setAgenda] = useState<conferenze.Agenda | null>(null);
+  const [agenda, setAgenda] = useState<Agenda | null>(null);
   const [loading, setLoading] = useState(true);
   const [errore, setErrore] = useState(false);
-  // Un mese per volta: la programmazione può arrivare a un anno, ma mostrarla
-  // tutta insieme sarebbe un muro. Si allunga quando serve.
-  const [giorni, setGiorni] = useState(30);
+  const [selezionato, setSelezionato] = useState<string | null>(null);
+
+  const oggi = oggiISO();
+  const [oa, om] = oggi.split("-").map(Number);
+  const [vista, setVista] = useState({ anno: oa, mese: om - 1 });
 
   // Un account con la password appena creata o reimpostata dal sistemista
   // deve cambiarla prima di poter fare qualunque altra cosa — vedi
@@ -59,14 +82,17 @@ export default function Conferenze({ lang, adminRole }: { lang: Lang; adminRole:
   }, [adminRole]);
   useEffect(() => { controllaSessione(); }, [controllaSessione]);
 
-  const carica = useCallback(async (g: number) => {
+  // Un solo giro di rete per un anno intero: la navigazione fra mesi diventa
+  // locale (si filtrano gli stessi dati), invece di ricaricare a ogni clic
+  // su "mese successivo".
+  const carica = useCallback(async () => {
     setLoading(true);
-    try { setAgenda(await conferenze.agenda(g)); setErrore(false); }
+    try { setAgenda(await conferenze.agenda(400)); setErrore(false); }
     catch { setErrore(true); }
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { carica(giorni); }, [carica, giorni]);
+  useEffect(() => { carica(); }, [carica]);
 
   if (loading && !agenda) {
     return (
@@ -82,7 +108,7 @@ export default function Conferenze({ lang, adminRole }: { lang: Lang; adminRole:
       <div className="flex-1 flex flex-col items-center justify-center gap-3 px-8 text-center" style={{ color: SUB }}>
         <AlertTriangle size={26} style={{ color: OOS_T }} />
         <p className="text-sm">{t.netError}</p>
-        <button onClick={() => carica(giorni)}
+        <button onClick={() => carica()}
           className="rounded-xl px-4 py-2 text-sm font-semibold"
           style={{ background: RED, color: "var(--primary-foreground)" }}>{t.retry}</button>
       </div>
@@ -90,13 +116,25 @@ export default function Conferenze({ lang, adminRole }: { lang: Lang; adminRole:
   }
 
   const occupata = agenda?.occupata_adesso ?? false;
-  const oggi = oggiISO();
 
-  // Raggruppate per data: una prenotazione per riga sarebbe un elenco piatto in
-  // cui il giorno si ripete a ogni voce.
-  const perGiorno = new Map<string, Occorrenza[]>();
+  const occByData = new Map<string, Occorrenza[]>();
   for (const o of agenda?.occorrenze ?? []) {
-    (perGiorno.get(o.data) ?? perGiorno.set(o.data, []).get(o.data)!).push(o);
+    (occByData.get(o.data) ?? occByData.set(o.data, []).get(o.data)!).push(o);
+  }
+
+  const celle = griglia(vista.anno, vista.mese);
+  const eMeseCorrente = vista.anno === oa && vista.mese === om - 1;
+  // "agosto 2026" — capitalize lo mette a inizio frase come nelle altre lingue.
+  const nomeMese = new Date(vista.anno, vista.mese, 1)
+    .toLocaleDateString(LOCALE_PER_LINGUA[lang], { month: "long", year: "numeric" });
+
+  function cambiaMese(delta: number) {
+    setVista(({ anno, mese }) => {
+      let m = mese + delta, a = anno;
+      if (m < 0) { m = 11; a--; }
+      if (m > 11) { m = 0; a++; }
+      return { anno: a, mese: m };
+    });
   }
 
   return (
@@ -123,72 +161,114 @@ export default function Conferenze({ lang, adminRole }: { lang: Lang; adminRole:
         )}
       </div>
 
-      <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color: SUB }}>
-        {t.prossimeOccupazioni}
-      </p>
-
-      {perGiorno.size === 0 ? (
-        <p className="text-sm py-6 text-center" style={{ color: SUB }}>{t.nessunaOccupazione}</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {[...perGiorno.entries()].map(([data, righe]) => (
-            <div key={data} className="rounded-2xl border overflow-hidden"
-              style={{ background: SURF, borderColor: DIV }}>
-              <div className="px-4 py-2 flex items-center gap-2 border-b"
-                style={{ borderColor: DIV, background: "var(--muted)" }}>
-                <CalendarDays size={13} style={{ color: SUB }} />
-                <span className="text-xs font-semibold" style={{ color: FG }}>
-                  {dataBreve(data, lang)}
-                </span>
-                {data === oggi && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                    style={{ background: `color-mix(in srgb, ${RED} 15%, transparent)`, color: RED }}>
-                    {t.oggi}
-                  </span>
-                )}
-              </div>
-              {righe.map((o, i) => (
-                <div key={o.id + "-" + i} className="px-4 py-2.5 flex items-baseline gap-3"
-                  style={{ borderTop: i === 0 ? "none" : `1px solid ${DIV}` }}>
-                  <span className="text-sm font-mono font-bold shrink-0" style={{ color: FG }}>
-                    {o.inizio}–{o.fine}
-                  </span>
-                  <span className="text-sm min-w-0" style={{ color: FG, overflowWrap: "anywhere" }}>
-                    {o.titolo}
-                    {o.note && <span className="block text-xs" style={{ color: SUB }}>{o.note}</span>}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Si allunga invece di caricare un anno subito: chi guarda "è libera
-          adesso?" non ha bisogno di sapere cosa succede a maggio. */}
-      {giorni < 365 && (
-        <button onClick={() => setGiorni((g) => (g < 90 ? 90 : 365))}
-          disabled={loading}
-          className="w-full mt-4 py-3 rounded-2xl text-sm font-semibold border"
-          style={{ borderColor: DIV, color: SUB, background: "transparent" }}>
-          {loading ? "…" : giorni < 90 ? t.guardaTreMesi : t.guardaAnno}
+      {/* Navigazione mese. Indietro si ferma al mese corrente: prima di oggi
+          non c'e' niente da programmare, e la sala non tiene comunque uno
+          storico da consultare qui. */}
+      <div className="flex items-center justify-between mb-3 px-1">
+        <button onClick={() => cambiaMese(-1)} disabled={eMeseCorrente}
+          className="p-2 rounded-xl disabled:opacity-30 transition-opacity"
+          style={{ color: SUB }} aria-label="Mese precedente">
+          <ChevronLeft size={18} />
         </button>
-      )}
+        <p className="text-sm font-bold capitalize" style={{ color: FG }}>{nomeMese}</p>
+        <button onClick={() => cambiaMese(1)}
+          className="p-2 rounded-xl" style={{ color: SUB }} aria-label="Mese successivo">
+          <ChevronRight size={18} />
+        </button>
+      </div>
 
-      {/* Solo per chi ha una sessione admin: la programmazione vera e propria
-          vive qui, non altrove — vedi la nota in cima al file. */}
-      {adminRole !== null && (
-        <div className="mt-8 pt-6 border-t" style={{ borderColor: DIV }}>
-          <p className="text-[11px] font-mono tracking-widest uppercase mb-3" style={{ color: SUB }}>
-            {t.amministrazione}
-          </p>
-          <Suspense fallback={null}>
-            {deveCambiare
-              ? <CambiaPasswordObbligata onFatto={controllaSessione} />
-              : <SalaConferenzeAdmin />}
-          </Suspense>
-        </div>
+      {/* Intestazione giorni della settimana */}
+      <div className="grid grid-cols-7 mb-1">
+        {t.days.map((d) => (
+          <div key={d} className="text-center text-[10px] font-mono uppercase py-1" style={{ color: SUB }}>
+            {d[0]}
+          </div>
+        ))}
+      </div>
+
+      {/* Griglia del mese. Un puntino per giorno con impegni (non il numero
+          di eventi: su un telefono tre puntini si leggono, "3" accanto a un
+          "22" si confondono con la data). Il dettaglio vero sta nel foglio
+          che si apre toccando il giorno. */}
+      <div className="grid grid-cols-7 gap-1">
+        {celle.map((iso, i) => {
+          if (!iso) return <div key={`vuota-${i}`} />;
+          const eventi = occByData.get(iso) ?? [];
+          const isOggi = iso === oggi;
+          const passato = iso < oggi;
+          return (
+            <button key={iso} onClick={() => setSelezionato(iso)}
+              className="aspect-square rounded-xl flex flex-col items-center justify-center gap-1 border transition-transform active:scale-95"
+              style={{
+                background: isOggi ? `color-mix(in srgb, ${RED} 10%, transparent)` : "transparent",
+                borderColor: isOggi ? RED : "transparent",
+                opacity: passato ? 0.35 : 1,
+              }}>
+              <span className="text-xs font-mono" style={{ color: isOggi ? RED : FG }}>
+                {Number(iso.slice(-2))}
+              </span>
+              <div className="flex gap-0.5 h-1">
+                {eventi.slice(0, 3).map((_, j) => (
+                  <span key={j} className="block rounded-full" style={{ width: 4, height: 4, background: RED }} />
+                ))}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Foglio giorno: dettaglio in lettura per chiunque, modulo di
+          aggiunta/rimozione in più per chi ha una sessione admin. */}
+      {selezionato && (
+        <GiornoSheet
+          data={selezionato}
+          eventi={occByData.get(selezionato) ?? []}
+          lang={lang}
+          adminRole={adminRole}
+          deveCambiare={deveCambiare}
+          onClose={() => setSelezionato(null)}
+          onCambioPassword={controllaSessione}
+          onCambiato={(nuovaAgenda) => setAgenda(nuovaAgenda)}
+        />
       )}
+    </div>
+  );
+}
+
+function GiornoSheet({ data, eventi, lang, adminRole, deveCambiare, onClose, onCambioPassword, onCambiato }: {
+  data: string; eventi: Occorrenza[]; lang: Lang; adminRole: AdminRole | null; deveCambiare: boolean;
+  onClose: () => void; onCambioPassword: () => void; onCambiato: (agenda: Agenda) => void;
+}) {
+  const t = T[lang];
+  return (
+    <div className="absolute inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.6)" }} onClick={onClose}>
+      <div className="w-full rounded-t-3xl p-6 pb-8 max-h-[85%] overflow-y-auto" style={{ background: "var(--background)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }} />
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-base font-bold capitalize" style={{ color: FG }}>{dataLunga(data, lang)}</p>
+          <button onClick={onClose} className="p-1.5 rounded-lg" style={{ color: SUB, background: CHIP }}><X size={16} /></button>
+        </div>
+
+        {adminRole !== null ? (
+          <Suspense fallback={<p className="text-sm" style={{ color: SUB }}>{t.loading}</p>}>
+            {deveCambiare
+              ? <CambiaPasswordObbligata onFatto={onCambioPassword} />
+              : <GiornoSheetAdmin data={data} eventi={eventi} onCambiato={onCambiato} />}
+          </Suspense>
+        ) : eventi.length === 0 ? (
+          <p className="text-sm py-4 text-center" style={{ color: SUB }}>{t.nessunaOccupazione}</p>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {eventi.map((o) => (
+              <div key={o.id} className="rounded-2xl border p-3" style={{ borderColor: DIV, background: SURF }}>
+                <p className="text-sm font-mono font-bold" style={{ color: FG }}>{o.inizio}–{o.fine}</p>
+                <p className="text-sm" style={{ color: FG }}>{o.titolo}</p>
+                {o.note && <p className="text-xs mt-0.5" style={{ color: SUB }}>{o.note}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

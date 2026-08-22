@@ -10,6 +10,7 @@
 // Caricato in lazy da App.tsx: non pesa sul bundle dei residenti.
 
 import { useCallback, useEffect, useState } from "react";
+import type { Occorrenza, Agenda } from "./conferenzeApi";
 
 // ─── Tipi ────────────────────────────────────────────────────────────────────
 
@@ -26,13 +27,6 @@ type Feedback = { id: number; room: string | null; body: string; laundry: string
 // Una REGOLA della sala conferenze, com'e' stata scritta: "ogni martedi' dalle
 // 14 alle 18, dal 7 ottobre al 30 maggio". Le singole date non esistono da
 // nessuna parte: le calcola il database quando qualcuno legge l'agenda.
-type ConfRule = {
-  id: number; titolo: string; note?: string;
-  inizio: string; fine: string; dal: string; al: string;
-  /** 0 = lunedi' … 6 = domenica. null = tutti i giorni del periodo. */
-  giorno: number | null;
-};
-
 // Un account amministrativo. La password non compare mai qui: il pannello la
 // invia una volta, in creazione o in reset, e da li' in poi esiste solo come
 // hash nel database.
@@ -852,212 +846,91 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
   );
 }
 
-// ─── Sala conferenze ─────────────────────────────────────────────────────────
+// ─── Sala polivalente — foglio del giorno (lato admin) ──────────────────────
 //
-// L'unica sala che i residenti non prenotano: la programma la direzione e loro
-// la guardano. Si programma per ATTIVITÀ: un nome (es. "Corsi PFP") e uno o
-// piu' INCONTRI, ciascuno con la propria data e fascia oraria. Ogni incontro
-// diventa una riga a sé nel database (un evento di un giorno solo): non c'e'
-// una tabella "attività" a parte, il nome si limita a essere ripetuto su ogni
-// incontro che lo condivide, e cancellare un incontro non tocca gli altri.
-//
-// Prima il modulo lavorava per REGOLE ("ogni martedì dal 7 ottobre al 30
-// maggio"): piu' compatto per una cadenza regolare, ma un errore nel giorno
-// della settimana rendeva la regola silenziosamente inutile (vedi migrazione
-// 010). L'elenco sotto capisce ancora le regole create prima di questo
-// cambio — vedi quando() — ma il modulo qui sopra ne crea solo di nuove nella
-// forma esplicita, una data alla volta.
-
-const oggiISO = () => new Date().toLocaleDateString("sv-SE");
-
-/** "sab 7 ott 2026" — il giorno della settimana aiuta a leggere l'elenco
- *  come un calendario invece che come una lista di date isolate. */
-const dataBreve = (iso: string) =>
-  new Date(iso + "T00:00:00").toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
-
-type Incontro = { data: string; inizio: string; fine: string };
-const incontroVuoto = (): Incontro => ({ data: oggiISO(), inizio: "14:00", fine: "18:00" });
-
-export function SalaConferenze() {
-  const [items, setItems] = useState<ConfRule[]>([]);
+// Aperto da Conferenze.tsx quando un admin tocca un giorno sul calendario:
+// l'elenco degli eventi di quel giorno con "Elimina", e un modulo per
+// aggiungerne uno nuovo. Ogni evento e' una riga a sé nel database (un
+// giorno solo): qui non si scrivono più "regole" astratte ("ogni martedì
+// dal 7 ottobre al 30 maggio") — si programma un giorno alla volta,
+// cliccando sul calendario. Un errore nel giorno della settimana di una
+// regola poteva renderla silenziosamente inutile (vedi migrazione 010):
+// un giorno solo non lascia spazio a quell'ambiguità.
+export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
+  data: string; eventi: Occorrenza[]; onCambiato: (agenda: Agenda) => void;
+}) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-
-  // "Corsi PFP" e' il caso per cui la sala esiste: sta gia' scritto e si cambia
-  // solo quando serve altro.
-  const [nomeAttivita, setNomeAttivita] = useState("Corsi PFP");
-  const [incontri, setIncontri] = useState<Incontro[]>([incontroVuoto()]);
+  const [titolo, setTitolo] = useState("");
+  const [inizio, setInizio] = useState("14:00");
+  const [fine, setFine] = useState("18:00");
   const [note, setNote] = useState("");
 
-  const load = useCallback(async () => {
-    setBusy(true);
-    try { setItems((await call("conferenzaList")).items); }
-    catch (e: any) { setMsg(e.message); }
-    finally { setBusy(false); }
-  }, []);
-
-  useEffect(() => { load(); }, [load]);
-
-  function aggiornaIncontro(i: number, campo: keyof Incontro, valore: string) {
-    setIncontri((prev) => prev.map((r, idx) => (idx === i ? { ...r, [campo]: valore } : r)));
-  }
-  const aggiungiIncontro = () => setIncontri((prev) => [...prev, incontroVuoto()]);
-  const rimuoviIncontro  = (i: number) => setIncontri((prev) => prev.filter((_, idx) => idx !== i));
-
-  /**
-   * Un incontro alla volta: la sovrapposizione si scopre riga per riga, cosi'
-   * un incontro che va a sbattere contro una programmazione gia' presente non
-   * blocca gli altri — vengono creati comunque, e si segnala solo quello
-   * scartato invece di annullare tutto il lavoro fatto nel modulo.
-   */
   async function aggiungi() {
-    if (!nomeAttivita.trim()) { setMsg("Indica il nome dell'attività."); return; }
-    const validi = incontri.filter((i) => i.data && i.inizio && i.fine);
-    if (validi.length === 0) { setMsg("Aggiungi almeno un incontro con data e orario."); return; }
-
+    if (!titolo.trim()) { setMsg("Indica un titolo."); return; }
     setBusy(true); setMsg(null);
-    let creati = 0;
-    const scartati: string[] = [];
-    for (const inc of validi) {
-      try {
-        await call("conferenzaAdd", {
-          titolo: nomeAttivita.trim(), inizio: inc.inizio, fine: inc.fine,
-          dal: inc.data, al: inc.data, giorno: null,
-          note: note.trim() || null,
-        });
-        creati++;
-      } catch (e: any) {
-        const motivo = e.message === "sovrapposto" ? "si sovrappone a una programmazione già presente" : e.message;
-        scartati.push(`${dataBreve(inc.data)} ${inc.inizio}–${inc.fine} (${motivo})`);
-      }
-    }
-    setBusy(false);
-
-    setMsg(scartati.length === 0
-      ? `${creati} incontr${creati === 1 ? "o" : "i"} aggiunt${creati === 1 ? "o" : "i"}.`
-      : `${creati} aggiunt${creati === 1 ? "o" : "i"}, ${scartati.length} scartat${scartati.length === 1 ? "o" : "i"}: ${scartati.join("; ")}`);
-
-    if (creati > 0) { setNomeAttivita(""); setNote(""); setIncontri([incontroVuoto()]); load(); }
+    try {
+      const r = await call<Agenda>("conferenzaAdd", {
+        titolo: titolo.trim(), inizio, fine, dal: data, al: data, giorno: null,
+        note: note.trim() || null,
+      });
+      onCambiato(r);
+      setTitolo(""); setNote("");
+    } catch (e: any) {
+      setMsg(e.message === "sovrapposto" ? "Si sovrappone a un evento già presente in questo orario." : e.message);
+    } finally { setBusy(false); }
   }
 
-  async function elimina(r: ConfRule) {
-    if (!confirm(`Eliminare "${r.titolo}" del ${dataBreve(r.dal)}?`)) return;
-    setBusy(true);
-    try { await call("conferenzaDelete", { id: r.id }); load(); }
+  async function elimina(id: number) {
+    setBusy(true); setMsg(null);
+    try { onCambiato(await call<Agenda>("conferenzaDelete", { id })); }
     catch (e: any) { setMsg(e.message); }
     finally { setBusy(false); }
-  }
-
-  /** "ogni martedì, 7 ott 2026 → 30 mag 2027", o la sola data per un incontro singolo.
-   *  La forma "ogni X" resta solo per le regole create prima di questo modulo. */
-  const quando = (r: ConfRule) => {
-    if (r.dal === r.al) return dataBreve(r.dal);
-    const cadenza = r.giorno === null ? "tutti i giorni" : `ogni ${DAYS[r.giorno].toLowerCase()}`;
-    return `${cadenza}, ${dataBreve(r.dal)} → ${dataBreve(r.al)}`;
-  };
-
-  // Per giorno d'inizio: una regola vecchio stile (dal ≠ al) finisce nel
-  // gruppo del suo primo giorno, non in uno per ciascuno — quando() sulla
-  // singola riga dice il resto.
-  const perGiorno = new Map<string, ConfRule[]>();
-  for (const r of items) {
-    (perGiorno.get(r.dal) ?? perGiorno.set(r.dal, []).get(r.dal)!).push(r);
   }
 
   return (
     <>
-      <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
-        La sala polivalente non si prenota: la programma la direzione, i residenti la
-        vedono in sola lettura con l'agenda fino a un anno avanti. Dai un nome
-        all'attività e aggiungi i suoi incontri, uno per uno: ciascuno con la propria
-        data e fascia oraria.
-      </p>
+      {msg && <div style={{ ...S.card, padding: 10, marginBottom: 12, fontSize: 13 }}>{msg}</div>}
 
-      {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
-
-      <div style={{ ...S.card, padding: 18, marginBottom: 16 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Nuova programmazione</h2>
-
-        <input style={{ ...S.input, marginBottom: 12 }} placeholder="Nome attività (es. Corsi PFP)"
-               value={nomeAttivita} maxLength={60} onChange={(e) => setNomeAttivita(e.target.value)} />
-
-        <p style={{ fontSize: 12, fontWeight: 700, ...S.sub, marginBottom: 8 }}>INCONTRI</p>
-        <div style={{ display: "grid", gap: 12, marginBottom: 8 }}>
-          {incontri.map((inc, i) => (
-            <div key={i} className="conf-incontro">
-              <div className="conf-incontro__campo">
-                <label>Data</label>
-                <input style={S.input} type="date" value={inc.data} onChange={(e) => aggiornaIncontro(i, "data", e.target.value)} />
-              </div>
-              {/* Inizio e fine restano SEMPRE affiancati (vedi .conf-incontro__orari
-                  in style.css): su telefono, prima, finivano uno sotto l'altro senza
-                  etichetta e sembravano due numeri scollegati invece di un intervallo. */}
-              <div className="conf-incontro__orari">
-                <div>
-                  <label>Orario di inizio</label>
-                  <input style={S.input} type="time" value={inc.inizio} onChange={(e) => aggiornaIncontro(i, "inizio", e.target.value)} />
-                </div>
-                <div>
-                  <label>Orario di fine</label>
-                  <input style={S.input} type="time" value={inc.fine} onChange={(e) => aggiornaIncontro(i, "fine", e.target.value)} />
-                </div>
-              </div>
-              {/* Il primo incontro non si toglie: il modulo deve sempre avere
-                  almeno una riga da compilare. */}
-              {incontri.length > 1 && (
-                <button type="button" style={S.danger} className="conf-incontro__rimuovi"
-                        onClick={() => rimuoviIncontro(i)} aria-label="Togli incontro">✕</button>
-              )}
+      {eventi.length === 0 ? (
+        <p style={{ fontSize: 13, ...S.sub, marginBottom: 14 }}>Nessun evento in programma.</p>
+      ) : (
+        <div style={{ display: "grid", gap: 6, marginBottom: 16 }}>
+          {eventi.map((o) => (
+            <div key={o.id} className="adm-rule">
+              <span style={{ fontSize: 13, fontWeight: 700 }}>{o.inizio}–{o.fine}</span>
+              <span className="adm-rule__what">
+                {o.titolo}
+                {o.note && <span style={{ display: "block", fontSize: 12, ...S.sub }}>{o.note}</span>}
+              </span>
+              <span className="adm-rule__act">
+                <button style={S.danger} disabled={busy} onClick={() => elimina(o.id)}>Elimina</button>
+              </span>
             </div>
           ))}
         </div>
-        <button type="button" style={{ ...S.btn, marginBottom: 12 }} onClick={aggiungiIncontro}>
-          + Aggiungi incontro
-        </button>
+      )}
 
-        <div className="adm-form">
-          <input style={S.input} placeholder="Note (facoltative)" value={note}
-                 maxLength={300} onChange={(e) => setNote(e.target.value)} />
-          <button style={{ ...S.btn, background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
-                  disabled={busy} onClick={aggiungi}>Crea programmazione</button>
+      <p style={{ fontSize: 12, fontWeight: 700, ...S.sub, marginBottom: 8 }}>AGGIUNGI EVENTO</p>
+      <input style={{ ...S.input, marginBottom: 8 }} placeholder="Titolo (es. Corsi PFP)" value={titolo}
+             maxLength={60} onChange={(e) => setTitolo(e.target.value)} />
+      {/* Inizio e fine restano SEMPRE affiancati (vedi .conf-incontro__orari in
+          style.css): su telefono, prima, finivano uno sotto l'altro senza
+          etichetta e sembravano due numeri scollegati invece di un intervallo. */}
+      <div className="conf-incontro__orari" style={{ marginBottom: 8 }}>
+        <div>
+          <label>Orario di inizio</label>
+          <input style={S.input} type="time" value={inizio} onChange={(e) => setInizio(e.target.value)} />
+        </div>
+        <div>
+          <label>Orario di fine</label>
+          <input style={S.input} type="time" value={fine} onChange={(e) => setFine(e.target.value)} />
         </div>
       </div>
-
-      <div style={{ ...S.card, padding: 18 }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>In programma ({items.length})</h2>
-        {items.length === 0 && <p style={{ fontSize: 13, ...S.sub }}>Niente in programma.</p>}
-        {/* Raggruppato per giorno, come la vista dei residenti: prima ogni riga
-            ripeteva la propria data ("· 22 ago 2026") anche quando la riga sopra
-            era lo stesso giorno, e con più incontri vicini diventava un elenco
-            da decifrare invece che un calendario da scorrere. */}
-        <div style={{ display: "grid", gap: 14 }}>
-          {[...perGiorno.entries()].map(([giorno, righe]) => (
-            <div key={giorno}>
-              <p style={{ fontSize: 12, fontWeight: 700, ...S.sub, marginBottom: 6, textTransform: "capitalize" }}>
-                {dataBreve(giorno)}
-              </p>
-              <div style={{ display: "grid", gap: 6 }}>
-                {righe.map((r) => (
-                  <div key={r.id} className="adm-rule">
-                    <span style={{ fontSize: 13, fontWeight: 700 }}>{r.inizio}–{r.fine}</span>
-                    <span className="adm-rule__what">
-                      {r.titolo}
-                      {/* Solo per le regole ricorrenti create prima della migrazione
-                          010 (dal ≠ al): un incontro nuovo è sempre un solo giorno,
-                          e il gruppo qui sopra basta a dirlo. */}
-                      {r.dal !== r.al && <span style={{ display: "block", fontSize: 11, ...S.sub }}>{quando(r)}</span>}
-                      {r.note && <span style={{ display: "block", fontSize: 12, ...S.sub }}>{r.note}</span>}
-                    </span>
-                    <span className="adm-rule__act">
-                      <button style={S.danger} disabled={busy} onClick={() => elimina(r)}>Elimina</button>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+      <input style={{ ...S.input, marginBottom: 12 }} placeholder="Note (facoltative)" value={note}
+             maxLength={300} onChange={(e) => setNote(e.target.value)} />
+      <button style={{ ...S.btn, width: "100%", background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
+              disabled={busy} onClick={aggiungi}>Aggiungi evento</button>
     </>
   );
 }

@@ -1831,35 +1831,42 @@ function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility,
 
       {/* Navigazione */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto">
-        {/* Strutture: Lavanderia / Cinema / Musica */}
+        {/* Strutture: Lavanderia / Cinema / Musica / Polivalente.
+            Le schede Dashboard/Giornaliero/Settimana sono annidate subito
+            sotto il pulsante Lavanderia (rientrate, e solo mentre e' la
+            struttura attiva) invece che spuntare in coda a tutte le
+            strutture: prima Cinema, Musica e Polivalente stavano IN MEZZO fra
+            Lavanderia e le sue stesse schede, e non si capiva a chi
+            appartenessero. Su mobile la stessa cosa e' ovvia perche' la barra
+            in basso cambia con la struttura scelta sopra; qui replichiamo lo
+            stesso legame visivo con il rientro. */}
         {showNav && FACILITIES.map(({ id, icon: Icon, chiave }) => {
           const isActive = facility === id;
           return (
-            <button key={id} onClick={()=>onFacility(id)}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors text-left ${isActive ? "" : "desk-nav"}`}
-              style={isActive ? { background:RED, color:RED_FG } : { color:sub }}>
-              <Icon size={18}/>{T[lang][chiave]}
-            </button>
+            <div key={id}>
+              <button onClick={()=>onFacility(id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors text-left ${isActive ? "" : "desk-nav"}`}
+                style={isActive ? { background:RED, color:RED_FG } : { color:sub }}>
+                <Icon size={18}/>{T[lang][chiave]}
+              </button>
+              {id === "laundry" && isActive && (
+                <div className="flex flex-col gap-1 mt-1 pl-3 ml-3.5 border-l" style={{ borderColor:div }}>
+                  {tabs.map((tab, i) => {
+                    const TabIcon = tab.icon;
+                    const tabAttiva = active === i;
+                    return (
+                      <button key={i} onClick={()=>onChange(i)}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-colors text-left ${tabAttiva ? "" : "desk-nav"}`}
+                        style={tabAttiva ? { background:`color-mix(in srgb, var(--primary) 15%, transparent)`, color:RED } : { color:sub }}>
+                        <TabIcon size={15}/>{tab.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           );
         })}
-
-        {/* Sotto-sezioni della Lavanderia */}
-        {showNav && facility === "laundry" && (
-          <>
-            <div className="h-px my-2 mx-2" style={{ background:div }}/>
-            {tabs.map((tab, i) => {
-              const Icon = tab.icon;
-              const isActive = active === i;
-              return (
-                <button key={i} onClick={()=>onChange(i)}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-colors text-left ${isActive ? "" : "desk-nav"}`}
-                  style={isActive ? { background:`color-mix(in srgb, var(--primary) 15%, transparent)`, color:RED } : { color:sub }}>
-                  <Icon size={15}/>{tab.label}
-                </button>
-              );
-            })}
-          </>
-        )}
 
         {/* Sezioni amministrative: stesso livello delle strutture, in coda e
             separate perché sono di natura diversa. Compaiono solo con una
