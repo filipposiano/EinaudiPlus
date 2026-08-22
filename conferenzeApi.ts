@@ -24,6 +24,15 @@ export interface Occorrenza {
   al?: string;
   /** 0 = lunedì … 6 = domenica. null = tutti i giorni del periodo. */
   giorno?: number | null;
+  /**
+   * La data che la REGOLA produce per questa occorrenza — non quella a cui si
+   * vede, se è stata spostata. È il nome con cui la si annulla o si sposta, e
+   * resta lo stesso per sempre: mandare la data visibile creerebbe una seconda
+   * eccezione invece di correggere la prima. (In iCalendar: RECURRENCE-ID.)
+   */
+  data_regola?: string;
+  /** Questa occorrenza ha già un'eccezione: è stata spostata o modificata. */
+  spostata?: boolean;
 }
 
 export interface Agenda {

@@ -889,6 +889,13 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
   // vorrebbe dire crearne altre, che non e' quello che chiede chi ha premuto
   // "Modifica".
   const [modifica, setModifica] = useState<Occorrenza | null>(null);
+  // Se la modifica riguarda solo QUESTO incontro o tutta la serie. La
+  // distinzione e' l'intero punto delle eccezioni: senza, chi vuole spostare
+  // un sabato di festa sposterebbe il corso di tutto l'anno.
+  const [ambito, setAmbito] = useState<"serie" | "occorrenza">("serie");
+  // L'occorrenza su cui si sta chiedendo "questo o tutti?", con l'azione che
+  // ha fatto scattare la domanda.
+  const [chiede, setChiede] = useState<{ o: Occorrenza; azione: "modifica" | "elimina" } | null>(null);
 
   const [titolo, setTitolo] = useState("");
   const [inizio, setInizio] = useState("14:00");
@@ -926,26 +933,58 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
   }
 
   function pulisci() {
-    setModifica(null); setTitolo(""); setNote("");
+    setModifica(null); setAmbito("serie"); setChiede(null);
+    setTitolo(""); setNote("");
     setInizio("14:00"); setFine("18:00");
     setDal(data); setRipete("mai"); setNSettimane(8); setFinoA(data);
     setGiorni([giornoDi(data)]);
   }
 
   /** Apre il modulo gia' compilato con cio' che l'evento e' adesso. */
-  function apriModifica(o: Occorrenza) {
+  function apriModifica(o: Occorrenza, quale: "serie" | "occorrenza") {
     setModifica(o);
+    setAmbito(quale);
+    setChiede(null);
     setMsg(null);
     setTitolo(o.titolo);
     setInizio(o.inizio);
     setFine(o.fine);
     setNote(o.note ?? "");
+    if (quale === "occorrenza") {
+      // Un solo incontro: si sposta una data, non si tocca la cadenza. Il
+      // modulo si riduce a titolo, orari e giorno.
+      setDal(o.data);
+      setRipete("mai");
+      return;
+    }
     const d = o.dal ?? o.data;
     const a = o.al ?? o.data;
     setDal(d);
     setFinoA(a);
     setRipete(a === d ? "mai" : "finoA");
     setGiorni([o.giorno ?? giornoDi(d)]);
+  }
+
+  /** Un'azione su un'occorrenza: se la serie si ripete, prima si chiede. */
+  function chiediAmbito(o: Occorrenza, azione: "modifica" | "elimina") {
+    if (!o.ricorrente) {
+      // Evento singolo: non c'e' niente da distinguere.
+      if (azione === "modifica") apriModifica(o, "serie");
+      else elimina(o, "serie");
+      return;
+    }
+    setChiede({ o, azione });
+    setMsg(null);
+  }
+
+  /** Rimette un incontro spostato o modificato come lo vuole la regola. */
+  async function ripristina(o: Occorrenza) {
+    setBusy(true); setMsg(null);
+    try {
+      await call("conferenzaResetOccorrenza", { id: o.id, data: o.data_regola ?? o.data });
+      await onCambiato();
+    } catch (e: any) { setMsg(e.message); }
+    finally { setBusy(false); }
   }
 
   /** Messaggio d'errore leggibile, con la data del primo scontro se c'e'. */
@@ -958,7 +997,28 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
   async function salva() {
     if (!titolo.trim()) { setMsg("Indica un titolo."); return; }
 
-    // ── Modifica: una riga sola, la sua cadenza non cambia numero ──────────
+    // ── Modifica di UN SOLO incontro: diventa un'eccezione alla serie ──────
+    if (modifica && ambito === "occorrenza") {
+      setBusy(true); setMsg(null);
+      try {
+        await call("conferenzaMove", {
+          id: modifica.id,
+          // La data che la REGOLA produce, non quella a cui si vede: e' il
+          // nome dell'incontro, e resta lo stesso anche spostandolo di nuovo.
+          data: modifica.data_regola ?? modifica.data,
+          nuova_data: dal,
+          inizio, fine,
+          titolo: titolo.trim(),
+          note: note.trim() || null,
+        });
+        await onCambiato();
+        pulisci();
+      } catch (e: any) { setMsg(spiegaErrore(e)); }
+      finally { setBusy(false); }
+      return;
+    }
+
+    // ── Modifica dell'intera serie ────────────────────────────────────────
     if (modifica) {
       const g = giorni[0] ?? giornoDi(dal);
       const al = ripete === "mai" ? dal
@@ -1035,13 +1095,23 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
     if (creati > 0) await onCambiato();
   }
 
-  async function elimina(id: number, ricorrente: boolean) {
-    // Conferma solo per le ricorrenze: li' il pulsante fa piu' di quanto la
-    // riga lasci pensare (toglie tutte le occorrenze, non quella che si sta
-    // guardando). Per un evento singolo sarebbe solo un clic in piu'.
-    if (ricorrente && !confirm("Questo evento si ripete ogni settimana.\n\nEliminandolo spariscono TUTTE le sue occorrenze, non solo quella di questo giorno.")) return;
-    setBusy(true); setEliminando(id); setMsg(null);
-    try { await call("conferenzaDelete", { id }); await onCambiato(); if (modifica?.id === id) pulisci(); }
+  /**
+   * Toglie un incontro solo ('occorrenza', diventa un'eccezione 'annullata')
+   * oppure l'intera serie ('serie', cancella la regola). La scelta la fa
+   * chiediAmbito qui sopra: qui non si indovina mai.
+   */
+  async function elimina(o: Occorrenza, quale: "serie" | "occorrenza") {
+    setChiede(null);
+    setBusy(true); setEliminando(o.id); setMsg(null);
+    try {
+      if (quale === "occorrenza") {
+        await call("conferenzaSkip", { id: o.id, data: o.data_regola ?? o.data });
+      } else {
+        await call("conferenzaDelete", { id: o.id });
+      }
+      await onCambiato();
+      if (modifica?.id === o.id) pulisci();
+    }
     catch (e: any) { setMsg(e.message); }
     finally { setBusy(false); setEliminando(null); }
   }
@@ -1060,28 +1130,67 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
       ) : (
         <div style={{ display: "grid", gap: 6, marginBottom: 16 }}>
           {eventi.map((o) => (
-            <div key={o.id} className="adm-rule"
-                 style={modifica?.id === o.id
-                   ? { borderColor: "var(--primary)", background: "color-mix(in srgb, var(--primary) 8%, transparent)" }
-                   : undefined}>
-              <span style={{ fontSize: 13, fontWeight: 700 }}>{o.inizio}–{o.fine}</span>
-              <span className="adm-rule__what">
-                {o.titolo}
-                {o.ricorrente && (
-                  <span style={{ display: "block", fontSize: 12, ...S.sub }}>
-                    Si ripete ogni settimana — eliminando si tolgono tutte le occorrenze
-                  </span>
-                )}
-                {o.note && <span style={{ display: "block", fontSize: 12, ...S.sub }}>{o.note}</span>}
-              </span>
-              <span className="adm-rule__act">
-                <button style={S.btn} disabled={busy} onClick={() => apriModifica(o)}>
-                  {modifica?.id === o.id ? "In modifica" : "Modifica"}
+            <div key={o.id}>
+              <div className="adm-rule"
+                   style={modifica?.id === o.id
+                     ? { borderColor: "var(--primary)", background: "color-mix(in srgb, var(--primary) 8%, transparent)" }
+                     : undefined}>
+                <span style={{ fontSize: 13, fontWeight: 700 }}>{o.inizio}–{o.fine}</span>
+                <span className="adm-rule__what">
+                  {o.titolo}
+                  {o.ricorrente && (
+                    <span style={{ display: "block", fontSize: 12, ...S.sub }}>
+                      Si ripete ogni settimana
+                      {o.spostata && " · questo incontro è stato modificato"}
+                    </span>
+                  )}
+                  {o.note && <span style={{ display: "block", fontSize: 12, ...S.sub }}>{o.note}</span>}
+                </span>
+                <span className="adm-rule__act">
+                  <button style={S.btn} disabled={busy} onClick={() => chiediAmbito(o, "modifica")}>
+                    {modifica?.id === o.id ? "In modifica" : "Modifica"}
+                  </button>
+                  <button style={S.danger} disabled={busy} onClick={() => chiediAmbito(o, "elimina")}>
+                    {eliminando === o.id ? "Elimino…" : "Elimina"}
+                  </button>
+                </span>
+              </div>
+
+              {/* La domanda che rende sicure le serie ricorrenti. Senza,
+                  "Elimina" su un sabato di festa cancellava il corso di tutto
+                  l'anno: la riga mostra UN incontro, ma il pulsante agiva
+                  sulla regola che li genera tutti. */}
+              {chiede?.o.id === o.id && chiede.o.data === o.data && (
+                <div style={{ ...S.card, padding: 10, marginTop: 6, display: "grid", gap: 8 }}>
+                  <p style={{ fontSize: 13 }}>
+                    {chiede.azione === "elimina" ? "Che cosa vuoi eliminare?" : "Che cosa vuoi modificare?"}
+                  </p>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <button style={{ ...S.btn, fontSize: 12 }} disabled={busy}
+                            onClick={() => chiede.azione === "elimina"
+                              ? elimina(o, "occorrenza")
+                              : apriModifica(o, "occorrenza")}>
+                      Solo {dataBreve(o.data)}
+                    </button>
+                    <button style={{ ...(chiede.azione === "elimina" ? S.danger : S.btn), fontSize: 12 }}
+                            disabled={busy}
+                            onClick={() => chiede.azione === "elimina"
+                              ? elimina(o, "serie")
+                              : apriModifica(o, "serie")}>
+                      Tutta la serie
+                    </button>
+                    <button style={{ ...S.btn, fontSize: 12 }} onClick={() => setChiede(null)}>Annulla</button>
+                  </div>
+                </div>
+              )}
+
+              {/* Un incontro gia' scostato dalla regola si puo' riallineare. */}
+              {o.spostata && chiede?.o.id !== o.id && (
+                <button style={{ ...S.btn, fontSize: 12, marginTop: 6 }} disabled={busy}
+                        onClick={() => ripristina(o)}>
+                  Rimetti come la serie
                 </button>
-                <button style={S.danger} disabled={busy} onClick={() => elimina(o.id, o.ricorrente)}>
-                  {eliminando === o.id ? "Elimino…" : "Elimina"}
-                </button>
-              </span>
+              )}
             </div>
           ))}
         </div>
@@ -1092,7 +1201,9 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
 
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
         <p style={{ fontSize: 12, fontWeight: 700, ...S.sub, flex: 1 }}>
-          {modifica ? "MODIFICA EVENTO" : "AGGIUNGI EVENTO"}
+          {!modifica ? "AGGIUNGI EVENTO"
+            : ambito === "occorrenza" ? "MODIFICA SOLO QUESTO INCONTRO"
+            : "MODIFICA TUTTA LA SERIE"}
         </p>
         {modifica && (
           <button style={{ ...S.btn, padding: "4px 10px", fontSize: 12 }} onClick={pulisci}>Annulla</button>
@@ -1121,12 +1232,14 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
       {modifica && (
         <div style={{ marginBottom: 8 }}>
           <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>
-            {ripete === "mai" ? "Giorno" : "A partire dal"}
+            {ambito === "occorrenza" ? "Sposta al giorno"
+              : ripete === "mai" ? "Giorno" : "A partire dal"}
           </label>
           <input style={S.input} type="date" value={dal} onChange={(e) => setDal(e.target.value)} />
         </div>
       )}
 
+      {ambito !== "occorrenza" && (<>
       <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>Si ripete</label>
       <select style={{ ...S.input, marginBottom: 8 }} value={ripete}
               onChange={(e) => setRipete(e.target.value as typeof ripete)}>
@@ -1173,6 +1286,14 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
           <input style={S.input} type="date" value={finoA} min={modifica ? dal : data}
                  onChange={(e) => setFinoA(e.target.value)} />
         </div>
+      )}
+      </>)}
+
+      {ambito === "occorrenza" && (
+        <p style={{ fontSize: 12, ...S.sub, marginBottom: 8 }}>
+          Cambia solo questo incontro. La serie resta com'è, e questo giorno
+          diventa un'eccezione che si può sempre rimettere in riga.
+        </p>
       )}
 
       <input style={{ ...S.input, marginBottom: 12 }} placeholder="Note (facoltative)" value={note}

@@ -16,6 +16,7 @@ const MUTATIONS = new Set([
   "recurringDelete", "applyRecurring", "purge",
   "bookDirezione", "bookSpaceDirezione", "clearDirezione",
   "conferenzaAdd", "conferenzaUpdate", "conferenzaDelete",
+  "conferenzaSkip", "conferenzaMove", "conferenzaResetOccorrenza",
   "accountCreate", "accountSetPassword", "accountSetActive", "accountDelete",
   "accountChangeOwnPassword",
 ]);
@@ -221,6 +222,39 @@ export default async function handler(req, res) {
           p_giorno_settimana: body.giorno === null || body.giorno === undefined || body.giorno === ""
             ? null : Number(body.giorno),
           p_note: body.note ? String(body.note) : null,
+        });
+        break;
+
+      // ── Un singolo incontro di una serie ricorrente ──────────────────────
+      // `data` è la data che la REGOLA produce (RECURRENCE-ID), non quella a
+      // cui l'incontro si vede: è il suo nome per sempre, anche dopo che è
+      // stato spostato. Mandare quella visibile creerebbe una seconda
+      // eccezione invece di correggere la prima.
+      case "conferenzaSkip":
+        result = await rpc("conference_skip", {
+          p_id: Number(body.id),
+          p_data: String(body.data || ""),
+          p_attore: me.u,
+        });
+        break;
+
+      case "conferenzaMove":
+        result = await rpc("conference_move", {
+          p_id: Number(body.id),
+          p_data: String(body.data || ""),
+          p_nuova_data: String(body.nuova_data || ""),
+          p_ora_inizio: body.inizio ? String(body.inizio) : null,
+          p_ora_fine: body.fine ? String(body.fine) : null,
+          p_titolo: body.titolo ? String(body.titolo) : null,
+          p_note: body.note ? String(body.note) : null,
+          p_attore: me.u,
+        });
+        break;
+
+      case "conferenzaResetOccorrenza":
+        result = await rpc("conference_reset_occorrenza", {
+          p_id: Number(body.id),
+          p_data: String(body.data || ""),
         });
         break;
 
