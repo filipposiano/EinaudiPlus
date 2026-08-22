@@ -138,10 +138,12 @@ export default function Conferenze({ lang, adminRole }: { lang: Lang; adminRole:
   }
 
   return (
-    // max-w-md: sul desktop il corpo pagina arriva a 1600px, e un calendario di
-    // 7 colonne stiracchiato su quella larghezza aveva celle enormi — un
-    // widget di calendario, non una tabella da riempire tutto lo schermo.
-    <div className="flex-1 overflow-y-auto px-5 pb-8 max-w-md mx-auto w-full">
+    // max-w-2xl: sul desktop il corpo pagina arriva a 1600px, e un calendario
+    // di 7 colonne stiracchiato su quella larghezza aveva celle enormi. Non
+    // il minimo indispensabile pero': celle troppo strette si leggono male
+    // quanto celle troppo larghe, questa via di mezzo resta un calendario
+    // vero, non un widget compresso in un angolo.
+    <div className="flex-1 overflow-y-auto px-5 pb-8 max-w-2xl mx-auto w-full">
       {/* La risposta alla domanda per cui uno apre questa schermata, in cima
           e grande: "posso entrarci adesso?" */}
       <div className="rounded-2xl border p-5 mt-3 mb-5 text-center"

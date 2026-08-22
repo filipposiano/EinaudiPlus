@@ -91,24 +91,6 @@ export default async function handler(req, res) {
     }
   }
 
-  // Il log non dipende dal risultato dell'azione (usa solo i parametri della
-  // richiesta, gia' qui disponibili): prima partiva DOPO l'azione principale
-  // e la aspettava prima di rispondere, cioe' due andate e ritorni verso
-  // Supabase in fila invece che uno solo — il pannello sembrava lento
-  // proprio sulle scritture (aggiungere un incontro alla sala polivalente,
-  // creare un account, ...). Partendo insieme costano quanto il piu' lento
-  // dei due, non la somma. Le password non finiscono mai nel log, nemmeno
-  // hashate: un filtro sul nome del campo resta valido anche se in futuro se
-  // ne aggiunge un'altra ("password", "password_attuale", "password_nuova").
-  const logPromise = MUTATIONS.has(action)
-    ? rpc("admin_log", {
-        p_actor: me.u, p_action: action,
-        p_detail: Object.fromEntries(
-          Object.entries(body).filter(([k]) => k !== "action" && !k.toLowerCase().includes("password"))
-        ),
-      }).catch(() => { /* il log non deve far fallire l'operazione */ })
-    : null;
-
   try {
     let result;
 
@@ -350,7 +332,23 @@ export default async function handler(req, res) {
         return fail(res, "azione sconosciuta");
     }
 
-    if (logPromise) await logPromise;
+    // Solo qui siamo certi che l'azione sia davvero avvenuta (nessun "return
+    // fail" prima l'ha intercettata): logga solo i tentativi riusciti, come
+    // sempre. Non si aspetta pero' che il log finisca prima di rispondere —
+    // non dipende dal risultato, quindi tenerlo sul percorso critico voleva
+    // dire pagare due andate e ritorni verso Supabase invece di uno solo per
+    // ogni scrittura (il pannello sembrava lento proprio li'). Il log resta
+    // best-effort: se si perde un tentativo perche' la funzione si ferma
+    // prima che la richiesta arrivi, non e' diverso da un log che fallisce
+    // per un errore di rete, gia' ignorato qui sotto.
+    if (MUTATIONS.has(action)) {
+      rpc("admin_log", {
+        p_actor: me.u, p_action: action,
+        p_detail: Object.fromEntries(
+          Object.entries(body).filter(([k]) => k !== "action" && !k.toLowerCase().includes("password"))
+        ),
+      }).catch(() => { /* il log non deve far fallire l'operazione */ });
+    }
 
     return json(res, 200, result);
   } catch (err) {
