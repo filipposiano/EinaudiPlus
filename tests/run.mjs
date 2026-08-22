@@ -240,29 +240,68 @@ section("Scheduler promemoria");
 
 // ─── Admin ───────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Gli account non stanno piu' nelle variabili d'ambiente di Vercel (migrazione
+// 008): vivono nella tabella admin_account. Ai test serve percio' UNA sola
+// credenziale vera, quella di un sistemista, dichiarata in .env.local:
+//
+//   TEST_ADMIN_USER / TEST_ADMIN_PASSWORD
+//
+// L'account di livello FDO che serve alle prove sui permessi se lo creano da
+// soli qui sotto, e lo cancellano alla fine. Cosi' non c'e' una seconda
+// password da tenere in giro, e non restano account di prova nell'elenco di
+// chi amministra davvero.
+const SYS_USER = process.env.TEST_ADMIN_USER;
+const SYS_PASS = process.env.TEST_ADMIN_PASSWORD;
+
+/** Fa il login e torna il cookie di sessione, o null. */
+async function accedi(username, password) {
+  const r = await call(adminAuth, { body: { action: "login", username, password } });
+  if (r.status !== 200) return null;
+  const raw = r.headers["Set-Cookie"];
+  return (Array.isArray(raw) ? raw.join("; ") : String(raw || "")).split(";")[0];
+}
+
 section("Accesso admin");
-let cookie = null;
+let cookie = null;        // sessione di livello FDO (account usa-e-getta)
+let sysCookie = null;     // sessione sistemista
+let fdoUsaEGetta = null;  // { id, username, password }
 {
   check("stato iniziale non loggato", (await call(adminAuth, { method: "GET" })).body?.logged === false);
 
-  const bad = await call(adminAuth, { body: { action: "login", username: process.env.FDO_USER, password: "sbagliata" } });
+  const bad = await call(adminAuth, { body: { action: "login", username: SYS_USER, password: "sbagliata" } });
   check("password errata -> 401", bad.status === 401);
   check("nessun cookie emesso", !bad.headers["Set-Cookie"]);
 
   const badUser = await call(adminAuth, { body: { action: "login", username: "root", password: "qualsiasi" } });
   check("stesso errore con utente inesistente", badUser.body?.error === bad.body?.error);
 
-  const pw = process.env.FDO_TEST_PASSWORD;
-  if (!pw) {
-    console.log("  salto  login corretto (serve FDO_TEST_PASSWORD nell'ambiente)");
+  if (!SYS_USER || !SYS_PASS) {
+    console.log("  salto  (servono TEST_ADMIN_USER e TEST_ADMIN_PASSWORD nell'ambiente)");
   } else {
-    const ok = await call(adminAuth, { body: { action: "login", username: process.env.FDO_USER, password: pw } });
+    const ok = await call(adminAuth, { body: { action: "login", username: SYS_USER, password: SYS_PASS } });
     check("login corretto", ok.status === 200, JSON.stringify(ok.body));
     const raw = ok.headers["Set-Cookie"];
     const s = Array.isArray(raw) ? raw.join("; ") : String(raw || "");
     check("cookie HttpOnly + Secure + SameSite=Strict",
       /HttpOnly/.test(s) && /Secure/.test(s) && /SameSite=Strict/.test(s));
-    cookie = s.split(";")[0];
+    sysCookie = s.split(";")[0];
+
+    // L'account FDO temporaneo. Nome con marcatore e numero casuale: se un
+    // giro di test si interrompe a meta' si riconosce a colpo d'occhio quale
+    // riga e' un residuo da togliere.
+    const nome = "zz-test-" + Math.random().toString(36).slice(2, 8);
+    const pw = "Prova-" + Math.random().toString(36).slice(2, 12);
+    const creato = await call(adminData, {
+      body: { action: "accountCreate", username: nome, password: pw, ruolo: "fdo" },
+      cookie: sysCookie,
+    });
+    check("il sistemista crea un account fdo", creato.body?.ok === true, JSON.stringify(creato.body));
+    if (creato.body?.ok) {
+      fdoUsaEGetta = { id: creato.body.id, username: nome, password: pw };
+      cookie = await accedi(nome, pw);
+      check("l'account appena creato riesce ad accedere", Boolean(cookie));
+    }
   }
 }
 
@@ -340,16 +379,11 @@ section("Separazione dei ruoli");
 }
 
 section("Sistemista");
-let sysCookie = null;
 {
-  const pw = process.env.SYSADMIN_TEST_PASSWORD;
-  if (!pw) {
-    console.log("  salto  (serve SYSADMIN_TEST_PASSWORD nell'ambiente)");
+  if (!sysCookie) {
+    console.log("  salto  (serve una sessione sistemista: vedi TEST_ADMIN_USER)");
   } else {
-    const login = await call(adminAuth, { body: { action: "login", username: process.env.SYSADMIN_USER, password: pw } });
-    check("login sistemista", login.status === 200 && login.body?.role === "sistemista", JSON.stringify(login.body));
-    const raw = login.headers["Set-Cookie"];
-    sysCookie = (Array.isArray(raw) ? raw.join("; ") : String(raw || "")).split(";")[0];
+    check("login sistemista", true);
 
     check("puo' leggere le regole",
       (await call(adminData, { body: { action: "recurringList" }, cookie: sysCookie })).body?.ok === true);
@@ -496,6 +530,21 @@ section("Telegram");
 
   check("camera non valida respinta",
     (await call(laundry, { body: { token: TOKEN, action: "telegramCode", room: "xyz" } })).body?.ok === false);
+}
+
+// ─── Pulizia ─────────────────────────────────────────────────────────────────
+//
+// L'account temporaneo va tolto SEMPRE, anche se qualche prova sopra e'
+// fallita: un test rosso che lascia dietro un account amministrativo attivo
+// e' un problema piu' serio del test stesso.
+if (fdoUsaEGetta && sysCookie) {
+  const via = await call(adminData, {
+    body: { action: "accountDelete", id: fdoUsaEGetta.id },
+    cookie: sysCookie,
+  });
+  check("l'account di prova viene cancellato", via.body?.ok === true, JSON.stringify(via.body));
+  const resta = await accedi(fdoUsaEGetta.username, fdoUsaEGetta.password);
+  check("e non riesce piu' ad accedere", resta === null);
 }
 
 // ─── Esito ───────────────────────────────────────────────────────────────────
