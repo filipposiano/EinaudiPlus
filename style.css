@@ -393,3 +393,114 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Ruota di scelta, stile iOS (vedi RuotaPicker.tsx) ─────────────────────
+   Sostituisce sia le griglie di pulsanti (19 fasce = 7 righe = ~280px) sia
+   `<input type="time">`, il cui pannello di sistema su alcuni telefoni si
+   apriva oltre il bordo inferiore e restava invisibile. Qui l'altezza è
+   fissa e il componente vive dentro il modale, quindi non può uscirne. */
+.ruota {
+  position: relative;
+  border-radius: 14px;
+  background: var(--secondary);
+  overflow: hidden;
+}
+
+/* La fascia che segna il centro. `pointer-events: none` è essenziale:
+   altrimenti intercetterebbe i tocchi proprio sulla voce da scegliere. */
+.ruota__banda {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--primary) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 45%, transparent);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.ruota__scorri {
+  height: 100%;
+  overflow-y: scroll;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  outline: none;
+  /* Sfuma sopra e sotto: senza, le voci ai bordi si tagliano di netto e la
+     ruota sembra una lista troncata invece che un cilindro che gira. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
+          mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
+}
+.ruota__scorri::-webkit-scrollbar { display: none; }
+.ruota__scorri:focus-visible { box-shadow: inset 0 0 0 2px var(--primary); border-radius: 14px; }
+
+.ruota__voce {
+  scroll-snap-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono, monospace);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--foreground);
+  cursor: pointer;
+  transition: opacity .12s ease, transform .12s ease;
+  user-select: none;
+}
+
+/* Chi ha chiesto meno animazioni non vuole nemmeno queste. */
+@media (prefers-reduced-motion: reduce) {
+  .ruota__voce { transition: none; }
+}
+
+/* ── Foglio modale: testa e piede fissi, centro scorrevole ────────────────
+   Il problema che risolve, misurato su un telefono da 375x667: il foglio del
+   calendario aveva 692px di contenuto in 567px visibili, e il pulsante
+   "Aggiungi evento" cadeva 93px SOTTO il bordo — invisibile, e senza niente
+   che suggerisse di scorrere per trovarlo.
+
+   Promettere "nessun modale scorre mai" sarebbe una bugia: il regolamento
+   delle sale e' testo lungo e su uno schermo piccolo non ci sta, punto. La
+   promessa che si puo' mantenere e' un'altra, ed e' quella che conta: il
+   contenuto lungo scorre DENTRO il suo riquadro, mentre intestazione e
+   pulsanti restano sempre a schermo. Non si perde mai il comando, e non
+   resta mai niente di irraggiungibile. */
+.foglio-modale {
+  display: flex;
+  flex-direction: column;
+  /* Mai piu' alto dello spazio disponibile: e' cio' che impedisce al piede
+     di finire oltre il bordo inferiore. */
+  max-height: 92%;
+  min-height: 0;
+}
+.foglio-modale__testa,
+.foglio-modale__piede { flex: 0 0 auto; }
+.foglio-modale__corpo {
+  flex: 1 1 auto;
+  min-height: 0;          /* senza, un figlio alto sfonda il contenitore flex */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* Il piede si stacca dal contenuto quando c'e' altro sotto: senza, il
+   pulsante sembra l'ultima riga di un elenco invece che un comando. */
+.foglio-modale__piede {
+  border-top: 1px solid var(--border);
+  background: var(--background);
+}
+
+/* Comando principale dentro un corpo scorrevole.
+   Serve quando il pulsante appartiene a un componente annidato e non puo'
+   essere sollevato nel piede del foglio (es. il modulo della sala polivalente,
+   che vive dentro GiornoSheetAdmin). `sticky` lo tiene incollato al fondo
+   dell'area visibile mentre il resto scorre: misurato, restava 46px sotto il
+   bordo anche dopo aver reso scorrevole il corpo. */
+.foglio-modale__corpo .azione-fissa {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  /* Lo sfondo e' obbligatorio: senza, il contenuto che scorre si vedrebbe in
+     trasparenza sotto il pulsante. */
+  background: var(--background);
+  padding-top: 10px;
+  padding-bottom: 2px;
+  box-shadow: 0 -8px 12px -8px color-mix(in srgb, var(--foreground) 25%, transparent);
+}

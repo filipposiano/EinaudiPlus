@@ -10,6 +10,7 @@ import {
 import * as api from "./api";
 import * as push from "./push";
 import RoomView from "./Rooms";
+import RuotaPicker from "./RuotaPicker";
 import Conferenze from "./Conferenze";
 import AccessibilityPanel from "./AccessibilityPanel";
 import { loadPrefs, savePrefs, applyToDOM, type AccessibilityPrefs } from "./statusConfig";
@@ -437,34 +438,44 @@ function FavPicker({ lang, favs, onAdd, onClose }: {
   const already = favs.some((f)=>f.day===day && f.slot===slot);
   return (
     <div className="absolute inset-0 z-50 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
-      <div className="w-full rounded-t-3xl pt-5 pb-7 px-6 max-h-[88%] overflow-y-auto" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
-        <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background:"color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-lg font-bold" style={{ color:fg }}>{t.addFav}</p>
-          <button onClick={onClose} className="p-2 rounded-xl" style={{ background:chip, color:sub }}><X size={16}/></button>
+      {/* foglio-modale: intestazione e piede fissi, solo il centro scorre. Cosi'
+          il pulsante di conferma non finisce mai sotto il bordo. Vedi style.css. */}
+      <div className="foglio-modale w-full rounded-t-3xl px-6" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
+        <div className="foglio-modale__testa pt-5">
+          <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background:"color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-lg font-bold" style={{ color:fg }}>{t.addFav}</p>
+            <button onClick={onClose} className="p-2 rounded-xl" style={{ background:chip, color:sub }}><X size={16}/></button>
+          </div>
         </div>
 
-        <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.day}</p>
-        <div className="grid grid-cols-7 gap-1 mb-4">
-          {t.days.map((d, i)=>(
-            <button key={i} onClick={()=>setDay(i)} className="py-2 rounded-xl text-xs font-semibold transition-colors"
-              style={ i===day ? { background:RED, color:RED_FG } : { background:chip, color:sub } }>{d}</button>
-          ))}
+        <div className="foglio-modale__corpo">
+          <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.day}</p>
+          <div className="grid grid-cols-7 gap-1 mb-4">
+            {t.days.map((d, i)=>(
+              <button key={i} onClick={()=>setDay(i)} className="py-2 rounded-xl text-xs font-semibold transition-colors"
+                style={ i===day ? { background:RED, color:RED_FG } : { background:chip, color:sub } }>{d}</button>
+            ))}
+          </div>
+
+          {/* Ruota al posto di 19 pulsanti su sette righe: stesse fasce in
+              170px fissi invece di ~280 che crescono col numero di turni. */}
+          <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.timeSlot}</p>
+          <RuotaPicker
+            valori={TIME_SLOTS.map((s) => `${s.start} – ${s.end}`)}
+            indice={slot}
+            onCambia={setSlot}
+            ariaLabel={t.timeSlot}
+          />
         </div>
 
-        <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.timeSlot}</p>
-        <div className="grid grid-cols-3 gap-2 mb-5">
-          {TIME_SLOTS.map((s, i)=>(
-            <button key={i} onClick={()=>setSlot(i)} className="py-2 rounded-xl text-[11px] font-mono font-semibold transition-colors"
-              style={ i===slot ? { background:RED, color:RED_FG } : { background:chip, color:fg } }>{s.start}</button>
-          ))}
+        <div className="foglio-modale__piede pb-7 pt-3">
+          <button onClick={()=>onAdd(day, slot)} disabled={already}
+            className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
+            style={{ background:RED, color:RED_FG, opacity: already ? 0.5 : 1 }}>
+            <Star size={15}/>{already ? t.favAlready : `${t.addFav} · ${t.days[day]} ${TIME_SLOTS[slot].start}`}
+          </button>
         </div>
-
-        <button onClick={()=>onAdd(day, slot)} disabled={already}
-          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
-          style={{ background:RED, color:RED_FG, opacity: already ? 0.5 : 1 }}>
-          <Star size={15}/>{already ? t.favAlready : `${t.addFav} · ${t.days[day]} ${TIME_SLOTS[slot].start}`}
-        </button>
       </div>
     </div>
   );

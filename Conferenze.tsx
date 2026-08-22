@@ -268,12 +268,20 @@ function GiornoSheet({ data, eventi, lang, adminRole, deveCambiare, onClose, onC
   const t = T[lang];
   return (
     <div className="absolute inset-0 z-50 flex items-end" style={{ background: "rgba(0,0,0,0.6)" }} onClick={onClose}>
-      <div className="w-full rounded-t-3xl p-6 pb-8 max-h-[85%] overflow-y-auto" style={{ background: "var(--background)" }} onClick={(e) => e.stopPropagation()}>
-        <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }} />
-        <div className="flex items-center justify-between mb-4">
-          <p className="text-base font-bold capitalize" style={{ color: FG }}>{dataLunga(data, lang)}</p>
-          <button onClick={onClose} className="p-1.5 rounded-lg" style={{ color: SUB, background: CHIP }}><X size={16} /></button>
+      {/* foglio-modale: la data resta sempre in testa, il contenuto scorre
+          sotto. Misurato prima di questa modifica su 375x667: 692px di
+          contenuto in 567px visibili, col pulsante "Aggiungi evento" 93px
+          sotto il bordo e nessun segnale che ci fosse. */}
+      <div className="foglio-modale w-full rounded-t-3xl px-6" style={{ background: "var(--background)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="foglio-modale__testa pt-6">
+          <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }} />
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-base font-bold capitalize" style={{ color: FG }}>{dataLunga(data, lang)}</p>
+            <button onClick={onClose} className="p-1.5 rounded-lg" style={{ color: SUB, background: CHIP }}><X size={16} /></button>
+          </div>
         </div>
+
+        <div className="foglio-modale__corpo pb-6">
 
         {adminRole !== null ? (
           <Suspense fallback={<p className="text-sm" style={{ color: SUB }}>{t.loading}</p>}>
@@ -294,6 +302,7 @@ function GiornoSheet({ data, eventi, lang, adminRole, deveCambiare, onClose, onC
             ))}
           </div>
         )}
+        </div>
       </div>
     </div>
   );

@@ -1178,7 +1178,8 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
       <input style={{ ...S.input, marginBottom: 12 }} placeholder="Note (facoltative)" value={note}
              maxLength={300} onChange={(e) => setNote(e.target.value)} />
 
-      <button style={{ ...S.btn, width: "100%", background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
+      <button className="azione-fissa"
+              style={{ ...S.btn, width: "100%", background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
               disabled={busy} onClick={salva}>
         {busy && eliminando === null
           ? (modifica ? "Salvo…" : "Aggiungo…")
