@@ -15,7 +15,7 @@ const MUTATIONS = new Set([
   "recurringAddLaundry", "recurringAddSpace", "recurringSetActive",
   "recurringDelete", "applyRecurring", "purge",
   "bookDirezione", "bookSpaceDirezione", "clearDirezione",
-  "conferenzaAdd", "conferenzaDelete",
+  "conferenzaAdd", "conferenzaUpdate", "conferenzaDelete",
   "accountCreate", "accountSetPassword", "accountSetActive", "accountDelete",
   "accountChangeOwnPassword",
 ]);
@@ -207,6 +207,20 @@ export default async function handler(req, res) {
             ? null : Number(body.giorno),
           p_note: body.note ? String(body.note) : null,
           p_attore: me.u,
+        });
+        break;
+
+      case "conferenzaUpdate":
+        result = await rpc("conference_update", {
+          p_id: Number(body.id),
+          p_titolo: String(body.titolo || ""),
+          p_ora_inizio: String(body.inizio || ""),
+          p_ora_fine: String(body.fine || ""),
+          p_dal: String(body.dal || ""),
+          p_al: String(body.al || ""),
+          p_giorno_settimana: body.giorno === null || body.giorno === undefined || body.giorno === ""
+            ? null : Number(body.giorno),
+          p_note: body.note ? String(body.note) : null,
         });
         break;
 

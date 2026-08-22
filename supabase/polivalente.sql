@@ -52,7 +52,11 @@ begin
              'data',   g.d::date,
              'inizio', to_char(e.ora_inizio, 'HH24:MI'),
              'fine',   to_char(e.ora_fine,   'HH24:MI'),
-             'ricorrente', e.giorno_settimana is not null and e.al > e.dal
+             'ricorrente', e.giorno_settimana is not null and e.al > e.dal,
+             -- I campi della REGOLA, ripetuti su ogni occorrenza: servono a
+             -- precompilare il modulo di modifica senza un secondo giro di
+             -- rete. Costano pochi byte e tolgono una richiesta a ogni clic.
+             'dal', e.dal, 'al', e.al, 'giorno', e.giorno_settimana
            ) as x
     from conference_event e
     cross join lateral generate_series(
@@ -152,6 +156,78 @@ begin
 end;
 $$;
 
+create or replace function conference_update(
+  p_id bigint,
+  p_titolo text,
+  p_ora_inizio text,
+  p_ora_fine text,
+  p_dal date,
+  p_al date,
+  p_giorno_settimana int default null,
+  p_note text default null
+) returns jsonb language plpgsql as $$
+declare
+  v_in     time := p_ora_inizio::time;
+  v_fi     time := p_ora_fine::time;
+  -- Un evento di un giorno solo non ha cadenza settimanale: vedi 010.
+  v_giorno int  := case when p_dal = p_al then null else p_giorno_settimana end;
+  v_conflitto text;
+  v_quando    date;
+begin
+  if not exists (select 1 from conference_event where id = p_id) then
+    return jsonb_build_object('ok', false, 'error', 'evento non trovato');
+  end if;
+  if p_titolo is null or btrim(p_titolo) = '' then
+    return jsonb_build_object('ok', false, 'error', 'titolo mancante');
+  end if;
+  if v_fi <= v_in then
+    return jsonb_build_object('ok', false, 'error', 'orario non valido');
+  end if;
+  if p_al < p_dal then
+    return jsonb_build_object('ok', false, 'error', 'periodo non valido');
+  end if;
+  if p_al - p_dal > 400 then
+    return jsonb_build_object('ok', false, 'error', 'periodo troppo lungo');
+  end if;
+  if v_giorno is not null and v_giorno not between 0 and 6 then
+    return jsonb_build_object('ok', false, 'error', 'giorno non valido');
+  end if;
+
+  -- Stesso controllo esatto della 012 (si espande l'intersezione dei periodi e
+  -- si cerca una data che soddisfi entrambe le regole), ma saltando se stessa.
+  select e.titolo, g.d::date into v_conflitto, v_quando
+  from conference_event e
+  cross join lateral generate_series(
+    greatest(e.dal, p_dal)::timestamp,
+    least(e.al, p_al)::timestamp,
+    interval '1 day'
+  ) g(d)
+  where e.id <> p_id
+    and v_in < e.ora_fine and e.ora_inizio < v_fi
+    and (e.giorno_settimana is null or extract(isodow from g.d)::int - 1 = e.giorno_settimana)
+    and (v_giorno is null              or extract(isodow from g.d)::int - 1 = v_giorno)
+  order by g.d
+  limit 1;
+
+  if v_conflitto is not null then
+    return jsonb_build_object('ok', false, 'error', 'sovrapposto',
+                              'con', v_conflitto, 'quando', v_quando);
+  end if;
+
+  update conference_event
+  set titolo = left(btrim(p_titolo), 60),
+      ora_inizio = v_in,
+      ora_fine = v_fi,
+      dal = p_dal,
+      al = p_al,
+      giorno_settimana = v_giorno,
+      note = nullif(btrim(coalesce(p_note, '')), '')
+  where id = p_id;
+
+  return conference_agenda(60);
+end;
+$$;
+
 create or replace function conference_delete(p_id bigint)
 returns jsonb language plpgsql as $$
 begin
@@ -179,11 +255,13 @@ $$;
 -- Permessi: come tutto il resto, eseguibili solo dal ruolo che usa /api.
 revoke all on function conference_agenda(int) from public, anon, authenticated;
 revoke all on function conference_add(text, text, text, date, date, int, text, text) from public, anon, authenticated;
+revoke all on function conference_update(bigint, text, text, text, date, date, int, text) from public, anon, authenticated;
 revoke all on function conference_delete(bigint) from public, anon, authenticated;
 revoke all on function conference_rules() from public, anon, authenticated;
 
 grant execute on function conference_agenda(int) to service_role;
 grant execute on function conference_add(text, text, text, date, date, int, text, text) to service_role;
+grant execute on function conference_update(bigint, text, text, text, date, date, int, text) to service_role;
 grant execute on function conference_delete(bigint) to service_role;
 grant execute on function conference_rules() to service_role;
 

@@ -870,83 +870,186 @@ const dataBreve = (iso: string) =>
     { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
 export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
-  // onCambiato NON riceve l'agenda tornata dalla scrittura: conference_add e
-  // conference_delete rispondono con una finestra di 60 giorni, che non e'
-  // per forza quella che il chiamante sta mostrando. Ricarica lui la sua.
+  // onCambiato NON riceve l'agenda tornata dalla scrittura: le funzioni SQL
+  // rispondono con una finestra di 60 giorni, che non e' per forza quella che
+  // il chiamante sta mostrando. Ricarica lui la sua.
   data: string; eventi: Occorrenza[]; onCambiato: () => void | Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
-  // Quale "Elimina" mostra il proprio stato di attesa: con un solo `busy`
+  // Quale "Elimina" mostra il proprio stato di attesa: con un solo stato
   // condiviso, cancellare un evento faceva sembrare in corso anche gli altri
-  // pulsanti Elimina della stessa lista, oltre a non dire nulla su quale dei
-  // due (aggiungi/elimina) stesse effettivamente aspettando la rete — il
-  // motivo per cui sembrava che il pannello "non desse nessun segnale".
+  // pulsanti della stessa lista.
   const [eliminando, setEliminando] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // L'evento che si sta modificando, se ce n'e' uno. Quando e' valorizzato il
+  // modulo qui sotto cambia mestiere: stesso form, "Salva" invece di
+  // "Aggiungi", e la selezione multipla dei giorni sparisce — una riga del
+  // database e' UNA cadenza, e spalmarla su piu' giorni modificandola
+  // vorrebbe dire crearne altre, che non e' quello che chiede chi ha premuto
+  // "Modifica".
+  const [modifica, setModifica] = useState<Occorrenza | null>(null);
+
   const [titolo, setTitolo] = useState("");
   const [inizio, setInizio] = useState("14:00");
   const [fine, setFine] = useState("18:00");
   const [note, setNote] = useState("");
+  const [dal, setDal] = useState(data);
 
-  // Ricorrenza settimanale. Il database la sa già rappresentare: una riga con
-  // `giorno_settimana` valorizzato e un intervallo dal→al è "ogni martedì dal…
-  // al…", espansa in lettura da conference_agenda. Qui si sceglie solo come
-  // calcolare quel `al`.
+  // Ricorrenza. Il database la sa gia' rappresentare: una riga con
+  // giorno_settimana valorizzato e un intervallo dal-al e' "ogni martedi' dal…
+  // al…", espansa in lettura da conference_agenda.
   const [ripete, setRipete] = useState<"mai" | "settimane" | "finoA">("mai");
   const [nSettimane, setNSettimane] = useState(8);
   const [finoA, setFinoA] = useState(data);
 
-  // 0 = lunedì … 6 = domenica, come `giorno_settimana` in tabella.
-  const giornoDellaSettimana = (iso: string) => (new Date(iso + "T00:00:00").getDay() + 6) % 7;
+  // 0 = lunedi' … 6 = domenica, come giorno_settimana in tabella.
+  const giornoDi = (iso: string) => (new Date(iso + "T00:00:00").getDay() + 6) % 7;
   const piuGiorni = (iso: string, n: number) => {
     const d = new Date(iso + "T00:00:00");
     d.setDate(d.getDate() + n);
     return d.toLocaleDateString("sv-SE");
   };
 
-  /** L'ultimo giorno del periodo, secondo la ricorrenza scelta. */
-  function calcolaAl(): string {
-    if (ripete === "settimane") return piuGiorni(data, (Math.max(1, nSettimane) - 1) * 7);
-    if (ripete === "finoA") return finoA;
-    return data;
+  // I giorni della settimana su cui ripetere. Piu' d'uno serve al caso PFP —
+  // "il martedi' e il giovedi'" — che altrimenti obbligava a compilare il
+  // modulo due volte. Ognuno diventa una riga a se': restano cosi'
+  // modificabili e cancellabili separatamente, e il controllo delle
+  // sovrapposizioni continua a ragionare su una cadenza per volta.
+  const [giorni, setGiorni] = useState<number[]>([giornoDi(data)]);
+  const alternaGiorno = (g: number) =>
+    setGiorni((p) => (p.includes(g) ? p.filter((x) => x !== g) : [...p, g].sort()));
+
+  /** La prima data successiva o uguale a daISO che cade nel giorno g. */
+  function primaOccorrenza(daISO: string, g: number) {
+    return piuGiorni(daISO, (g - giornoDi(daISO) + 7) % 7);
   }
 
-  async function aggiungi() {
+  function pulisci() {
+    setModifica(null); setTitolo(""); setNote("");
+    setInizio("14:00"); setFine("18:00");
+    setDal(data); setRipete("mai"); setNSettimane(8); setFinoA(data);
+    setGiorni([giornoDi(data)]);
+  }
+
+  /** Apre il modulo gia' compilato con cio' che l'evento e' adesso. */
+  function apriModifica(o: Occorrenza) {
+    setModifica(o);
+    setMsg(null);
+    setTitolo(o.titolo);
+    setInizio(o.inizio);
+    setFine(o.fine);
+    setNote(o.note ?? "");
+    const d = o.dal ?? o.data;
+    const a = o.al ?? o.data;
+    setDal(d);
+    setFinoA(a);
+    setRipete(a === d ? "mai" : "finoA");
+    setGiorni([o.giorno ?? giornoDi(d)]);
+  }
+
+  /** Messaggio d'errore leggibile, con la data del primo scontro se c'e'. */
+  function spiegaErrore(e: any) {
+    if (e.message !== "sovrapposto") return e.message;
+    const quando = e.quando ? " (primo scontro: " + dataBreve(e.quando) + ")" : "";
+    return 'Si sovrappone a "' + (e.con ?? "un evento") + '" in questo orario' + quando + ".";
+  }
+
+  async function salva() {
     if (!titolo.trim()) { setMsg("Indica un titolo."); return; }
-    const al = calcolaAl();
-    if (al < data) { setMsg("La data di fine è prima di questo giorno."); return; }
+
+    // ── Modifica: una riga sola, la sua cadenza non cambia numero ──────────
+    if (modifica) {
+      const g = giorni[0] ?? giornoDi(dal);
+      const al = ripete === "mai" ? dal
+               : ripete === "settimane" ? piuGiorni(dal, (Math.max(1, nSettimane) - 1) * 7)
+               : finoA;
+      if (al < dal) { setMsg("La data di fine è prima di quella di inizio."); return; }
+      setBusy(true); setMsg(null);
+      try {
+        await call("conferenzaUpdate", {
+          id: modifica.id, titolo: titolo.trim(), inizio, fine,
+          dal, al, giorno: al === dal ? null : g,
+          note: note.trim() || null,
+        });
+        await onCambiato();
+        pulisci();
+      } catch (e: any) { setMsg(spiegaErrore(e)); }
+      finally { setBusy(false); }
+      return;
+    }
+
+    // ── Creazione: un evento singolo, oppure una regola per giorno scelto ──
+    if (ripete === "mai") {
+      setBusy(true); setMsg(null);
+      try {
+        await call("conferenzaAdd", {
+          titolo: titolo.trim(), inizio, fine, dal: data, al: data,
+          giorno: null, note: note.trim() || null,
+        });
+        await onCambiato();
+        pulisci();
+      } catch (e: any) { setMsg(spiegaErrore(e)); }
+      finally { setBusy(false); }
+      return;
+    }
+
+    if (giorni.length === 0) { setMsg("Scegli almeno un giorno della settimana."); return; }
+
+    // Una regola per giorno: ognuna parte dalla prima occorrenza di QUEL
+    // giorno a partire da oggi, non dal giorno cliccato — scegliendo
+    // "martedi'" da un sabato, la serie deve cominciare il martedi' dopo.
     setBusy(true); setMsg(null);
-    try {
-      await call("conferenzaAdd", {
-        titolo: titolo.trim(), inizio, fine, dal: data, al,
-        // Un giorno solo non ha cadenza: si manda null e il database la
-        // azzera comunque (migrazione 010).
-        giorno: al === data ? null : giornoDellaSettimana(data),
-        note: note.trim() || null,
-      });
-      await onCambiato();
-      setTitolo(""); setNote(""); setRipete("mai");
-    } catch (e: any) {
-      // Il database dice anche QUANDO cade il primo conflitto: con una regola
-      // annuale, sapere solo CHE si sovrappone lascia a cercare a mano fra
-      // decine di occorrenze.
-      const quando = e.quando ? ` (primo scontro: ${dataBreve(e.quando)})` : "";
-      setMsg(e.message === "sovrapposto"
-        ? `Si sovrappone a "${e.con ?? "un evento"}" in questo orario${quando}.`
-        : e.message);
-    } finally { setBusy(false); }
+    let creati = 0;
+    const scartati: string[] = [];
+    for (const g of giorni) {
+      const d = primaOccorrenza(data, g);
+      const al = ripete === "settimane"
+        ? piuGiorni(d, (Math.max(1, nSettimane) - 1) * 7)
+        : finoA;
+      if (al < d) { scartati.push(DAYS[g] + " (la data di fine è prima dell'inizio)"); continue; }
+      try {
+        await call("conferenzaAdd", {
+          titolo: titolo.trim(), inizio, fine, dal: d, al,
+          giorno: al === d ? null : g,
+          note: note.trim() || null,
+        });
+        creati++;
+      } catch (e: any) {
+        scartati.push(DAYS[g] + ": " + spiegaErrore(e));
+      }
+    }
+    setBusy(false);
+
+    // Ogni giorno e' indipendente: se il martedi' va a sbattere contro un
+    // altro corso, il giovedi' viene creato comunque e si dice solo quale e'
+    // saltato — invece di annullare tutto e far ricominciare da capo.
+    if (scartati.length === 0) {
+      setMsg(null);
+      pulisci();
+    } else {
+      setMsg(creati + " creat" + (creati === 1 ? "a" : "e") + ", "
+           + scartati.length + " saltat" + (scartati.length === 1 ? "a" : "e")
+           + " — " + scartati.join(" · "));
+    }
+    if (creati > 0) await onCambiato();
   }
 
   async function elimina(id: number, ricorrente: boolean) {
-    // Conferma solo per le ricorrenze: lì il pulsante fa più di quanto la riga
-    // lasci pensare (toglie tutte le occorrenze, non quella che si sta
-    // guardando). Per un evento singolo sarebbe solo un clic in più.
+    // Conferma solo per le ricorrenze: li' il pulsante fa piu' di quanto la
+    // riga lasci pensare (toglie tutte le occorrenze, non quella che si sta
+    // guardando). Per un evento singolo sarebbe solo un clic in piu'.
     if (ricorrente && !confirm("Questo evento si ripete ogni settimana.\n\nEliminandolo spariscono TUTTE le sue occorrenze, non solo quella di questo giorno.")) return;
     setBusy(true); setEliminando(id); setMsg(null);
-    try { await call("conferenzaDelete", { id }); await onCambiato(); }
+    try { await call("conferenzaDelete", { id }); await onCambiato(); if (modifica?.id === id) pulisci(); }
     catch (e: any) { setMsg(e.message); }
     finally { setBusy(false); setEliminando(null); }
   }
+
+  const baseFine = modifica ? dal : primaOccorrenza(data, giorni[0] ?? giornoDi(data));
+  const etichettaFine = ripete === "settimane"
+    ? piuGiorni(baseFine, (Math.max(1, nSettimane) - 1) * 7)
+    : finoA;
 
   return (
     <>
@@ -957,13 +1060,13 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
       ) : (
         <div style={{ display: "grid", gap: 6, marginBottom: 16 }}>
           {eventi.map((o) => (
-            <div key={o.id} className="adm-rule">
+            <div key={o.id} className="adm-rule"
+                 style={modifica?.id === o.id
+                   ? { borderColor: "var(--primary)", background: "color-mix(in srgb, var(--primary) 8%, transparent)" }
+                   : undefined}>
               <span style={{ fontSize: 13, fontWeight: 700 }}>{o.inizio}–{o.fine}</span>
               <span className="adm-rule__what">
                 {o.titolo}
-                {/* Una ricorrenza è una riga sola: il pulsante qui accanto non
-                    toglie questa occorrenza, toglie l'intera regola. Dirlo
-                    prima è meglio che scoprirlo dopo. */}
                 {o.ricorrente && (
                   <span style={{ display: "block", fontSize: 12, ...S.sub }}>
                     Si ripete ogni settimana — eliminando si tolgono tutte le occorrenze
@@ -972,6 +1075,9 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
                 {o.note && <span style={{ display: "block", fontSize: 12, ...S.sub }}>{o.note}</span>}
               </span>
               <span className="adm-rule__act">
+                <button style={S.btn} disabled={busy} onClick={() => apriModifica(o)}>
+                  {modifica?.id === o.id ? "In modifica" : "Modifica"}
+                </button>
                 <button style={S.danger} disabled={busy} onClick={() => elimina(o.id, o.ricorrente)}>
                   {eliminando === o.id ? "Elimino…" : "Elimina"}
                 </button>
@@ -981,17 +1087,24 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
         </div>
       )}
 
-      {/* Linea netta fra "cosa c'e' gia'" e "cosa sto per aggiungere": senza,
-          le due sezioni si leggevano come un blocco solo e non si capiva a
-          colpo d'occhio dove finisse l'elenco e cominciasse il modulo. */}
+      {/* Linea netta fra "cosa c'e' gia'" e "cosa sto per fare". */}
       <div style={{ borderTop: "1px solid var(--border)", margin: "4px 0 16px" }} />
 
-      <p style={{ fontSize: 12, fontWeight: 700, ...S.sub, marginBottom: 8 }}>AGGIUNGI EVENTO</p>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 8 }}>
+        <p style={{ fontSize: 12, fontWeight: 700, ...S.sub, flex: 1 }}>
+          {modifica ? "MODIFICA EVENTO" : "AGGIUNGI EVENTO"}
+        </p>
+        {modifica && (
+          <button style={{ ...S.btn, padding: "4px 10px", fontSize: 12 }} onClick={pulisci}>Annulla</button>
+        )}
+      </div>
+
       <input style={{ ...S.input, marginBottom: 8 }} placeholder="Titolo (es. Corsi PFP)" value={titolo}
              maxLength={60} onChange={(e) => setTitolo(e.target.value)} />
+
       {/* Inizio e fine restano SEMPRE affiancati (vedi .conf-incontro__orari in
-          style.css): su telefono, prima, finivano uno sotto l'altro senza
-          etichetta e sembravano due numeri scollegati invece di un intervallo. */}
+          style.css): su telefono finivano uno sotto l'altro senza etichetta e
+          sembravano due numeri scollegati invece di un intervallo. */}
       <div className="conf-incontro__orari" style={{ marginBottom: 8 }}>
         <div>
           <label>Orario di inizio</label>
@@ -1002,49 +1115,74 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
           <input style={S.input} type="time" value={fine} onChange={(e) => setFine(e.target.value)} />
         </div>
       </div>
-      {/* Ricorrenza. Una regola settimanale è UNA riga nel database, non N
-          copie: cambiarne l'orario le cambia tutte, e cancellarla le libera
-          tutte insieme. */}
+
+      {/* In modifica la data si puo' spostare: e' il "cambia giorno". In
+          creazione e' il giorno che si e' toccato sul calendario. */}
+      {modifica && (
+        <div style={{ marginBottom: 8 }}>
+          <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>
+            {ripete === "mai" ? "Giorno" : "A partire dal"}
+          </label>
+          <input style={S.input} type="date" value={dal} onChange={(e) => setDal(e.target.value)} />
+        </div>
+      )}
+
       <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>Si ripete</label>
       <select style={{ ...S.input, marginBottom: 8 }} value={ripete}
               onChange={(e) => setRipete(e.target.value as typeof ripete)}>
         <option value="mai">Una volta sola</option>
-        <option value="settimane">Ogni {DAYS[giornoDellaSettimana(data)].toLowerCase()}, per N settimane</option>
-        <option value="finoA">Ogni {DAYS[giornoDellaSettimana(data)].toLowerCase()}, fino a una data</option>
+        <option value="settimane">Ogni settimana, per N settimane</option>
+        <option value="finoA">Ogni settimana, fino a una data</option>
       </select>
+
+      {ripete !== "mai" && (
+        <div style={{ marginBottom: 8 }}>
+          <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>
+            {modifica ? "In che giorno" : "In che giorni (se ne possono scegliere più d'uno)"}
+          </label>
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+            {DAYS.map((d, g) => {
+              const scelto = giorni.includes(g);
+              return (
+                <button key={g} type="button"
+                        onClick={() => (modifica ? setGiorni([g]) : alternaGiorno(g))}
+                        style={{
+                          ...S.btn, padding: "6px 10px", fontSize: 12, minWidth: 44,
+                          ...(scelto ? { background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" } : {}),
+                        }}>
+                  {d}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {ripete === "settimane" && (
         <div style={{ marginBottom: 8 }}>
           <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>Quante settimane</label>
           <input style={S.input} type="number" min={1} max={57} value={nSettimane}
                  onChange={(e) => setNSettimane(Number(e.target.value))} />
-          <p style={{ fontSize: 12, ...S.sub, marginTop: 4 }}>
-            Ultima volta: {dataBreve(calcolaAl())}
-          </p>
+          <p style={{ fontSize: 12, ...S.sub, marginTop: 4 }}>Ultima volta: {dataBreve(etichettaFine)}</p>
         </div>
       )}
 
       {ripete === "finoA" && (
         <div style={{ marginBottom: 8 }}>
           <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>Fino al</label>
-          <input style={S.input} type="date" value={finoA} min={data}
+          <input style={S.input} type="date" value={finoA} min={modifica ? dal : data}
                  onChange={(e) => setFinoA(e.target.value)} />
-          {finoA >= data && (() => {
-            const n = Math.floor((Date.parse(finoA) - Date.parse(data)) / 604800000) + 1;
-            return (
-              <p style={{ fontSize: 12, ...S.sub, marginTop: 4 }}>
-                {n} {n === 1 ? "occorrenza" : "occorrenze"}
-              </p>
-            );
-          })()}
         </div>
       )}
 
       <input style={{ ...S.input, marginBottom: 12 }} placeholder="Note (facoltative)" value={note}
              maxLength={300} onChange={(e) => setNote(e.target.value)} />
+
       <button style={{ ...S.btn, width: "100%", background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
-              disabled={busy} onClick={aggiungi}>
-        {busy && eliminando === null ? "Aggiungo…" : "Aggiungi evento"}
+              disabled={busy} onClick={salva}>
+        {busy && eliminando === null
+          ? (modifica ? "Salvo…" : "Aggiungo…")
+          : (modifica ? "Salva modifiche" : "Aggiungi evento")}
       </button>
     </>
   );

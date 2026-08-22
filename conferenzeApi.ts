@@ -18,6 +18,12 @@ export interface Occorrenza {
   inizio: string;      // "14:00"
   fine: string;        // "18:00"
   ricorrente: boolean; // fa parte di una regola che si ripete
+  // I campi della REGOLA da cui questa occorrenza nasce, ripetuti su ognuna.
+  // Servono a precompilare il modulo di modifica senza un secondo giro di rete.
+  dal?: string;
+  al?: string;
+  /** 0 = lunedì … 6 = domenica. null = tutti i giorni del periodo. */
+  giorno?: number | null;
 }
 
 export interface Agenda {
