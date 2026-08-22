@@ -1,22 +1,13 @@
-<!-- Ritiro del bucato.
-     Nessun corpo macchina: una gruccia. E' l'unico dei tre promemoria che non
-     parla di una macchina ma di una cosa da fare — andare a prendere i
-     vestiti — e una sagoma completamente diversa lo dice prima di qualsiasi
-     testo. Prima questo promemoria usava la stessa icona dell'asciugatrice.
-
-     Il gancio sopra le spalle sposta il baricentro della sagoma verso l'alto
-     senza un contrappeso sotto: misurato con getBBox(), il centro reale era
-     a y=78 invece di 96 (il centro del canvas 192), 18 unità più in alto.
-     Le coordinate qui sotto sono quelle originali con +18 su ogni y, cosa
-     che riporta il centro esattamente a 96 senza cambiare la forma. -->
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
-  <rect width="192" height="192" rx="40" fill="#e11d2a"/>
-  <g fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
-    <!-- Gancio -->
-    <path d="M96 92V80a14 14 0 1 1 14-14"/>
-    <!-- Spalle della gruccia -->
-    <path d="M96 92 38 140h116L96 92z"/>
-    <!-- Barra inferiore -->
-    <path d="M38 140h116"/>
-  </g>
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0_1_2)">
+<path d="M152 0H40C17.9086 0 0 17.9086 0 40V152C0 174.091 17.9086 192 40 192H152C174.091 192 192 174.091 192 152V40C192 17.9086 174.091 0 152 0Z" fill="#22C55E"/>
+<path d="M96 92V80C93.2311 80 90.5243 79.1789 88.222 77.6406C85.9197 76.1022 84.1253 73.9157 83.0657 71.3576C82.0061 68.7994 81.7288 65.9845 82.269 63.2687C82.8092 60.553 84.1426 58.0584 86.1005 56.1005C88.0584 54.1426 90.553 52.8092 93.2687 52.269C95.9845 51.7288 98.7994 52.0061 101.358 53.0657C103.916 54.1253 106.102 55.9197 107.641 58.222C109.179 60.5243 110 63.2311 110 66" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M96 92L38 140H154L96 92Z" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M38 140H154" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+</g>
+<defs>
+<clipPath id="clip0_1_2">
+<rect width="192" height="192" fill="white"/>
+</clipPath>
+</defs>
 </svg>
