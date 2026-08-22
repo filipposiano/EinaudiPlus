@@ -36,9 +36,9 @@ returns jsonb language sql stable as $$
       'sample_room', l.room_min::text,
       'quota', l.weekly_quota,
       'reminders', l.reminder_mode,
-      'week_start', current_week_start(l.tz),
+      'week_start', current_laundry_week_start(l.id),
       'bookings', (select count(*) from laundry_booking b
-                   where b.laundry_id = l.id and b.week_start = current_week_start(l.tz)),
+                   where b.laundry_id = l.id and b.week_start = current_laundry_week_start(l.id)),
       'machines', (
         select jsonb_agg(jsonb_build_object(
           'code', m.code, 'kind', m.kind,
@@ -63,7 +63,7 @@ begin
   select * into v_l from laundry where id = p_laundry_id;
   if not found then return jsonb_build_object('ok', false, 'error', 'lavanderia non valida'); end if;
 
-  v_ws := current_week_start(v_l.tz) + (p_offset * 7);
+  v_ws := current_laundry_week_start(v_l.id) + (p_offset * 7);
 
   return jsonb_build_object(
     'ok', true,
@@ -107,7 +107,7 @@ begin
   select * into v_l from laundry where id = p_laundry_id;
   if not found then return jsonb_build_object('ok', false, 'error', 'lavanderia non valida'); end if;
 
-  v_ws := current_week_start(v_l.tz);
+  v_ws := current_laundry_week_start(v_l.id);
 
   insert into laundry_booking (laundry_id, week_start, day, slot, machine_code, room, created_by)
   values (v_l.id, v_ws, p_day, p_slot, p_machine, p_room, 'admin')
@@ -220,7 +220,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'macchina non valida');
   end if;
 
-  v_ws := current_week_start(v_l.tz);
+  v_ws := current_laundry_week_start(v_l.id);
 
   insert into laundry_booking (laundry_id, week_start, day, slot, machine_code, room, created_by)
   values (v_l.id, v_ws, p_day, p_slot, p_machine, 'DIREZIONE', 'admin')

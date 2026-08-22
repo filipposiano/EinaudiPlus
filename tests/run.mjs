@@ -532,6 +532,93 @@ section("Telegram");
     (await call(laundry, { body: { token: TOKEN, action: "telegramCode", room: "xyz" } })).body?.ok === false);
 }
 
+// ─── Confine della settimana ─────────────────────────────────────────────────
+//
+// Il difetto che questa sezione sorveglia: sei dei diciannove slot finiscono
+// dopo la mezzanotte (il 13 va 23:15->00:30, il 18 va 05:30->06:45), quindi uno
+// slot "di domenica" alle 02:00 accade in realta' lunedi'. Client e server
+// datavano quel momento in due settimane diverse, e fra le 00:00 e le 06:59 del
+// lunedi' le prenotazioni della domenica notte sparivano dall'app mentre la
+// lavatrice girava ancora.
+//
+// E' una prova locale, senza rete: verifica un invariante fra due file, non il
+// comportamento del server. Serve proprio perche' nessun test poteva accorgersi
+// del difetto — girando di giorno, i due orologi coincidono sempre.
+
+section("Confine della settimana");
+{
+  // I due numeri che devono restare uguali, letti dalle rispettive sorgenti
+  // invece che riscritti qui: se qualcuno sposta il primo turno da una parte
+  // sola, questa prova cade.
+  const modello = fs.readFileSync(path.join(ROOT, "modello.ts"), "utf8");
+  const schema  = fs.readFileSync(path.join(ROOT, "supabase", "schema.sql"), "utf8");
+
+  const mCli = modello.match(/if \(mins < (\d+) \* (\d+)\)/);
+  const mSrv = schema.match(/slot0_min\s+smallint not null default (\d+)/);
+  check("nowInfo dichiara ancora lo scarto orario", mCli !== null);
+  check("schema.sql dichiara ancora slot0_min", mSrv !== null);
+
+  const scartoClient = mCli ? Number(mCli[1]) * Number(mCli[2]) : NaN;
+  const scartoServer = mSrv ? Number(mSrv[1]) : NaN;
+  check(
+    `client e server iniziano la giornata alla stessa ora (${scartoClient} = ${scartoServer})`,
+    scartoClient === scartoServer,
+    `client ${scartoClient} min, server ${scartoServer} min`
+  );
+
+  // Sweep di una settimana intera: per ogni istante, la settimana che il client
+  // intende deve essere quella che il server calcola.
+  const N_SLOTS = 19;
+  const nowInfo = (d) => {
+    let mins = d.getHours() * 60 + d.getMinutes();
+    let shift = 0;
+    if (mins < scartoClient) { shift = -1; mins += 1440; }
+    const since = mins - scartoClient;
+    const slot = Math.min(Math.floor(since / 75), N_SLOTS - 1);
+    return { base: new Date(d.getFullYear(), d.getMonth(), d.getDate() + shift), slot };
+  };
+  const lunediDi = (d) => {
+    const x = new Date(d);
+    x.setDate(x.getDate() - ((x.getDay() + 6) % 7));
+    x.setHours(0, 0, 0, 0);
+    return x;
+  };
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+  // current_laundry_week_start: date_trunc('week', now() - slot0_min).
+  const settimanaServer = (d) => lunediDi(new Date(d.getTime() - scartoServer * 60000));
+  const settimanaClient = (d) => lunediDi(nowInfo(d).base);
+
+  const disallineati = [];
+  const lunedi = new Date(2026, 7, 24); // 24 ago 2026 e' un lunedi'
+  for (let g = 0; g < 7; g++)
+    for (let h = 0; h < 24; h++)
+      for (const m of [0, 30, 59]) {
+        const d = new Date(2026, 7, 24 + g, h, m);
+        if (iso(settimanaClient(d)) !== iso(settimanaServer(d)))
+          disallineati.push(`${d.toDateString()} ${h}:${m}`);
+      }
+  check(
+    "client e server datano ogni istante nella stessa settimana",
+    disallineati.length === 0,
+    `${disallineati.length} disallineati, primo: ${disallineati[0]}`
+  );
+
+  // Il caso concreto, chiamato per nome: la notte fra domenica e lunedi'.
+  const notte = new Date(2026, 7, 24, 2, 0);        // lunedi' 24 ago, ore 02:00
+  const lunediPrec = new Date(2026, 7, 17);         // il lunedi' della settimana che finisce
+  check(
+    "alle 02:00 del lunedi' si guarda ancora la settimana che finisce",
+    iso(settimanaServer(notte)) === iso(lunediPrec),
+    `atteso ${iso(lunediPrec)}, ottenuto ${iso(settimanaServer(notte))}`
+  );
+  check(
+    "alle 07:00 del lunedi' la settimana e' scattata",
+    iso(settimanaServer(new Date(2026, 7, 24, 7, 0))) === iso(lunedi),
+    `atteso ${iso(lunedi)}, ottenuto ${iso(settimanaServer(new Date(2026, 7, 24, 7, 0)))}`
+  );
+}
+
 // ─── Pulizia ─────────────────────────────────────────────────────────────────
 //
 // L'account temporaneo va tolto SEMPRE, anche se qualche prova sopra e'

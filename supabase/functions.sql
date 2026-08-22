@@ -31,6 +31,27 @@ returns date language sql stable as $$
   select (date_trunc('week', now() at time zone p_tz))::date;
 $$;
 
+-- La settimana "di lavanderia", che comincia il lunedi' all'ora del primo turno
+-- invece che a mezzanotte. Vedi migrations/016 per il difetto che risolve: sei
+-- slot su diciannove finiscono dopo la mezzanotte, e fra le 00:00 e le 06:59 del
+-- lunedi' il client (nowInfo, che prima delle 07:00 sta ancora al giorno prima)
+-- chiedeva una settimana e il server ne serviva un'altra.
+--
+-- Resta separata da current_week_start apposta: quella la usa apply_recurring,
+-- che gira alle 02:00, e spostandole il confine di lunedi' avrebbe applicato le
+-- regole ricorrenti alla settimana in scadenza.
+--
+-- ATTENZIONE: slot0_min qui e il 7*60 dentro nowInfo() sono lo stesso numero in
+-- due posti. Se il primo turno si sposta, vanno cambiati insieme.
+create or replace function current_laundry_week_start(p_laundry_id smallint)
+returns date language sql stable as $$
+  select (date_trunc('week',
+            (now() at time zone l.tz) - make_interval(mins => l.slot0_min)
+          ))::date
+  from laundry l
+  where l.id = p_laundry_id;
+$$;
+
 -- Sostituisce getApiUrl() lato client, che leggeva localStorage a ogni chiamata:
 -- cambiando camera senza ricaricare si poteva leggere una lavanderia e scrivere
 -- sull'altra. Ora la decisione è una sola, server-side.
@@ -97,7 +118,7 @@ begin
   -- Fallback su 'valentino' come faceva getApiUrl() con "return API_URL"
   v_id := coalesce(laundry_for_room(p_room), (select id from laundry where slug = 'valentino'));
   select * into v_l from laundry where id = v_id;
-  v_ws := current_week_start(v_l.tz);
+  v_ws := current_laundry_week_start(v_l.id);
 
   return jsonb_build_object(
     'ok',     true,
@@ -166,7 +187,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'macchina non valida');
   end if;
 
-  v_ws := current_week_start(v_l.tz);
+  v_ws := current_laundry_week_start(v_l.id);
 
   -- La quota settimanale NON viene applicata qui: senza autenticazione la
   -- camera è auto-dichiarata, quindi il blocco fermava solo chi la rispettava
@@ -222,7 +243,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'camera non valida');
   end if;
 
-  v_ws := current_week_start(v_l.tz);
+  v_ws := current_laundry_week_start(v_l.id);
 
   -- Di chi è il turno che si sta per liberare.
   select room into v_di
