@@ -1,0 +1,21 @@
+<!-- Badge delle notifiche push: solo il glifo, sfondo trasparente.
+     Diverso da icon.svg (favicon e icona dell'app, che invece VUOLE il
+     quadrato rosso pieno). Il badge e' la piccola icona monocroma che
+     Android mostra nella barra di stato: il sistema ne legge SOLO il canale
+     alpha e lo ridipinge lui, di solito di bianco, ignorando i colori.
+     Con lo sfondo rosso pieno di icon.svg l'intero quadrato risultava
+     opaco — nessuna trasparenza da cui distinguere la lavatrice dal fondo —
+     e il sistema mostrava un blob pieno, visto da chi segnalava come "un
+     pallino bianco" invece dell'icona. Qui lo sfondo non c'e' proprio: resta
+     trasparente solo dove non c'e' inchiostro, ed e' li' che il glifo si
+     distingue. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <g fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="48" y="36" width="96" height="120" rx="14"/>
+    <path d="M48 64h96"/>
+    <path d="M66 50h.01"/>
+    <path d="M86 50h.01"/>
+    <circle cx="96" cy="112" r="28"/>
+    <path d="M96 134a14 14 0 0 0 0-28 14 14 0 0 1 0-28"/>
+  </g>
+</svg>

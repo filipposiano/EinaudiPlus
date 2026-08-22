@@ -130,7 +130,7 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
   const chip = "var(--secondary)";
   const machLabel = selMachine?.split("-")[1] ?? "";
   // Chi risulta intestatario del turno: una camera, o la Direzione.
-  const intestatario = room === api.DIREZIONE ? "Direzione" : `${t.room} ${room}`;
+  const intestatario = room === api.DIREZIONE ? t.direzioneNome : `${t.room} ${room}`;
 
   /**
    * La camera digitata appartiene all'altro edificio.
@@ -693,7 +693,7 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
                 camera, è chi prenota per conto della struttura. */}
             {t.greeting(now.getHours())}
             {roomNumber === api.DIREZIONE
-              ? <>, <span style={{ color:fg, fontWeight:600 }}>Direzione</span></>
+              ? <>, <span style={{ color:fg, fontWeight:600 }}>{t.direzioneNome}</span></>
               : roomNumber ? <>, {t.camera} <span style={{ color:fg, fontWeight:600 }}>{roomNumber}</span></> : ""}
           </p>
         </div>
@@ -1751,9 +1751,7 @@ function LoginScreen({ lang, onLogin, onAdmin }: {
       {/* Solo da schermo grande: su un telefono la tastiera fisica non c'è e
           la riga sarebbe un'istruzione impossibile da seguire. */}
       <p className="text-[10px] mt-4 hidden md:block" style={{ color:sub }}>
-        {lang === "it"
-          ? "Puoi anche digitare da tastiera e premere Invio."
-          : "You can also type on your keyboard and press Enter."}
+        {t.usaTastiera}
       </p>
 
       <p className="text-[10px] font-mono mt-6" style={{ color:sub }}>v. {APP_VERSION} (beta)</p>

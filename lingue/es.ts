@@ -147,6 +147,10 @@ const es: Testi = {
   lavBreve: "Lav.",
   navProgrammazione: "Programación",
   navAccount: "Cuentas",
+  direzioneNome: "Dirección",
+  sessioneAttiva: (r: string): string => `Sesión ${r} activa: reservas como Dirección. Para salir, toca DIREZIONE arriba.`,
+  telegramAperto: "Telegram está abierto: toca INICIAR en el bot para quedar conectado.",
+  usaTastiera: "También puedes escribir con el teclado y pulsar Intro.",
 };
 
 export default es;

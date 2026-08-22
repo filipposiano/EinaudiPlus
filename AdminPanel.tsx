@@ -38,7 +38,7 @@ type ConfRule = {
 // hash nel database.
 type Account = {
   id: number; username: string; ruolo: Role; attivo: boolean;
-  created_at: string; password_at: string;
+  created_at: string; password_at: string; deve_cambiare_password: boolean;
 };
 
 type Recurring = {
@@ -420,11 +420,13 @@ const IconaArchivia = () => (
   </svg>
 );
 
-const IconaRiapri = () => (
+const IconaAggiorna = () => (
   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M3 12a9 9 0 1 0 3-6.7" />
-    <path d="M3 4v5h5" />
+    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <path d="M3 3v5h5" />
+    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+    <path d="M16 16h5v5" />
   </svg>
 );
 
@@ -489,8 +491,9 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
     finally { setAzione(null); }
   }
 
-  const daGestire = items.filter((f) => !f.handled);
-  const mostrati  = onlyOpen ? daGestire : items;
+  const daGestire  = items.filter((f) => !f.handled);
+  const archiviate = items.filter((f) => f.handled);
+  const mostrati   = onlyOpen ? daGestire : archiviate;
 
   const Scheda = ({ attiva, onClick, label, n }: {
     attiva: boolean; onClick: () => void; label: string; n: number;
@@ -512,23 +515,26 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
       {/* La spiegazione prima dei filtri: stava sotto, quindi si leggeva
           dopo aver gia' dovuto scegliere fra due pulsanti senza sapere
           cosa contenessero. */}
-      {/* Il testo si ferma a 70ch. Una riga lunga quanto uno schermo da 1440px
-          si legge male: l'occhio perde il capo della riga successiva. */}
       <p style={{ fontSize: 13, ...S.sub, marginBottom: 14, maxWidth: "70ch" }}>
-        Qui arrivano le segnalazioni dei residenti, comprese quelle di guasto: da quando il fuori servizio
-        è riservato agli amministratori, è questo il canale con cui si scopre che una macchina è rotta.
+        Qui arrivano le segnalazioni dei residenti, comprese quelle di guasto.
       </p>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
-        <Scheda attiva={onlyOpen}  onClick={() => setOnlyOpen(true)}  label="Da gestire" n={daGestire.length} />
-        <Scheda attiva={!onlyOpen} onClick={() => setOnlyOpen(false)} label="Tutte"      n={items.length} />
-        <button style={{ ...S.btn, marginLeft: "auto" }} disabled={busy} onClick={load}>Aggiorna</button>
+        <Scheda attiva={onlyOpen}  onClick={() => setOnlyOpen(true)}  label="Da gestire"  n={daGestire.length} />
+        <Scheda attiva={!onlyOpen} onClick={() => setOnlyOpen(false)} label="Archiviate" n={archiviate.length} />
+        {/* Solo icona: e' l'unico pulsante di questa riga che non sceglie un
+            filtro, e scriverci "Aggiorna" accanto a due schede piu' grandi lo
+            faceva sembrare un terzo filtro invece che un'azione a parte. */}
+        <button style={{ ...S.btn, marginLeft: "auto", padding: "8px 9px", lineHeight: 0 }}
+                disabled={busy} onClick={load} title="Aggiorna" aria-label="Aggiorna">
+          <IconaAggiorna />
+        </button>
       </div>
 
       {busy && items.length === 0 && <p style={{ fontSize: 13, ...S.sub }}>Caricamento…</p>}
       {!busy && mostrati.length === 0 && (
         <p style={{ fontSize: 13, ...S.sub }}>
-          {onlyOpen ? "Niente da gestire: tutte le segnalazioni sono state chiuse." : "Nessuna segnalazione."}
+          {onlyOpen ? "Niente da gestire: tutte le segnalazioni sono state chiuse." : "Nessuna segnalazione archiviata."}
         </p>
       )}
 
@@ -557,33 +563,35 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
               borderColor: machine && !f.handled ? "var(--destructive)" : "var(--border)",
               opacity: f.handled ? 0.6 : 1,
             }}>
-              {/* Etichetta e camera sulla prima riga, quando sotto: la data
-                  serve a ordinare le priorita', non a identificare la
-                  segnalazione, quindi non compete per lo spazio con quello che
-                  dice DI COSA si tratta. Le righe si accorciano di conseguenza. */}
+              {/* Solo la camera sulla prima riga: la data serve a ordinare le
+                  priorita', non a identificare la segnalazione, quindi non
+                  compete per lo spazio con quello che dice DI COSA si tratta. */}
               <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-                {machine ? (
-                  <span style={{
-                    fontSize: 12, fontWeight: 700, padding: "1px 8px", borderRadius: 99,
-                    background: "color-mix(in srgb, var(--destructive) 12%, transparent)",
-                    color: "var(--destructive-text)",
-                  }}>{tipo} {machine.slice(-1)}</span>
-                ) : (
-                  <span style={{ fontSize: 12, fontWeight: 700, ...S.sub }}>Messaggio</span>
-                )}
                 {/* Solo il numero: la lavanderia si ricava dalla camera (sotto
                     il 100 e' la Manica) e stamparla accanto era una parola in
                     piu' per riga che non aggiungeva niente. */}
-                <span style={{ fontSize: 12 }}>{f.room ? `camera ${f.room}` : "anonimo"}</span>
+                <span style={{ fontSize: 12 }}>{f.room ? `Camera ${f.room}` : "Anonimo"}</span>
               </div>
               <p style={{ fontSize: 10, marginTop: 1, marginBottom: 6, ...S.sub }}
                  title={new Date(f.created_at).toLocaleString("it-IT")}>
                 {quandoRelativo(f.created_at)}
               </p>
 
-              {/* overflowWrap: il testo arriva da chi segnala, e una parola
-                  lunghissima senza spazi allargherebbe la scheda oltre lo schermo. */}
-              {testo && (
+              {/* Una segnalazione di guasto dice cosa e' rotto nella stessa
+                  frase in cui lo dice, invece di un'etichetta ("Asciugatrice
+                  B") separata dalla motivazione scritta sotto: chi legge non
+                  deve piu' ricomporre le due parti da solo.
+                  overflowWrap: il testo arriva da chi segnala, e una parola
+                  lunghissima senza spazi allargherebbe la scheda oltre lo
+                  schermo. */}
+              {machine ? (
+                <p style={{ fontSize: 13, marginBottom: 8, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                  <strong style={{ color: "var(--destructive-text)" }}>
+                    {tipo} {machine.slice(-1)} segnalata come guasta{testo ? ":" : "."}
+                  </strong>
+                  {testo && ` ${testo}`}
+                </p>
+              ) : testo && (
                 <p style={{ fontSize: 13, marginBottom: 8, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{testo}</p>
               )}
 
@@ -625,20 +633,28 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
                 {/* Archivia e' un'icona: e' l'azione che si ripete su ogni
                     scheda e non ha bisogno di rileggersi ogni volta, mentre le
                     decisioni sul guasto restano a parole perche' quelle vanno
-                    lette. Titolo e aria-label tengono il testo per chi passa
-                    col mouse e per i lettori di schermo.
+                    lette. Riportarla indietro dall'archivio invece e' scritta
+                    per esteso: la' dentro e' l'unica azione della scheda, e
+                    un'icona sola in mezzo a schede sbiadite (opacity 0.6) si
+                    perdeva — bisognava sapere gia' cosa significava.
 
-                    Niente `marginLeft: auto`: spingeva l'icona all'estremita'
+                    Niente `marginLeft: auto`: spingeva l'azione all'estremita'
                     della scheda, e su desktop la scheda era larga tutto lo
                     schermo — per archiviare bisognava attraversare il monitor.
                     Sta accanto alle altre azioni, dove si guarda gia'. */}
-                <button
-                  style={{ ...S.btn, padding: "6px 9px", lineHeight: 0 }}
-                  disabled={inCorso} onClick={() => mark(f)}
-                  title={f.handled ? "Riapri la segnalazione" : "Archivia"}
-                  aria-label={f.handled ? "Riapri la segnalazione" : "Archivia"}>
-                  {f.handled ? <IconaRiapri /> : <IconaArchivia />}
-                </button>
+                {f.handled ? (
+                  <button style={{ ...S.btn, padding: "6px 12px", fontSize: 12 }}
+                          disabled={inCorso} onClick={() => mark(f)}>
+                    Riporta a Da gestire
+                  </button>
+                ) : (
+                  <button
+                    style={{ ...S.btn, padding: "6px 9px", lineHeight: 0 }}
+                    disabled={inCorso} onClick={() => mark(f)}
+                    title="Archivia" aria-label="Archivia">
+                    <IconaArchivia />
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -839,15 +855,27 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
 // ─── Sala conferenze ─────────────────────────────────────────────────────────
 //
 // L'unica sala che i residenti non prenotano: la programma la direzione e loro
-// la guardano. Qui si scrivono le REGOLE, non le singole date — "ogni martedi'
-// fino al 30 maggio" e' UNA riga, e correggerne l'orario le corregge tutte
-// insieme invece che quaranta volte.
+// la guardano. Si programma per ATTIVITÀ: un nome (es. "Corsi PFP") e uno o
+// piu' INCONTRI, ciascuno con la propria data e fascia oraria. Ogni incontro
+// diventa una riga a sé nel database (un evento di un giorno solo): non c'e'
+// una tabella "attività" a parte, il nome si limita a essere ripetuto su ogni
+// incontro che lo condivide, e cancellare un incontro non tocca gli altri.
+//
+// Prima il modulo lavorava per REGOLE ("ogni martedì dal 7 ottobre al 30
+// maggio"): piu' compatto per una cadenza regolare, ma un errore nel giorno
+// della settimana rendeva la regola silenziosamente inutile (vedi migrazione
+// 010). L'elenco sotto capisce ancora le regole create prima di questo
+// cambio — vedi quando() — ma il modulo qui sopra ne crea solo di nuove nella
+// forma esplicita, una data alla volta.
 
 const oggiISO = () => new Date().toLocaleDateString("sv-SE");
 
 /** "7 ott 2026" — compatta, per le righe dell'elenco. */
 const dataBreve = (iso: string) =>
   new Date(iso + "T00:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" });
+
+type Incontro = { data: string; inizio: string; fine: string };
+const incontroVuoto = (): Incontro => ({ data: oggiISO(), inizio: "14:00", fine: "18:00" });
 
 function SalaConferenze() {
   const [items, setItems] = useState<ConfRule[]>([]);
@@ -856,13 +884,9 @@ function SalaConferenze() {
 
   // "Corsi PFP" e' il caso per cui la sala esiste: sta gia' scritto e si cambia
   // solo quando serve altro.
-  const [titolo, setTitolo] = useState("Corsi PFP");
-  const [giorno, setGiorno] = useState<string>("1");   // "" = tutti i giorni
-  const [inizio, setInizio] = useState("14:00");
-  const [fine, setFine]     = useState("18:00");
-  const [dal, setDal]       = useState(oggiISO());
-  const [al, setAl]         = useState(oggiISO());
-  const [note, setNote]     = useState("");
+  const [nomeAttivita, setNomeAttivita] = useState("Corsi PFP");
+  const [incontri, setIncontri] = useState<Incontro[]>([incontroVuoto()]);
+  const [note, setNote] = useState("");
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -873,39 +897,58 @@ function SalaConferenze() {
 
   useEffect(() => { load(); }, [load]);
 
+  function aggiornaIncontro(i: number, campo: keyof Incontro, valore: string) {
+    setIncontri((prev) => prev.map((r, idx) => (idx === i ? { ...r, [campo]: valore } : r)));
+  }
+  const aggiungiIncontro = () => setIncontri((prev) => [...prev, incontroVuoto()]);
+  const rimuoviIncontro  = (i: number) => setIncontri((prev) => prev.filter((_, idx) => idx !== i));
+
+  /**
+   * Un incontro alla volta: la sovrapposizione si scopre riga per riga, cosi'
+   * un incontro che va a sbattere contro una programmazione gia' presente non
+   * blocca gli altri — vengono creati comunque, e si segnala solo quello
+   * scartato invece di annullare tutto il lavoro fatto nel modulo.
+   */
   async function aggiungi() {
-    if (!titolo.trim()) { setMsg("Indica un titolo."); return; }
+    if (!nomeAttivita.trim()) { setMsg("Indica il nome dell'attività."); return; }
+    const validi = incontri.filter((i) => i.data && i.inizio && i.fine);
+    if (validi.length === 0) { setMsg("Aggiungi almeno un incontro con data e orario."); return; }
+
     setBusy(true); setMsg(null);
-    try {
-      await call("conferenzaAdd", {
-        titolo: titolo.trim(), inizio, fine, dal, al,
-        // Un evento di un solo giorno non ha un giorno della settimana: si
-        // ignora qui, e non solo lato server, cosi' il selettore disabilitato
-        // (quando dal === al) non lascia comunque passare un valore rimasto
-        // da una modifica precedente del modulo.
-        giorno: dal === al ? null : (giorno === "" ? null : Number(giorno)),
-        note: note.trim() || null,
-      });
-      setMsg("Programmazione aggiunta.");
-      setNote("");
-      load();
-    } catch (e: any) {
-      // Il database rifiuta le sovrapposizioni: ripetere il messaggio qui evita
-      // di far cercare all'utente quale riga dell'elenco gli sta contro.
-      setMsg(e.message === "sovrapposto" ? "Si sovrappone a una programmazione già presente." : e.message);
+    let creati = 0;
+    const scartati: string[] = [];
+    for (const inc of validi) {
+      try {
+        await call("conferenzaAdd", {
+          titolo: nomeAttivita.trim(), inizio: inc.inizio, fine: inc.fine,
+          dal: inc.data, al: inc.data, giorno: null,
+          note: note.trim() || null,
+        });
+        creati++;
+      } catch (e: any) {
+        const motivo = e.message === "sovrapposto" ? "si sovrappone a una programmazione già presente" : e.message;
+        scartati.push(`${dataBreve(inc.data)} ${inc.inizio}–${inc.fine} (${motivo})`);
+      }
     }
-    finally { setBusy(false); }
+    setBusy(false);
+
+    setMsg(scartati.length === 0
+      ? `${creati} incontr${creati === 1 ? "o" : "i"} aggiunt${creati === 1 ? "o" : "i"}.`
+      : `${creati} aggiunt${creati === 1 ? "o" : "i"}, ${scartati.length} scartat${scartati.length === 1 ? "o" : "i"}: ${scartati.join("; ")}`);
+
+    if (creati > 0) { setNomeAttivita(""); setNote(""); setIncontri([incontroVuoto()]); load(); }
   }
 
   async function elimina(r: ConfRule) {
-    if (!confirm(`Eliminare "${r.titolo}"?\n\nSparisce da tutte le date in cui compare.`)) return;
+    if (!confirm(`Eliminare "${r.titolo}" del ${dataBreve(r.dal)}?`)) return;
     setBusy(true);
     try { await call("conferenzaDelete", { id: r.id }); load(); }
     catch (e: any) { setMsg(e.message); }
     finally { setBusy(false); }
   }
 
-  /** "ogni martedì, 7 ott 2026 → 30 mag 2027", o la sola data se e' un giorno solo. */
+  /** "ogni martedì, 7 ott 2026 → 30 mag 2027", o la sola data per un incontro singolo.
+   *  La forma "ogni X" resta solo per le regole create prima di questo modulo. */
   const quando = (r: ConfRule) => {
     if (r.dal === r.al) return dataBreve(r.dal);
     const cadenza = r.giorno === null ? "tutti i giorni" : `ogni ${DAYS[r.giorno].toLowerCase()}`;
@@ -916,41 +959,44 @@ function SalaConferenze() {
     <>
       <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
         La sala conferenze non si prenota: la programma la direzione, i residenti la
-        vedono in sola lettura con l'agenda fino a un anno avanti. Una riga qui è una{" "}
-        <strong>regola</strong>: "ogni martedì fino al 30 maggio" occupa tutti i martedì
-        di quel periodo, e cancellarla li libera tutti insieme.
+        vedono in sola lettura con l'agenda fino a un anno avanti. Dai un nome
+        all'attività e aggiungi i suoi incontri, uno per uno: ciascuno con la propria
+        data e fascia oraria.
       </p>
 
       {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
 
       <div style={{ ...S.card, padding: 18, marginBottom: 16 }}>
         <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Nuova programmazione</h2>
+
+        <input style={{ ...S.input, marginBottom: 12 }} placeholder="Nome attività (es. Corsi PFP)"
+               value={nomeAttivita} maxLength={60} onChange={(e) => setNomeAttivita(e.target.value)} />
+
+        <p style={{ fontSize: 12, fontWeight: 700, ...S.sub, marginBottom: 8 }}>INCONTRI</p>
+        <div style={{ display: "grid", gap: 8, marginBottom: 8 }}>
+          {incontri.map((inc, i) => (
+            <div key={i} className="adm-form" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))" }}>
+              <input style={S.input} type="date" value={inc.data} onChange={(e) => aggiornaIncontro(i, "data", e.target.value)} />
+              <input style={S.input} type="time" value={inc.inizio} onChange={(e) => aggiornaIncontro(i, "inizio", e.target.value)} />
+              <input style={S.input} type="time" value={inc.fine} onChange={(e) => aggiornaIncontro(i, "fine", e.target.value)} />
+              {/* Il primo incontro non si toglie: il modulo deve sempre avere
+                  almeno una riga da compilare. */}
+              {incontri.length > 1 && (
+                <button type="button" style={S.danger} onClick={() => rimuoviIncontro(i)} aria-label="Togli incontro">✕</button>
+              )}
+            </div>
+          ))}
+        </div>
+        <button type="button" style={{ ...S.btn, marginBottom: 12 }} onClick={aggiungiIncontro}>
+          + Aggiungi incontro
+        </button>
+
         <div className="adm-form">
-          <input style={S.input} placeholder="Titolo (es. Corsi PFP)" value={titolo}
-                 maxLength={60} onChange={(e) => setTitolo(e.target.value)} />
-          {/* Disabilitato per un evento di un solo giorno: "ogni martedì" non
-              vuol dire niente quando dal e al sono la stessa data, ed è
-              esattamente quello che il database ignora — qui lo si rende
-              visibile invece di lasciarlo scelto e silenziosamente inutile. */}
-          <select style={S.input} value={giorno} disabled={dal === al}
-                  onChange={(e) => setGiorno(e.target.value)}>
-            {DAYS.map((d, i) => <option key={i} value={String(i)}>Ogni {d.toLowerCase()}</option>)}
-            {/* Per un convegno di giorni consecutivi: nessuna cadenza
-                settimanale, occupa ogni giorno del periodo. */}
-            <option value="">Tutti i giorni del periodo</option>
-          </select>
-          <input style={S.input} type="time" value={inizio} onChange={(e) => setInizio(e.target.value)} />
-          <input style={S.input} type="time" value={fine} onChange={(e) => setFine(e.target.value)} />
-          <input style={S.input} type="date" value={dal} onChange={(e) => setDal(e.target.value)} />
-          <input style={S.input} type="date" value={al} onChange={(e) => setAl(e.target.value)} />
           <input style={S.input} placeholder="Note (facoltative)" value={note}
                  maxLength={300} onChange={(e) => setNote(e.target.value)} />
           <button style={{ ...S.btn, background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
-                  disabled={busy} onClick={aggiungi}>Aggiungi</button>
+                  disabled={busy} onClick={aggiungi}>Crea programmazione</button>
         </div>
-        <p style={{ fontSize: 12, ...S.sub, marginTop: 10 }}>
-          Per un evento di un giorno solo metti la stessa data in "dal" e "al".
-        </p>
       </div>
 
       <div style={{ ...S.card, padding: 18 }}>
@@ -1102,6 +1148,16 @@ function Accounts({ me }: { me: string | null }) {
                 <span style={{ fontSize: 11, fontWeight: 700, ...S.sub, textTransform: "uppercase" }}>{a.ruolo}</span>
                 <span className="adm-rule__what">
                   {a.username}{a.username === me && <span style={{ ...S.sub }}> (tu)</span>}
+                  {/* Chi non ha ancora fatto il primo accesso non ha ancora
+                      scelto una password sua: sta ancora usando quella data
+                      dal sistemista alla creazione (o all'ultimo reset). */}
+                  {a.deve_cambiare_password && (
+                    <span style={{
+                      marginLeft: 8, fontSize: 11, fontWeight: 700, padding: "1px 8px", borderRadius: 99,
+                      background: "color-mix(in srgb, var(--destructive) 12%, transparent)",
+                      color: "var(--destructive-text)",
+                    }}>In attesa del primo accesso</span>
+                  )}
                   <span style={{ display: "block", fontSize: 12, ...S.sub }}>
                     creato il {etichettaData(a.created_at)} · password aggiornata il {etichettaData(a.password_at)}
                   </span>
@@ -1270,6 +1326,67 @@ export async function adminLogout() {
   });
 }
 
+// ─── Cambio password obbligato ────────────────────────────────────────────────
+//
+// Un account creato (o reimpostato) dal sistemista parte con una password che
+// il sistemista stesso conosce ancora: gliel'ha appena scelta lui per
+// comunicargliela. Al primo accesso, prima di poter fare qualunque altra
+// cosa, il titolare deve sceglierne una sua — da quel momento il sistemista
+// smette di conoscerla.
+function CambiaPasswordObbligata({ onFatto }: { onFatto: () => void }) {
+  const [attuale, setAttuale] = useState("");
+  const [nuova, setNuova] = useState("");
+  const [conferma, setConferma] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (nuova.length < 8) { setErr("La nuova password deve avere almeno 8 caratteri."); return; }
+    if (nuova !== conferma) { setErr("Le due password non coincidono."); return; }
+    setBusy(true); setErr(null);
+    try {
+      await call("accountChangeOwnPassword", { password_attuale: attuale, password_nuova: nuova });
+      onFatto();
+    } catch (e: any) {
+      setErr(e.message);
+    } finally { setBusy(false); }
+  }
+
+  return (
+    <div style={{ display: "grid", placeItems: "center", padding: "20px 4px" }}>
+      <form onSubmit={submit} style={{ ...S.card, padding: 24, width: "100%", maxWidth: 360 }}>
+        <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 8 }}>Scegli una password</h2>
+        <p style={{ fontSize: 13, ...S.sub, marginBottom: 18 }}>
+          Prima di continuare devi impostare una password tua: quella attuale te l'ha
+          data chi ha creato (o reimpostato) questo account.
+        </p>
+
+        <label style={{ fontSize: 12, ...S.sub }}>Password attuale</label>
+        <input style={{ ...S.input, marginTop: 4, marginBottom: 12 }} type="password"
+               value={attuale} onChange={(e) => setAttuale(e.target.value)} autoFocus />
+
+        <label style={{ fontSize: 12, ...S.sub }}>Nuova password</label>
+        <input style={{ ...S.input, marginTop: 4, marginBottom: 12 }} type="password"
+               value={nuova} onChange={(e) => setNuova(e.target.value)} />
+
+        <label style={{ fontSize: 12, ...S.sub }}>Ripeti la nuova password</label>
+        <input style={{ ...S.input, marginTop: 4, marginBottom: 16 }} type="password"
+               value={conferma} onChange={(e) => setConferma(e.target.value)} />
+
+        {err && <p style={{ fontSize: 13, color: "var(--destructive-text)", marginBottom: 12 }}>{err}</p>}
+
+        <button type="submit" disabled={busy} style={{
+          ...S.btn, width: "100%", background: "var(--primary)",
+          color: "var(--primary-foreground)", borderColor: "transparent",
+        }}>
+          {busy ? "…" : "Conferma"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 // Il login sta in una scheda a se' perche' e' l'unico punto d'ingresso: le
 // sezioni amministrative vere e proprie vivono nella navigazione, accanto a
 // Lavanderia / Cinema / Musica, e compaiono li' solo dopo l'accesso.
@@ -1321,6 +1438,7 @@ export function AdminScreens({ tab, onSession }: {
   const [logged, setLogged] = useState<boolean | null>(null);
   const [role, setRole] = useState<Role | null>(null);
   const [username, setUsername] = useState<string | null>(null);
+  const [deveCambiare, setDeveCambiare] = useState(false);
   const [laundries, setLaundries] = useState<Laundry[]>([]);
 
   const loadOverview = useCallback(async () => {
@@ -1335,6 +1453,7 @@ export function AdminScreens({ tab, onSession }: {
         setLogged(Boolean(d.logged));
         setRole(d.role || null);
         setUsername(d.user || null);
+        setDeveCambiare(Boolean(d.deve_cambiare_password));
         onSession(d.logged ? (d.role as Role) : null);
       })
       .catch(() => { setLogged(false); onSession(null); });
@@ -1362,6 +1481,19 @@ export function AdminScreens({ tab, onSession }: {
           La sessione amministrativa non è attiva.
         </p>
         <Login onDone={refreshSession} />
+      </div>
+    );
+  }
+
+  // Un account appena creato (o con la password appena reimpostata) non puo'
+  // fare nient'altro finche' non sceglie una password sua: qui la sala
+  // d'attesa sostituisce QUALUNQUE scheda, a prescindere da quale sia stata
+  // scelta in navigazione — altrimenti bastava restare su Macchine per
+  // rimandare la scelta all'infinito.
+  if (deveCambiare) {
+    return (
+      <div style={{ paddingBottom: 40, color: "var(--foreground)" }}>
+        <CambiaPasswordObbligata onFatto={refreshSession} />
       </div>
     );
   }

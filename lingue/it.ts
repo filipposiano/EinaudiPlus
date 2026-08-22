@@ -157,6 +157,10 @@ const it = {
   lavBreve: "Lav.",
   navProgrammazione: "Programmazione",
   navAccount: "Account",
+  direzioneNome: "Direzione",
+  sessioneAttiva: (r: string): string => `Sessione ${r} attiva: prenoti come Direzione. Per uscire tocca DIREZIONE in alto.`,
+  telegramAperto: "Ho aperto Telegram: tocca AVVIA nel bot e sei collegato.",
+  usaTastiera: "Puoi anche digitare da tastiera e premere Invio.",
 };
 
 export default it;

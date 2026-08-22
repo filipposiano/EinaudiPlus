@@ -10,11 +10,22 @@ import { rpc } from "../_lib/db.js";
 export default async function handler(req, res) {
   if (!methodOk(req, res, ["POST", "GET"])) return;
 
-  // GET = "chi sono": serve al pannello per sapere se mostrare il login.
+  // GET = "chi sono": serve al pannello per sapere se mostrare il login, e se
+  // mostrare al suo posto la schermata di cambio password obbligato.
   if (req.method === "GET") {
     const me = currentAdmin(req);
+    // Solo gli account nella tabella hanno questo obbligo: uno storico via
+    // env var non ha una riga da controllare, quindi non gli si applica.
+    let deveCambiare = false;
+    if (me) {
+      try {
+        const row = await rpc("account_by_username", { p_username: me.u });
+        deveCambiare = Boolean(row?.deve_cambiare_password);
+      } catch { /* se il database non risponde non si blocca comunque l'accesso */ }
+    }
     return json(res, 200, {
       ok: true, logged: Boolean(me), user: me?.u || null, role: me?.r || null,
+      deve_cambiare_password: deveCambiare,
     });
   }
 

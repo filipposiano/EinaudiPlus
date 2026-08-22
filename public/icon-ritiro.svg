@@ -2,15 +2,21 @@
      Nessun corpo macchina: una gruccia. E' l'unico dei tre promemoria che non
      parla di una macchina ma di una cosa da fare — andare a prendere i
      vestiti — e una sagoma completamente diversa lo dice prima di qualsiasi
-     testo. Prima questo promemoria usava la stessa icona dell'asciugatrice. -->
+     testo. Prima questo promemoria usava la stessa icona dell'asciugatrice.
+
+     Il gancio sopra le spalle sposta il baricentro della sagoma verso l'alto
+     senza un contrappeso sotto: misurato con getBBox(), il centro reale era
+     a y=78 invece di 96 (il centro del canvas 192), 18 unità più in alto.
+     Le coordinate qui sotto sono quelle originali con +18 su ogni y, cosa
+     che riporta il centro esattamente a 96 senza cambiare la forma. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
   <rect width="192" height="192" rx="40" fill="#e11d2a"/>
   <g fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round">
     <!-- Gancio -->
-    <path d="M96 74V62a14 14 0 1 1 14-14"/>
+    <path d="M96 92V80a14 14 0 1 1 14-14"/>
     <!-- Spalle della gruccia -->
-    <path d="M96 74 38 122h116L96 74z"/>
+    <path d="M96 92 38 140h116L96 92z"/>
     <!-- Barra inferiore -->
-    <path d="M38 122h116"/>
+    <path d="M38 140h116"/>
   </g>
 </svg>

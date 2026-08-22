@@ -147,6 +147,10 @@ const en: Testi = {
   lavBreve: "Wash.",
   navProgrammazione: "Scheduling",
   navAccount: "Accounts",
+  direzioneNome: "Front desk",
+  sessioneAttiva: (r: string): string => `${r} session active: you book as Direzione. Tap DIREZIONE at the top to sign out.`,
+  telegramAperto: "Telegram is open: tap START in the bot and you're linked.",
+  usaTastiera: "You can also type on your keyboard and press Enter.",
 };
 
 export default en;

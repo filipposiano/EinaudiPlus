@@ -30,13 +30,16 @@ self.addEventListener("push", (event) => {
   const title = data.title || "Lavanderia";
   const options = {
     body: data.body || "",
-    // `icon` (grande, a destra) e `badge` (piccola, mascherata in monocromo
-    // dal sistema) erano lo stesso file: sulla stessa notifica comparivano
-    // due volte la stessa immagine colorata. Ora l'icona grande mostra
-    // lavatrice o asciugatrice a seconda del promemoria, la badge resta il
-    // logo dell'app — il sistema la trasforma comunque in una sagoma bianca.
+    // `icon` (grande, a destra) e `badge` (piccola, nella barra di stato)
+    // sono due file diversi apposta. Il badge, su Android, il sistema lo
+    // legge SOLO dal canale alpha e lo ridipinge lui — motivo per cui
+    // icon-badge.svg ha lo sfondo trasparente e nient'altro che il glifo:
+    // con lo sfondo rosso PIENO di icon.svg (usato qui fino a poco fa)
+    // l'intero quadrato risultava opaco, senza trasparenza da cui
+    // distinguere la lavatrice dal fondo, e compariva un blob pieno — "un
+    // pallino bianco" invece dell'icona, su alcuni dispositivi.
     icon: iconFor(data.kind),
-    badge: "/icon.svg",
+    badge: "/icon-badge.svg",
     tag: data.tag || "laundry-reminder",
     renotify: true,
     data: { url: data.url || "/" },

@@ -5,7 +5,7 @@
 
 import { rpc } from "../_lib/db.js";
 import { readBody, json, fail, methodOk, intero } from "../_lib/http.js";
-import { currentAdmin, isSysadmin, hashPassword } from "../_lib/auth.js";
+import { currentAdmin, isSysadmin, hashPassword, verifyPassword } from "../_lib/auth.js";
 
 // Le azioni che modificano qualcosa finiscono nell'audit log. Le letture no,
 // sarebbero solo rumore.
@@ -17,6 +17,7 @@ const MUTATIONS = new Set([
   "bookDirezione", "bookSpaceDirezione", "clearDirezione",
   "conferenzaAdd", "conferenzaDelete",
   "accountCreate", "accountSetPassword", "accountSetActive", "accountDelete",
+  "accountChangeOwnPassword",
 ]);
 
 // Riservate al sistemista. La portineria non le vede nel pannello, ma il
@@ -242,6 +243,26 @@ export default async function handler(req, res) {
         result = await rpc("account_delete", { p_id: Number(body.id) });
         break;
 
+      // Cambio password fatto dal titolare per se' stesso: nessuna sessione
+      // sistemista richiesta, ma serve la password attuale (quella data
+      // dall'admin alla creazione o al reset) per dimostrare di essere lui.
+      // Non si applica agli account storici via env var: quelli non hanno
+      // una riga da aggiornare, e lo si dice chiaro invece di un generico
+      // "account non trovato".
+      case "accountChangeOwnPassword": {
+        const attuale = String(body.password_attuale || "");
+        const nuova = String(body.password_nuova || "");
+        if (nuova.length < 8) return fail(res, "la nuova password deve avere almeno 8 caratteri");
+        const row = await rpc("account_by_username", { p_username: me.u });
+        if (!row?.id) return fail(res, "questo account non gestisce la password da qui: è configurato su Vercel");
+        if (!verifyPassword(attuale, row.password_hash)) return fail(res, "password attuale non corretta");
+        result = await rpc("account_set_own_password", {
+          p_username: me.u,
+          p_password_hash: hashPassword(nuova),
+        });
+        break;
+      }
+
       // ── Sistemista: regole ricorrenti ────────────────────────────────────
       case "recurringList":
         result = await rpc("recurring_list");
@@ -300,10 +321,15 @@ export default async function handler(req, res) {
     }
 
     if (MUTATIONS.has(action)) {
-      // La password non deve mai finire nell'audit log, nemmeno hashata:
+      // Le password non devono mai finire nell'audit log, nemmeno hashate:
       // chi lo legge deve sapere CHE un account e' stato creato o ha
-      // cambiato password, non conoscerne il segreto.
-      const { action: _drop, password: _pw, ...detail } = body;
+      // cambiato password, non conoscerne il segreto. Un filtro sul nome del
+      // campo invece di elencare ogni possibile chiave ("password",
+      // "password_attuale", "password_nuova", ...) resta valido anche se in
+      // futuro se ne aggiunge un'altra.
+      const detail = Object.fromEntries(
+        Object.entries(body).filter(([k]) => k !== "action" && !k.toLowerCase().includes("password"))
+      );
       try {
         await rpc("admin_log", { p_actor: me.u, p_action: action, p_detail: detail });
       } catch { /* il log non deve far fallire l'operazione */ }

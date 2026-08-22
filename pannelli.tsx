@@ -32,7 +32,6 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
   adminRole: AdminRole | null;
   onLang: (l: Lang) => void; onAccessibility: () => void; onClose: () => void;
 }) {
-  const it = lang === "it";
   // Le lingue non sono più due: al posto dell'interruttore c'è un elenco che
   // si apre. Vive qui e non in un foglio a parte perché è una riga sola che
   // si espande — aprire un altro pannello sopra questo, per scegliere fra sei
@@ -145,10 +144,12 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
             <span>
               {/* Il ruolo per esteso, non "sistemista oppure FDO": da quando
                   esiste anche `staff`, quel ternario avrebbe etichettato lo
-                  staff come portineria. */}
-              {it
-                ? `Sessione ${etichettaRuolo(adminRole)} attiva: prenoti come Direzione. Per uscire tocca DIREZIONE in alto.`
-                : `${etichettaRuolo(adminRole)} session active: you book as Direzione. Tap DIREZIONE at the top to sign out.`}
+                  staff come portineria.
+
+                  Prima un ternario it/en: chi guardava l'app in francese,
+                  tedesco o spagnolo vedeva comunque questa frase in inglese,
+                  perche' il ternario copriva solo due lingue su sei. */}
+              {T[lang].sessioneAttiva(etichettaRuolo(adminRole))}
             </span>
           </p>
         )}
@@ -172,7 +173,6 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
   lang: Lang; room: string | null; state: push.ReminderState;
   busy: boolean; onToggle: () => void; onClose: () => void;
 }) {
-  const it = lang === "it";
   const [code, setCode] = useState<string | null>(null);
   const [tgBusy, setTgBusy] = useState(false);
   const [tgErr, setTgErr] = useState(false);
@@ -283,9 +283,7 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
             {code && (
               <div className="mt-3 pt-3" style={{ borderTop:"1px solid var(--border)" }}>
                 <p className="text-xs" style={{ color:"var(--foreground)" }}>
-                  {it
-                    ? "Ho aperto Telegram: tocca AVVIA nel bot e sei collegato."
-                    : "Telegram is open: tap START in the bot and you're linked."}
+                  {T[lang].telegramAperto}
                 </p>
                 {/* Riserva, non il percorso principale: serve solo se
                     l'apertura automatica non è andata a buon fine (popup

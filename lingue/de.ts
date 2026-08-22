@@ -147,6 +147,10 @@ const de: Testi = {
   lavBreve: "WM",
   navProgrammazione: "Programm",
   navAccount: "Konten",
+  direzioneNome: "Verwaltung",
+  sessioneAttiva: (r: string): string => `${r}-Sitzung aktiv: du buchst als Verwaltung. Zum Abmelden oben auf DIREZIONE tippen.`,
+  telegramAperto: "Telegram ist offen: tippe im Bot auf START, um dich zu verbinden.",
+  usaTastiera: "Du kannst auch über die Tastatur eingeben und Enter drücken.",
 };
 
 export default de;
