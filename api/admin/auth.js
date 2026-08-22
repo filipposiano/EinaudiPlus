@@ -14,8 +14,9 @@ export default async function handler(req, res) {
   // mostrare al suo posto la schermata di cambio password obbligato.
   if (req.method === "GET") {
     const me = currentAdmin(req);
-    // Solo gli account nella tabella hanno questo obbligo: uno storico via
-    // env var non ha una riga da controllare, quindi non gli si applica.
+    // Serve al pannello per decidere se mostrare la sala d'attesa. Non e'
+    // qui che l'obbligo viene imposto: quello lo fa data.js a ogni azione,
+    // perche' una schermata si aggira parlando all'API direttamente.
     let deveCambiare = false;
     if (me) {
       try {

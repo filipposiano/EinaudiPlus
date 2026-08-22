@@ -70,6 +70,40 @@ export default async function handler(req, res) {
     return json(res, 403, { ok: false, error: "riservato a FDO e sistemista" });
   }
 
+  // Chi ha ancora la password provvisoria non puo' fare altro che cambiarla.
+  //
+  // Il pannello lo impedisce gia' con una schermata che sostituisce qualunque
+  // scheda, ma quella e' una cortesia verso chi il pannello lo usa: `curl` o
+  // la console del browser parlano a questo endpoint direttamente, e finivano
+  // per lavorare benissimo. Il divieto sembrava esserci e non c'era —
+  // verificato creando un account e facendogli fare un'azione senza cambiare
+  // la password: 200, riuscita.
+  //
+  // Conta perche' la provvisoria e' la password piu' debole del sistema: la
+  // detta un admin a voce o per messaggio, ed era proprio quella a restare
+  // buona a tempo indeterminato per chi non apriva il pannello.
+  //
+  // Costa una lettura in piu' a ogni azione. Si potrebbe evitare mettendo il
+  // flag nel cookie firmato, ma un reset fatto dall'admin non toccherebbe le
+  // sessioni gia' aperte: qui la domanda si fa a chi la risposta ce l'ha.
+  if (action !== "accountChangeOwnPassword") {
+    let deveCambiare = false;
+    try {
+      const row = await rpc("account_by_username", { p_username: me.u });
+      deveCambiare = Boolean(row?.deve_cambiare_password);
+    } catch {
+      // Database muto: si lascia passare, ma non e' una falla — ogni azione
+      // qui sotto finisce comunque sul database e fallira' da sola.
+    }
+    if (deveCambiare) {
+      return json(res, 403, {
+        ok: false,
+        error: "cambia la password provvisoria prima di continuare",
+        deve_cambiare_password: true,
+      });
+    }
+  }
+
   // I campi numerici si controllano tutti qui, una volta, invece che a ogni
   // `Number(body.x)` sparso nello switch. `Number("pippo")` da' NaN, che
   // diventa `null` una volta serializzato: le guardie SQL (`not between`) su
@@ -306,15 +340,15 @@ export default async function handler(req, res) {
       // Cambio password fatto dal titolare per se' stesso: nessuna sessione
       // sistemista richiesta, ma serve la password attuale (quella data
       // dall'admin alla creazione o al reset) per dimostrare di essere lui.
-      // Non si applica agli account storici via env var: quelli non hanno
-      // una riga da aggiornare, e lo si dice chiaro invece di un generico
-      // "account non trovato".
+      //
+      // E' l'unica azione ammessa a chi ha ancora la password provvisoria:
+      // la guardia in testa all'handler lascia passare solo questa.
       case "accountChangeOwnPassword": {
         const attuale = String(body.password_attuale || "");
         const nuova = String(body.password_nuova || "");
         if (nuova.length < 8) return fail(res, "la nuova password deve avere almeno 8 caratteri");
         const row = await rpc("account_by_username", { p_username: me.u });
-        if (!row?.id) return fail(res, "questo account non gestisce la password da qui: è configurato su Vercel");
+        if (!row?.id) return fail(res, "account non trovato");
         if (!verifyPassword(attuale, row.password_hash)) return fail(res, "password attuale non corretta");
         result = await rpc("account_set_own_password", {
           p_username: me.u,

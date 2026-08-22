@@ -301,6 +301,42 @@ let fdoUsaEGetta = null;  // { id, username, password }
       fdoUsaEGetta = { id: creato.body.id, username: nome, password: pw };
       cookie = await accedi(nome, pw);
       check("l'account appena creato riesce ad accedere", Boolean(cookie));
+
+      // La password provvisoria apre la sessione ma non fa fare niente.
+      //
+      // Il pannello mostra gia' una sala d'attesa al posto di qualunque
+      // scheda, ma quella e' una cortesia verso chi il pannello lo usa: chi
+      // parla all'API direttamente la scavalca. Verificato una volta che si
+      // poteva davvero (azione riuscita, 200), ora il server rifiuta — e
+      // questa prova serve ad accorgersene se un domani tornasse a essere
+      // solo una schermata.
+      const conProvvisoria = await call(adminData, {
+        body: { action: "week", laundry_id: 1, offset: 0 },
+        cookie,
+      });
+      check("con la password provvisoria le azioni sono respinte",
+        conProvvisoria.status === 403, `ricevuto ${conProvvisoria.status}`);
+
+      const pwScelta = "Scelta-" + Math.random().toString(36).slice(2, 12);
+      const cambio = await call(adminData, {
+        body: {
+          action: "accountChangeOwnPassword",
+          password_attuale: pw, password_nuova: pwScelta,
+        },
+        cookie,
+      });
+      check("ma cambiare la password si puo' (e' l'unica azione ammessa)",
+        cambio.body?.ok === true, JSON.stringify(cambio.body));
+
+      if (cambio.body?.ok) {
+        fdoUsaEGetta.password = pwScelta;
+        const dopo = await call(adminData, {
+          body: { action: "week", laundry_id: 1, offset: 0 },
+          cookie,
+        });
+        check("e da li' in poi lavora normalmente",
+          dopo.body?.ok === true, JSON.stringify(dopo.body).slice(0, 120));
+      }
     }
   }
 }
