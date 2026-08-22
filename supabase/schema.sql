@@ -120,6 +120,11 @@ create table room_space (
   name        text not null,
   max_per_day smallint not null default 6,
   has_type    boolean  not null default false,
+  -- Descrittive, non applicate: nessuna funzione le legge, e book_space
+  -- accetta qualunque fascia dentro le 24 ore. L'orario di apertura lo
+  -- impone il client (ROOM_CFG in Rooms.tsx), che e' anche l'unico posto da
+  -- cambiare se un giorno una sala apre prima. Restano qui perche' dicono a
+  -- chi legge lo schema come sono pensate le due sale.
   open_min    smallint not null default 0,
   close_min   smallint not null default 1440
 );

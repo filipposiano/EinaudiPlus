@@ -30,13 +30,20 @@ const fmtMin = (m: number) => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
 const TODAY = (new Date().getDay() + 6) % 7; // 0 = Lunedì
 
 // Finestra oraria e tipo per ciascuna sala
-// `overnight`: se la sala si può tenere oltre la mezzanotte. Vero per il
-// cinema, che è già prenotabile 0–24 e dove una proiezione che finisce all'una
-// è normale. Falso per la musica, che chiude alle 23 — lì una fascia notturna
-// sarebbe una regola nuova, non un limite tecnico da togliere.
+// `overnight`: se la sala si può tenere oltre la mezzanotte. Vero per
+// entrambe: una prova che finisce all'una capita quanto una proiezione.
+//
+// `winStart`/`winEnd` restano diversi perché sono l'orario di apertura: la
+// musica non si prenota prima delle 9, e la sua griglia arriva alle 23. Ma
+// quello limita quando si COMINCIA, non quando si finisce — la coda oltre la
+// mezzanotte la costruisce endOptions() a parte, e sconfina di proposito.
+//
+// Nota: questi valori vivono solo qui. Le colonne open_min/close_min di
+// room_space dicono le stesse ore ma non le applica nessuno — il database
+// accetta qualunque fascia dentro le 24 ore.
 const ROOM_CFG: Record<RoomKind, { winStart: number; winEnd: number; step: number; overnight: boolean }> = {
   cinema: { winStart: 0,       winEnd: 24 * 60, step: 30, overnight: true },
-  music:  { winStart: 9 * 60,  winEnd: 23 * 60, step: 30, overnight: false },
+  music:  { winStart: 9 * 60,  winEnd: 23 * 60, step: 30, overnight: true },
 };
 
 function timeOptions(winStart: number, winEnd: number, step: number) {
@@ -63,10 +70,14 @@ function endOptions(start: number, cfg: { winEnd: number; step: number; overnigh
   const out: number[] = [];
   for (let m = start + cfg.step; m <= cfg.winEnd; m += cfg.step) out.push(m);
   if (!cfg.overnight) return out;
-  // La coda notturna si ferma prima di richiudere il cerchio sull'orario di
-  // partenza: una prenotazione di 24 ore esatte non ha senso e il database la
-  // rifiuterebbe comunque.
-  for (let m = 24 * 60 + cfg.step; m < start + 24 * 60; m += cfg.step) out.push(m);
+  // La coda riparte da dove finisce la griglia della sala, non dalla
+  // mezzanotte: per il cinema le due cose coincidono (chiude alle 24), per la
+  // musica no. Partendo fisso da 24:00 la lista della musica saltava da 23:00
+  // a 00:30, perdendo per strada le 23:30 e la mezzanotte esatta.
+  //
+  // Si ferma prima di richiudere il cerchio sull'orario di partenza: una
+  // prenotazione di 24 ore esatte non ha senso e il database la rifiuterebbe.
+  for (let m = cfg.winEnd + cfg.step; m < start + 24 * 60; m += cfg.step) out.push(m);
   return out;
 }
 

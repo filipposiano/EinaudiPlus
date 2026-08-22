@@ -223,6 +223,49 @@ section("Sale cinema e musica");
     if (r.body?.ok) removed++;
   }
   check("cancellazione e pulizia", removed === 2, `rimosse ${removed} su 2`);
+
+  // ── Oltre la mezzanotte, sala musica ──────────────────────────────────────
+  //
+  // La musica e' passata da "chiude alle 23" a scavalcabile come il cinema.
+  // Il pezzo dopo la mezzanotte non e' una nota sulla stessa riga: sono due
+  // righe su due giorni consecutivi, legate da group_id, ed e' quel legame a
+  // far sparire entrambe quando se ne cancella una. Senza, resterebbe mezza
+  // prenotazione fantasma sul giorno dopo.
+  const gm = await call(rooms, { method: "GET", query: { token: TOKEN, space: "music" } });
+  const musOccupate = gm.body?.bookings || [];
+  // Serve un giorno la cui sera E la notte seguente siano libere.
+  const seraLibera = (d) => !musOccupate.some((b) => b.day === d && b.end > 22 * 60)
+                         && !musOccupate.some((b) => b.day === (d + 1) % 7 && b.start < 90);
+  let notte = -1;
+  for (let d = 0; d < 7; d++) if (seraLibera(d)) { notte = d; break; }
+
+  if (notte < 0) {
+    console.log("  salto  (nessuna notte libera in sala musica questa settimana)");
+  } else {
+    const tagN = "TESTN-" + Math.random().toString(36).slice(2, 7);
+    // 23:00 -> 01:00: l'ora d'inizio e' l'ultima che la griglia offre.
+    const bn = await call(rooms, {
+      query: { token: TOKEN, space: "music", action: "book" },
+      body: { day: notte, start: 23 * 60, end: 25 * 60, name: tagN },
+    });
+    check("la musica si prenota oltre la mezzanotte", bn.body?.ok === true, JSON.stringify(bn.body).slice(0, 120));
+
+    const meta = (bn.body?.bookings || []).filter((x) => x.name === tagN);
+    check("diventa due righe su due giorni", meta.length === 2, `righe: ${meta.length}`);
+    check("il pezzo dopo mezzanotte sta sul giorno dopo",
+      meta.some((x) => x.day === notte && x.end === 1440) &&
+      meta.some((x) => x.day === (notte + 1) % 7 && x.start === 0),
+      JSON.stringify(meta.map((x) => [x.day, x.start, x.end])));
+    check("le due meta' condividono il gruppo",
+      meta.length === 2 && meta[0].group && meta[0].group === meta[1].group);
+
+    // Cancellandone UNA sola devono sparire entrambe.
+    if (meta.length) {
+      const via = await call(rooms, { query: { token: TOKEN, space: "music", action: "clear" }, body: { id: meta[0].id } });
+      const resta = (via.body?.bookings || []).filter((x) => x.name === tagN).length;
+      check("cancellarne una toglie tutta la serata", resta === 0, `rimaste ${resta}`);
+    }
+  }
 }
 
 // ─── Cron ────────────────────────────────────────────────────────────────────
