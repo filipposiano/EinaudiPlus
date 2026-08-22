@@ -525,7 +525,12 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
     // proiezione aperta. Prima passava di qui e si beccava "Formato camera non
     // valido" su "DIREZIONE" stesso, quindi non poteva prenotare le sale
     // affatto. Il database accetta già testo libero fino a 40 caratteri.
-    if (!direzione) {
+    //
+    // `myRoom &&`: senza, lo stesso controllo scattava anche per chi non ha
+    // NESSUNA camera (prenotazione anonima, "Continua senza accedere") — li'
+    // `who` è il nome scritto a mano, non un numero, e il regex lo respingeva
+    // sempre a meno che non fosse fatto di sole cifre.
+    if (myRoom && !direzione) {
       const regexCamera = /^\d+(?:-?[a-bA-B])?$/;
       if (!regexCamera.test(who)) {
         setToast(t.formatoCamera); return;
