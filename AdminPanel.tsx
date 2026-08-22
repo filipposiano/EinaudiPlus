@@ -10,7 +10,7 @@
 // Caricato in lazy da App.tsx: non pesa sul bundle dei residenti.
 
 import { useCallback, useEffect, useState } from "react";
-import type { Occorrenza, Agenda } from "./conferenzeApi";
+import type { Occorrenza } from "./conferenzeApi";
 
 // ─── Tipi ────────────────────────────────────────────────────────────────────
 
@@ -857,7 +857,10 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
 // regola poteva renderla silenziosamente inutile (vedi migrazione 010):
 // un giorno solo non lascia spazio a quell'ambiguità.
 export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
-  data: string; eventi: Occorrenza[]; onCambiato: (agenda: Agenda) => void;
+  // onCambiato NON riceve l'agenda tornata dalla scrittura: conference_add e
+  // conference_delete rispondono con una finestra di 60 giorni, che non e'
+  // per forza quella che il chiamante sta mostrando. Ricarica lui la sua.
+  data: string; eventi: Occorrenza[]; onCambiato: () => void | Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
   // Quale "Elimina" mostra il proprio stato di attesa: con un solo `busy`
@@ -876,11 +879,11 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
     if (!titolo.trim()) { setMsg("Indica un titolo."); return; }
     setBusy(true); setMsg(null);
     try {
-      const r = await call<Agenda>("conferenzaAdd", {
+      await call("conferenzaAdd", {
         titolo: titolo.trim(), inizio, fine, dal: data, al: data, giorno: null,
         note: note.trim() || null,
       });
-      onCambiato(r);
+      await onCambiato();
       setTitolo(""); setNote("");
     } catch (e: any) {
       setMsg(e.message === "sovrapposto" ? "Si sovrappone a un evento già presente in questo orario." : e.message);
@@ -889,7 +892,7 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
 
   async function elimina(id: number) {
     setBusy(true); setEliminando(id); setMsg(null);
-    try { onCambiato(await call<Agenda>("conferenzaDelete", { id })); }
+    try { await call("conferenzaDelete", { id }); await onCambiato(); }
     catch (e: any) { setMsg(e.message); }
     finally { setBusy(false); setEliminando(null); }
   }

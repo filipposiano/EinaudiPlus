@@ -233,7 +233,14 @@ export default function Conferenze({ lang, adminRole }: { lang: Lang; adminRole:
           deveCambiare={deveCambiare}
           onClose={() => setSelezionato(null)}
           onCambioPassword={controllaSessione}
-          onCambiato={(nuovaAgenda) => setAgenda(nuovaAgenda)}
+          // Si ricarica la NOSTRA finestra invece di fidarsi di quella che
+          // torna dalla scrittura: conference_add/delete rispondono con
+          // un'agenda di 60 giorni, mentre qui se ne tengono 400. Prendendo
+          // la loro, ogni evento oltre i due mesi spariva dal calendario
+          // appena se ne aggiungeva o toglieva un altro — e riappariva solo
+          // ricaricando la pagina. Proprio il caso della programmazione
+          // annuale per cui questa sala esiste.
+          onCambiato={carica}
         />
       )}
     </div>
@@ -242,7 +249,7 @@ export default function Conferenze({ lang, adminRole }: { lang: Lang; adminRole:
 
 function GiornoSheet({ data, eventi, lang, adminRole, deveCambiare, onClose, onCambioPassword, onCambiato }: {
   data: string; eventi: Occorrenza[]; lang: Lang; adminRole: AdminRole | null; deveCambiare: boolean;
-  onClose: () => void; onCambioPassword: () => void; onCambiato: (agenda: Agenda) => void;
+  onClose: () => void; onCambioPassword: () => void; onCambiato: () => void | Promise<void>;
 }) {
   const t = T[lang];
   return (
