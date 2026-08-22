@@ -60,7 +60,7 @@ export const TIME_SLOTS = buildSlots();
  */
 export const WEEKLY_QUOTA = 2;
 
-export const APP_VERSION = "0.9.1";
+export const APP_VERSION = "0.9.2";
 
 // ─── "Adesso" ────────────────────────────────────────────────────────────────
 //
@@ -148,6 +148,18 @@ export function bookingAt(week: WeekData, day: number, slot: number, wid: string
 export function prevRef(day: number, slot: number) {
   if (slot > 0) return { day, slot: slot - 1 };
   return { day: (day + 6) % 7, slot: N_SLOTS - 1 };
+}
+
+/**
+ * Il turno DOPO, con lo stesso avvolgimento di prevRef.
+ *
+ * Serve a dire a chi prenota una lavatrice quale turno di asciugatrice gli
+ * tocca di conseguenza: l'ultimo turno del giorno passa il testimone al primo
+ * del giorno seguente, esattamente come prevRef guarda indietro.
+ */
+export function nextRef(day: number, slot: number) {
+  if (slot < N_SLOTS - 1) return { day, slot: slot + 1 };
+  return { day: (day + 1) % 7, slot: 0 };
 }
 
 /**

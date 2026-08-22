@@ -146,6 +146,8 @@ const en: Testi = {
   sessioneAttiva: (r: string): string => `${r} session active: you book as Direzione. Tap DIREZIONE at the top to sign out.`,
   telegramAperto: "Telegram is open: tap START in the bot and you're linked.",
   usaTastiera: "You can also type on your keyboard and press Enter.",
+  autoReservedLabel: "included",
+  giornoDopo: "(the next day)",
 };
 
 export default en;

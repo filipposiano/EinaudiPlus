@@ -156,6 +156,8 @@ const it = {
   sessioneAttiva: (r: string): string => `Sessione ${r} attiva: prenoti come Direzione. Per uscire tocca DIREZIONE in alto.`,
   telegramAperto: "Ho aperto Telegram: tocca AVVIA nel bot e sei collegato.",
   usaTastiera: "Puoi anche digitare da tastiera e premere Invio.",
+  autoReservedLabel: "inclusa",
+  giornoDopo: "(del giorno successivo)",
 };
 
 export default it;

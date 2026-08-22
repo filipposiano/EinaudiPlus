@@ -146,6 +146,8 @@ const de: Testi = {
   sessioneAttiva: (r: string): string => `${r}-Sitzung aktiv: du buchst als Verwaltung. Zum Abmelden oben auf DIREZIONE tippen.`,
   telegramAperto: "Telegram ist offen: tippe im Bot auf START, um dich zu verbinden.",
   usaTastiera: "Du kannst auch über die Tastatur eingeben und Enter drücken.",
+  autoReservedLabel: "inbegriffen",
+  giornoDopo: "(am Folgetag)",
 };
 
 export default de;

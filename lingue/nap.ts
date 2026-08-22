@@ -208,6 +208,8 @@ const nap: Partial<Testi> = {
   sessioneAttiva: (r: string): string => `Sessione ${r} attiva: prenote comm'a Direzione. Pe' asci' tuocca DIREZIONE 'ncoppa.`,
   telegramAperto: "Aggio aperto Telegram: tuocca AVVIA int' 'o bot e sî collegato.",
   usaTastiera: "Può pure scrivere cu 'a tastiera e appriette Invio.",
+  autoReservedLabel: "'ncluta",
+  giornoDopo: "(o juorno appriesso)",
 };
 
 export default nap;

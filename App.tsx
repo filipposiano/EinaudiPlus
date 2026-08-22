@@ -21,7 +21,7 @@ import {
   TIME_SLOTS, WEEKLY_QUOTA, APP_VERSION,
   TODAY_DOW, CUR_SLOT, PREV_SLOT, DAYS_DATE, monShort,
   slotEndDate, fmtCountdown,
-  machinesFor, bookingAt, deriveMachines,
+  machinesFor, bookingAt, deriveMachines, nextRef,
   myWeekBookings, isPastBooking, isCurrentBooking,
   favsKey, loadFavs,
   type WeekData, type StatusData, type Machine, type MachineType,
@@ -131,6 +131,15 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
   const machLabel = selMachine?.split("-")[1] ?? "";
   // Chi risulta intestatario del turno: una camera, o la Direzione.
   const intestatario = room === api.DIREZIONE ? t.direzioneNome : `${t.room} ${room}`;
+
+  // Il turno di asciugatrice che viene insieme alla lavatrice. Passa da
+  // nextRef e non da `slotIdx + 1` perché l'ultimo turno del giorno consegna
+  // al primo del giorno dopo, e scriverlo a mano qui avrebbe sballato
+  // l'orario proprio nel caso in cui serve saperlo di più.
+  const rifAsciugatrice   = nextRef(dayIdx, target.slotIdx);
+  const slotAsciugatrice  = TIME_SLOTS[rifAsciugatrice.slot];
+  const asciugaturaDomani = rifAsciugatrice.day !== dayIdx;
+  const surfConferma      = "var(--card)";
 
   /**
    * La camera digitata appartiene all'altro edificio.
@@ -340,6 +349,23 @@ function BookModal({ target, bookings, status = {}, myRoom, lang, isAdmin = fals
                 <div>
                   <p className="text-xs font-mono mb-0.5" style={{ color:sub }}>{t.washer} {machLabel} · {intestatario}</p>
                   <p className="text-base font-mono font-bold" style={{ color:fg }}>{slot.start} – {slot.end}</p>
+                </div>
+              </div>
+              {/* L'asciugatrice non si prenota: è di chi ha avuto la lavatrice
+                  nel turno prima (vedi deriveMachines). Era una regola vera
+                  ma invisibile — le stringhe per dirla esistevano tradotte in
+                  sei lingue e non erano renderizzate da nessuna parte. Qui
+                  diventa parte di ciò che si sta confermando, con l'orario
+                  esatto: chi prenota alle 22:00 deve sapere che il bucato va
+                  spostato alle 23:15, non "dopo". */}
+              <div className="p-4 flex items-center gap-3 border-t" style={{ borderColor:"var(--border)", background:surfConferma }}>
+                <div className="p-2.5 rounded-xl" style={{ background:chip, color:sub }}><Wind size={18}/></div>
+                <div className="min-w-0">
+                  <p className="text-xs font-mono mb-0.5" style={{ color:sub }}>{t.dryer} {machLabel} · {t.autoReservedLabel}</p>
+                  <p className="text-base font-mono font-bold" style={{ color:fg }}>
+                    {slotAsciugatrice.start} – {slotAsciugatrice.end}
+                    {asciugaturaDomani && <span className="text-xs font-sans font-normal" style={{ color:sub }}> {t.giornoDopo}</span>}
+                  </p>
                 </div>
               </div>
             </div>
@@ -1849,13 +1875,17 @@ function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility,
                 style={isActive ? { background:RED, color:RED_FG } : { color:sub }}>
                 <Icon size={18}/>{T[lang][chiave]}
               </button>
-              {id === "laundry" && isActive && (
+              {/* Sempre visibile, non solo quando la lavanderia è la sezione
+                  attiva: comparendo e sparendo faceva saltare in su e in giù
+                  tutte le voci sotto, e da Cinema non si vedeva più che quelle
+                  tre schede esistono. Toccarne una porta in lavanderia. */}
+              {id === "laundry" && (
                 <div className="flex flex-col gap-1 mt-1 pl-3 ml-3.5 border-l" style={{ borderColor:div }}>
                   {tabs.map((tab, i) => {
                     const TabIcon = tab.icon;
-                    const tabAttiva = active === i;
+                    const tabAttiva = isActive && active === i;
                     return (
-                      <button key={i} onClick={()=>onChange(i)}
+                      <button key={i} onClick={()=>{ onFacility("laundry"); onChange(i); }}
                         className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-colors text-left ${tabAttiva ? "" : "desk-nav"}`}
                         style={tabAttiva ? { background:`color-mix(in srgb, var(--primary) 15%, transparent)`, color:RED } : { color:sub }}>
                         <TabIcon size={15}/>{tab.label}

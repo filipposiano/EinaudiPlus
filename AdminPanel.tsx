@@ -56,7 +56,14 @@ async function call<T = any>(action: string, payload: Record<string, unknown> = 
   });
   if (res.status === 401) throw new Error("SESSIONE_SCADUTA");
   const data = await res.json();
-  if (!data.ok) throw new Error(data.error || "errore");
+  if (!data.ok) {
+    // I campi oltre `error` restano attaccati all'eccezione: alcune funzioni
+    // SQL spiegano il rifiuto invece di limitarsi a nominarlo — `con` e
+    // `quando` dicono con quale evento e in che data una programmazione si
+    // sovrappone. Buttarli via lasciava all'utente il compito di cercarlo.
+    const err = Object.assign(new Error(data.error || "errore"), data);
+    throw err;
+  }
   return data;
 }
 
@@ -856,6 +863,12 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
 // cliccando sul calendario. Un errore nel giorno della settimana di una
 // regola poteva renderla silenziosamente inutile (vedi migrazione 010):
 // un giorno solo non lascia spazio a quell'ambiguità.
+/** "sab 7 ott 2026" — il giorno della settimana aiuta a leggere una data
+ *  isolata come parte di un calendario invece che come un numero. */
+const dataBreve = (iso: string) =>
+  new Date(iso + "T00:00:00").toLocaleDateString("it-IT",
+    { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+
 export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
   // onCambiato NON riceve l'agenda tornata dalla scrittura: conference_add e
   // conference_delete rispondono con una finestra di 60 giorni, che non e'
@@ -875,22 +888,60 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
   const [fine, setFine] = useState("18:00");
   const [note, setNote] = useState("");
 
+  // Ricorrenza settimanale. Il database la sa già rappresentare: una riga con
+  // `giorno_settimana` valorizzato e un intervallo dal→al è "ogni martedì dal…
+  // al…", espansa in lettura da conference_agenda. Qui si sceglie solo come
+  // calcolare quel `al`.
+  const [ripete, setRipete] = useState<"mai" | "settimane" | "finoA">("mai");
+  const [nSettimane, setNSettimane] = useState(8);
+  const [finoA, setFinoA] = useState(data);
+
+  // 0 = lunedì … 6 = domenica, come `giorno_settimana` in tabella.
+  const giornoDellaSettimana = (iso: string) => (new Date(iso + "T00:00:00").getDay() + 6) % 7;
+  const piuGiorni = (iso: string, n: number) => {
+    const d = new Date(iso + "T00:00:00");
+    d.setDate(d.getDate() + n);
+    return d.toLocaleDateString("sv-SE");
+  };
+
+  /** L'ultimo giorno del periodo, secondo la ricorrenza scelta. */
+  function calcolaAl(): string {
+    if (ripete === "settimane") return piuGiorni(data, (Math.max(1, nSettimane) - 1) * 7);
+    if (ripete === "finoA") return finoA;
+    return data;
+  }
+
   async function aggiungi() {
     if (!titolo.trim()) { setMsg("Indica un titolo."); return; }
+    const al = calcolaAl();
+    if (al < data) { setMsg("La data di fine è prima di questo giorno."); return; }
     setBusy(true); setMsg(null);
     try {
       await call("conferenzaAdd", {
-        titolo: titolo.trim(), inizio, fine, dal: data, al: data, giorno: null,
+        titolo: titolo.trim(), inizio, fine, dal: data, al,
+        // Un giorno solo non ha cadenza: si manda null e il database la
+        // azzera comunque (migrazione 010).
+        giorno: al === data ? null : giornoDellaSettimana(data),
         note: note.trim() || null,
       });
       await onCambiato();
-      setTitolo(""); setNote("");
+      setTitolo(""); setNote(""); setRipete("mai");
     } catch (e: any) {
-      setMsg(e.message === "sovrapposto" ? "Si sovrappone a un evento già presente in questo orario." : e.message);
+      // Il database dice anche QUANDO cade il primo conflitto: con una regola
+      // annuale, sapere solo CHE si sovrappone lascia a cercare a mano fra
+      // decine di occorrenze.
+      const quando = e.quando ? ` (primo scontro: ${dataBreve(e.quando)})` : "";
+      setMsg(e.message === "sovrapposto"
+        ? `Si sovrappone a "${e.con ?? "un evento"}" in questo orario${quando}.`
+        : e.message);
     } finally { setBusy(false); }
   }
 
-  async function elimina(id: number) {
+  async function elimina(id: number, ricorrente: boolean) {
+    // Conferma solo per le ricorrenze: lì il pulsante fa più di quanto la riga
+    // lasci pensare (toglie tutte le occorrenze, non quella che si sta
+    // guardando). Per un evento singolo sarebbe solo un clic in più.
+    if (ricorrente && !confirm("Questo evento si ripete ogni settimana.\n\nEliminandolo spariscono TUTTE le sue occorrenze, non solo quella di questo giorno.")) return;
     setBusy(true); setEliminando(id); setMsg(null);
     try { await call("conferenzaDelete", { id }); await onCambiato(); }
     catch (e: any) { setMsg(e.message); }
@@ -910,10 +961,18 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
               <span style={{ fontSize: 13, fontWeight: 700 }}>{o.inizio}–{o.fine}</span>
               <span className="adm-rule__what">
                 {o.titolo}
+                {/* Una ricorrenza è una riga sola: il pulsante qui accanto non
+                    toglie questa occorrenza, toglie l'intera regola. Dirlo
+                    prima è meglio che scoprirlo dopo. */}
+                {o.ricorrente && (
+                  <span style={{ display: "block", fontSize: 12, ...S.sub }}>
+                    Si ripete ogni settimana — eliminando si tolgono tutte le occorrenze
+                  </span>
+                )}
                 {o.note && <span style={{ display: "block", fontSize: 12, ...S.sub }}>{o.note}</span>}
               </span>
               <span className="adm-rule__act">
-                <button style={S.danger} disabled={busy} onClick={() => elimina(o.id)}>
+                <button style={S.danger} disabled={busy} onClick={() => elimina(o.id, o.ricorrente)}>
                   {eliminando === o.id ? "Elimino…" : "Elimina"}
                 </button>
               </span>
@@ -943,6 +1002,44 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
           <input style={S.input} type="time" value={fine} onChange={(e) => setFine(e.target.value)} />
         </div>
       </div>
+      {/* Ricorrenza. Una regola settimanale è UNA riga nel database, non N
+          copie: cambiarne l'orario le cambia tutte, e cancellarla le libera
+          tutte insieme. */}
+      <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>Si ripete</label>
+      <select style={{ ...S.input, marginBottom: 8 }} value={ripete}
+              onChange={(e) => setRipete(e.target.value as typeof ripete)}>
+        <option value="mai">Una volta sola</option>
+        <option value="settimane">Ogni {DAYS[giornoDellaSettimana(data)].toLowerCase()}, per N settimane</option>
+        <option value="finoA">Ogni {DAYS[giornoDellaSettimana(data)].toLowerCase()}, fino a una data</option>
+      </select>
+
+      {ripete === "settimane" && (
+        <div style={{ marginBottom: 8 }}>
+          <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>Quante settimane</label>
+          <input style={S.input} type="number" min={1} max={57} value={nSettimane}
+                 onChange={(e) => setNSettimane(Number(e.target.value))} />
+          <p style={{ fontSize: 12, ...S.sub, marginTop: 4 }}>
+            Ultima volta: {dataBreve(calcolaAl())}
+          </p>
+        </div>
+      )}
+
+      {ripete === "finoA" && (
+        <div style={{ marginBottom: 8 }}>
+          <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>Fino al</label>
+          <input style={S.input} type="date" value={finoA} min={data}
+                 onChange={(e) => setFinoA(e.target.value)} />
+          {finoA >= data && (() => {
+            const n = Math.floor((Date.parse(finoA) - Date.parse(data)) / 604800000) + 1;
+            return (
+              <p style={{ fontSize: 12, ...S.sub, marginTop: 4 }}>
+                {n} {n === 1 ? "occorrenza" : "occorrenze"}
+              </p>
+            );
+          })()}
+        </div>
+      )}
+
       <input style={{ ...S.input, marginBottom: 12 }} placeholder="Note (facoltative)" value={note}
              maxLength={300} onChange={(e) => setNote(e.target.value)} />
       <button style={{ ...S.btn, width: "100%", background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}

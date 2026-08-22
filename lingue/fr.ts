@@ -146,6 +146,8 @@ const fr: Testi = {
   sessioneAttiva: (r: string): string => `Session ${r} active : tu réserves en tant que Direction. Pour te déconnecter, touche DIREZIONE en haut.`,
   telegramAperto: "Telegram est ouvert : touche DÉMARRER dans le bot pour être connecté.",
   usaTastiera: "Tu peux aussi taper au clavier et appuyer sur Entrée.",
+  autoReservedLabel: "incluse",
+  giornoDopo: "(le lendemain)",
 };
 
 export default fr;
