@@ -1942,9 +1942,13 @@ const ADMIN_SECTIONS: {
   id: AdminTab; icon: any;
   chiave: "navMacchine" | "navSegnalazioni" | "navProgrammazione" | "navAccount" | "navRicorrenti" | "navManutenzione";
   sistemistaOnly?: boolean;
+  // Macchine e segnalazioni restano affari di FDO e sistemista: lo staff
+  // prenota per conto della Direzione come l'FDO, ma non deve vedere lo
+  // stato guasto/funzionante delle macchine ne' le segnalazioni.
+  staffEsclusa?: boolean;
 }[] = [
-  { id: "macchine",       icon: Wrench,        chiave: "navMacchine" },
-  { id: "segnalazioni",   icon: MessageSquare, chiave: "navSegnalazioni" },
+  { id: "macchine",       icon: Wrench,        chiave: "navMacchine",     staffEsclusa: true },
+  { id: "segnalazioni",   icon: MessageSquare, chiave: "navSegnalazioni", staffEsclusa: true },
   // Aperta a qualunque admin (fdo, staff, sistemista): è il "solo gli admin
   // possono segnare" della sala conferenze, non una faccenda da sistemista.
   { id: "programmazione", icon: Presentation,  chiave: "navProgrammazione" },
@@ -1956,7 +1960,9 @@ const ADMIN_SECTIONS: {
 ];
 
 const adminSectionsFor = (role: AdminRole | null) =>
-  role === null ? [] : ADMIN_SECTIONS.filter((s) => !s.sistemistaOnly || role === "sistemista");
+  role === null ? [] : ADMIN_SECTIONS.filter((s) =>
+    (!s.sistemistaOnly || role === "sistemista") && (!s.staffEsclusa || role !== "staff")
+  );
 
 function FacilitySwitcher({ facility, onChange, lang, adminRole }: {
   facility: Facility; onChange: (f: Facility)=>void; lang: Lang; adminRole: AdminRole | null;

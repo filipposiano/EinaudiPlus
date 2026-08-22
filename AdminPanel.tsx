@@ -1460,13 +1460,18 @@ export function AdminScreens({ tab, onSession }: {
   }, [onSession]);
 
   useEffect(() => { refreshSession(); }, [refreshSession]);
-  useEffect(() => { if (logged) loadOverview(); }, [logged, loadOverview]);
+  // Lo staff non vede Macchine ne' Segnalazioni — le uniche schede che usano
+  // `laundries` — quindi per lui questa chiamata fallirebbe soltanto (il
+  // server la rifiuta, vedi VIETATE_A_STAFF in api/admin/data.js) senza
+  // nessun beneficio.
+  useEffect(() => { if (logged && role !== "staff") loadOverview(); }, [logged, role, loadOverview]);
 
   // L'uscita non sta piu' qui: la fa il pulsante della camera nell'app, che
   // chiude la sessione e riporta al selettore della stanza. `adminLogout()`
   // resta esportato ed e' quello che App.tsx chiama.
 
   const sistemista = role === "sistemista";
+  const staff = role === "staff";
 
   if (logged === null) {
     return <p style={{ fontSize: 13, ...S.sub, padding: "20px 4px" }}>Caricamento…</p>;
@@ -1507,11 +1512,16 @@ export function AdminScreens({ tab, onSession }: {
           contenuto — e il ruolo si capisce gia' da quali voci si vedono in
           navigazione (Ricorrenti e Manutenzione solo da sistemista). */}
 
-      {/* Le sezioni riservate al sistemista non compaiono nemmeno nella
-          navigazione, ma se ci si arriva lo stesso il controllo vero resta sul
-          server: nascondere una voce non e' un'autorizzazione. */}
-      {tab === "macchine" && <Macchine laundries={laundries} reload={loadOverview} />}
-      {tab === "segnalazioni" && <Segnalazioni laundries={laundries} reload={loadOverview} />}
+      {/* Le sezioni riservate al sistemista (o escluse per lo staff) non
+          compaiono nemmeno nella navigazione, ma se ci si arriva lo stesso
+          il controllo vero resta sul server: nascondere una voce non e'
+          un'autorizzazione. */}
+      {tab === "macchine" && (!staff
+        ? <Macchine laundries={laundries} reload={loadOverview} />
+        : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata a FDO e sistemista.</p>)}
+      {tab === "segnalazioni" && (!staff
+        ? <Segnalazioni laundries={laundries} reload={loadOverview} />
+        : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata a FDO e sistemista.</p>)}
       {tab === "programmazione" && <SalaConferenze />}
       {tab === "account" && (sistemista
         ? <Accounts me={username} />

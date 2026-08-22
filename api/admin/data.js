@@ -5,7 +5,7 @@
 
 import { rpc } from "../_lib/db.js";
 import { readBody, json, fail, methodOk, intero } from "../_lib/http.js";
-import { currentAdmin, isSysadmin, hashPassword, verifyPassword } from "../_lib/auth.js";
+import { currentAdmin, isSysadmin, isStaff, hashPassword, verifyPassword } from "../_lib/auth.js";
 
 // Le azioni che modificano qualcosa finiscono nell'audit log. Le letture no,
 // sarebbero solo rumore.
@@ -27,6 +27,14 @@ const SOLO_SISTEMISTA = new Set([
   "recurringSetActive", "recurringDelete", "applyRecurring", "purge",
   "accountList", "accountCreate", "accountSetPassword",
   "accountSetActive", "accountDelete",
+]);
+
+// Macchine e segnalazioni restano affari di FDO e sistemista: lo staff
+// prenota e libera turni per conto della Direzione come l'FDO, ma non deve
+// vedere ne' toccare lo stato guasto/funzionante delle macchine ne' le
+// segnalazioni dei residenti.
+const VIETATE_A_STAFF = new Set([
+  "overview", "setMachineStatus", "feedback", "markFeedback",
 ]);
 
 export default async function handler(req, res) {
@@ -55,6 +63,10 @@ export default async function handler(req, res) {
 
   if (SOLO_SISTEMISTA.has(action) && !isSysadmin(me)) {
     return json(res, 403, { ok: false, error: "riservato al sistemista" });
+  }
+
+  if (VIETATE_A_STAFF.has(action) && isStaff(me)) {
+    return json(res, 403, { ok: false, error: "riservato a FDO e sistemista" });
   }
 
   // I campi numerici si controllano tutti qui, una volta, invece che a ogni

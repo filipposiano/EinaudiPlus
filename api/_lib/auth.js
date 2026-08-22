@@ -145,6 +145,15 @@ export function isSysadmin(claims) {
   return claims?.r === "sistemista";
 }
 
+/**
+ * Lo staff prenota e libera turni per conto della Direzione come l'FDO, ma
+ * non vede macchine fuori servizio ne' segnalazioni: quelle restano affari
+ * della portineria (FDO) e del sistemista.
+ */
+export function isStaff(claims) {
+  return claims?.r === "staff";
+}
+
 // Il segreto di sessione e' l'unica cosa ancora necessaria per accettare un
 // login: senza, non c'e' modo di firmare il cookie qualunque sia la fonte
 // dell'account.
