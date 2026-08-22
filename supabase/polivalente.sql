@@ -37,6 +37,8 @@ declare
   v_ora  time := (now() at time zone 'Europe/Rome')::time;
   v_occorrenze jsonb;
   v_ora_fine time;
+  v_titolo   text;
+  v_note     text;
 begin
   select coalesce(jsonb_agg(x order by x->>'data', x->>'inizio'), '[]'::jsonb)
   into v_occorrenze
@@ -45,16 +47,11 @@ begin
              'id',     e.id,
              'titolo', e.titolo,
              'note',   e.note,
-             -- g.d e' un timestamp (generate_series lavora su timestamp, non
-             -- su date): senza il cast finiva in jsonb come "2026-10-07T00:00:00",
-             -- e il frontend (che si aspetta "2026-10-07" e ci concatena lui
-             -- stesso l'ora per fare new Date()) costruiva una stringa doppia
-             -- e non riusciva piu' a leggere la data.
+             -- g.d e' un timestamp: senza il cast usciva "2026-10-07T00:00:00"
+             -- e il client, che ci concatena l'ora, non sapeva piu' leggerlo.
              'data',   g.d::date,
              'inizio', to_char(e.ora_inizio, 'HH24:MI'),
              'fine',   to_char(e.ora_fine,   'HH24:MI'),
-             -- Serve al pannello per dire "ogni martedi'" invece di ripetere
-             -- quaranta volte la stessa riga.
              'ricorrente', e.giorno_settimana is not null and e.al > e.dal
            ) as x
     from conference_event e
@@ -67,8 +64,10 @@ begin
        or extract(isodow from g.d)::int - 1 = e.giorno_settimana
   ) s;
 
-  -- Occupata adesso? Si guarda solo oggi, ovviamente.
-  select e.ora_fine into v_ora_fine
+  -- Occupata adesso, e da cosa. Stessa riga per entrambe le risposte: e' il
+  -- motivo per cui non possono contraddirsi.
+  select e.ora_fine, e.titolo, e.note
+    into v_ora_fine, v_titolo, v_note
   from conference_event e
   where v_da between e.dal and e.al
     and (e.giorno_settimana is null
@@ -81,6 +80,8 @@ begin
     'ok', true,
     'occupata_adesso', v_ora_fine is not null,
     'libera_dalle', to_char(v_ora_fine, 'HH24:MI'),
+    'evento_adesso', v_titolo,
+    'note_adesso', v_note,
     'occorrenze', v_occorrenze
   );
 end;

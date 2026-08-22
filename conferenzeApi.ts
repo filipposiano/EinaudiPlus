@@ -24,6 +24,10 @@ export interface Agenda {
   occupata_adesso: boolean;
   /** L'ora in cui si libera, se occupata adesso. */
   libera_dalle?: string;
+  /** Che cosa la sta occupando. Viene dalla stessa riga di `occupata_adesso`,
+   *  quindi non può contraddirla. */
+  evento_adesso?: string;
+  note_adesso?: string;
   occorrenze: Occorrenza[];
 }
 
@@ -48,6 +52,8 @@ export async function agenda(giorni = 30): Promise<Agenda> {
   return {
     occupata_adesso: Boolean(d.occupata_adesso),
     libera_dalle: d.libera_dalle ?? undefined,
+    evento_adesso: d.evento_adesso ?? undefined,
+    note_adesso: d.note_adesso ?? undefined,
     occorrenze: (d.occorrenze || []) as Occorrenza[],
   };
 }

@@ -159,6 +159,20 @@ export default function Conferenze({ lang, adminRole }: { lang: Lang; adminRole:
         <p className="text-2xl font-bold" style={{ color: occupata ? OOS_T : GREEN_T }}>
           {occupata ? t.occupataOra : t.liberaOra}
         </p>
+        {/* Da cosa è occupata. "Occupata adesso" da solo lascia comunque a
+            chiedere in giro — cioè la telefonata che questa pagina esiste per
+            evitare. Il titolo viene dalla stessa riga che ha deciso
+            `occupata_adesso`, quindi le due non possono contraddirsi. */}
+        {occupata && agenda?.evento_adesso && (
+          <p className="text-base font-semibold mt-1" style={{ color: FG, overflowWrap: "anywhere" }}>
+            {agenda.evento_adesso}
+          </p>
+        )}
+        {occupata && agenda?.note_adesso && (
+          <p className="text-xs mt-0.5" style={{ color: SUB, overflowWrap: "anywhere" }}>
+            {agenda.note_adesso}
+          </p>
+        )}
         {occupata && agenda?.libera_dalle && (
           <p className="text-sm mt-1" style={{ color: SUB }}>
             {t.liberaDalle(agenda.libera_dalle)}
