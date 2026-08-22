@@ -480,6 +480,18 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   const t = T[lang];
   const cfg = ROOM_CFG[room];
   const opts = timeOptions(cfg.winStart, cfg.winEnd, cfg.step);
+
+  // Le ore in cui si puo' COMINCIARE.
+  //
+  // Mai le 24:00: come istante sono gia' lo zero del giorno dopo, e per il
+  // cinema comparirebbero due volte nella stessa tendina.
+  //
+  // Per una sala che non scavalca si toglie anche l'ultima ora utile, perche'
+  // cominciare all'orario di chiusura non lascerebbe nessuna fine possibile.
+  // Da quando la musica scavalca, invece, una fine c'e' sempre: tenere fuori
+  // le 23:00 rendeva prenotabile 22:30->05:00 ma non 23:00->01:00, che e'
+  // l'esempio tipico di serata a cavallo della mezzanotte.
+  const startOpts = (cfg.overnight ? opts : opts.slice(0, -1)).filter((m) => m < 24 * 60);
   const myRoom = (roomNumber || "").trim();   // identità = numero camera (come lavanderia)
 
   // Chi amministra prenota come DIREZIONE, che non è una camera: qui il campo
@@ -642,7 +654,7 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
               <select value={start} onChange={(e) => setStart(Number(e.target.value))}
                 className="w-full mt-1 rounded-xl px-3 py-2.5 text-sm font-mono outline-none"
                 style={{ background: chip, color: fg, border: `1px solid ${div}` }}>
-                {opts.slice(0, -1).map((m) => <option key={m} value={m}>{fmtMin(m)}</option>)}
+                {startOpts.map((m) => <option key={m} value={m}>{fmtMin(m)}</option>)}
               </select>
             </label>
             <label className="flex-1">
