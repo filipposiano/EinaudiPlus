@@ -41,7 +41,35 @@ nelle sale).
 | `api/telegram.js` | webhook del bot |
 | `api/admin/auth.js` · `api/admin/data.js` | accesso e operazioni riservate |
 | `api/_lib/` | pezzi condivisi: `db.js` (chiamate SQL), `http.js` (lettura corpo, validazione, rate limit), `auth.js` (password e sessioni), `push.js` (invio Web Push) |
-| `supabase/` | schema e funzioni SQL. `migrations/` sono le modifiche successive, numerate |
+| `supabase/` | schema e funzioni SQL, consolidati. `migrations/` è la storia delle modifiche, numerata |
+
+## Il database
+
+I file in `supabase/` sono **consolidati**: contengono lo stato attuale, non
+quello iniziale. Ricostruire un database da zero significa eseguirli in
+quest'ordine, e nient'altro:
+
+| # | File | Cosa contiene |
+|---|---|---|
+| 1 | `schema.sql` | tabelle, vincoli, dati iniziali (lavanderie, macchine, sale) |
+| 2 | `functions.sql` | lettura e scrittura di lavanderia e sale, per i residenti |
+| 3 | `admin.sql` | operazioni del pannello, comprese quelle a nome della Direzione |
+| 4 | `sysadmin.sql` | regole ricorrenti e pulizia, riservate al sistemista |
+| 5 | `polivalente.sql` | sala polivalente: tabella, agenda, programmazione |
+| 6 | `account.sql` | account amministrativi e cambio password |
+| 7 | `telegram.sql` | collegamento del bot |
+| 8 | `reminders.sql` | promemoria dovuti e potatura periodica |
+| 9 | `cron.sql` | job `pg_cron` (va personalizzato: contiene dei segnaposto) |
+| 10 | **`permessi.sql`** | **restringe l'esecuzione a `service_role`. Non è facoltativo** |
+
+`permessi.sql` va **per ultimo** e va eseguito: agisce su tutte le funzioni
+già create, e senza di lui ognuna resta invocabile via `/rest/v1/rpc/` da
+chiunque abbia la chiave pubblicabile di Supabase — scavalcando cookie di
+sessione, hash delle password e rate limit in un colpo solo.
+
+`migrations/` non serve a una ricostruzione: quelle modifiche sono già dentro
+i file qui sopra. Restano perché spiegano **perché** una cosa è come è, e
+perché vanno applicate una alla volta al database che è già in produzione.
 
 ## Lavorarci
 

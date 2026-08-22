@@ -1,3 +1,13 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- FILE CONSOLIDATO: contiene lo stato ATTUALE, non quello iniziale.
+--
+-- Le migrazioni in migrations/ sono gia' incorporate qui. Non vanno riapplicate
+-- sopra a questo file, e questo file non va rieseguito su un database gia' in
+-- produzione: le due cose insieme creerebbero doppioni di funzione (due
+-- overload della stessa RPC = errore PGRST203, che PostgREST non sa risolvere).
+--
+-- Ordine di ricostruzione e ruolo di ciascun file: vedi README.md.
+-- ─────────────────────────────────────────────────────────────────────────────
 -- EinaudiPlus — promemoria push
 --
 -- Sostituisce sendDueReminders() dei due Apps Script e le chiavi

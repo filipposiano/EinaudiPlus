@@ -1,3 +1,13 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- FILE CONSOLIDATO: contiene lo stato ATTUALE, non quello iniziale.
+--
+-- Le migrazioni in migrations/ sono gia' incorporate qui. Non vanno riapplicate
+-- sopra a questo file, e questo file non va rieseguito su un database gia' in
+-- produzione: le due cose insieme creerebbero doppioni di funzione (due
+-- overload della stessa RPC = errore PGRST203, che PostgREST non sa risolvere).
+--
+-- Ordine di ricostruzione e ruolo di ciascun file: vedi README.md.
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Ruolo sistemista: prenotazioni ricorrenti e pulizia.
 --
 -- L'autorizzazione si applica in /api/admin/data: queste funzioni non sono
@@ -140,6 +150,8 @@ returns jsonb language sql stable as $$
   ) t;
 $$;
 
+-- Versione consolidata dalla migrazione 009. Vedi supabase/migrations/
+-- per il perche' del cambiamento: qui c'e' solo il risultato.
 create or replace function recurring_add_laundry(
   p_laundry_id smallint, p_day int, p_slot int, p_machine text, p_room text, p_note text default null
 ) returns jsonb language plpgsql as $$
@@ -147,6 +159,16 @@ declare v_id bigint;
 begin
   if not exists (select 1 from machine where laundry_id = p_laundry_id and code = p_machine and bookable) then
     return jsonb_build_object('ok', false, 'error', 'macchina non valida per questa lavanderia');
+  end if;
+
+  -- DIREZIONE non ha un numero e non appartiene a un intervallo: è l'unica
+  -- eccezione, come nel resto dello schema.
+  if p_room <> 'DIREZIONE' and not exists (
+    select 1 from laundry
+    where id = p_laundry_id
+      and nullif(substring(p_room from '^[0-9]+'), '')::int between room_min and room_max
+  ) then
+    return jsonb_build_object('ok', false, 'error', 'quella camera non appartiene a questa lavanderia');
   end if;
 
   insert into recurring_booking (kind, laundry_id, day, slot, machine_code, room, note)

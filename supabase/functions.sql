@@ -1,3 +1,13 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- FILE CONSOLIDATO: contiene lo stato ATTUALE, non quello iniziale.
+--
+-- Le migrazioni in migrations/ sono gia' incorporate qui. Non vanno riapplicate
+-- sopra a questo file, e questo file non va rieseguito su un database gia' in
+-- produzione: le due cose insieme creerebbero doppioni di funzione (due
+-- overload della stessa RPC = errore PGRST203, che PostgREST non sa risolvere).
+--
+-- Ordine di ricostruzione e ruolo di ciascun file: vedi README.md.
+-- ─────────────────────────────────────────────────────────────────────────────
 -- EinaudiPlus — funzioni applicative
 --
 -- Ogni mutazione passa da qui, mai da SQL sparso nelle funzioni serverless.
@@ -102,8 +112,15 @@ $$;
 -- Scritture lavanderia
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- Versione consolidata dalla migrazione 003. Vedi supabase/migrations/
+-- per il perche' del cambiamento: qui c'e' solo il risultato.
 create or replace function book_laundry(
-  p_room text, p_day int, p_slot int, p_machine text, p_as_admin boolean default false
+  p_room       text,
+  p_day        integer,
+  p_slot       integer,
+  p_machine    text,
+  p_as_admin   boolean default false,
+  p_actor_room text default null
 ) returns jsonb language plpgsql as $$
 declare
   v_l     laundry%rowtype;
@@ -111,6 +128,7 @@ declare
   v_ws    date;
   v_id    bigint;
   v_by    text;
+  v_actor smallint;
 begin
   if p_room is null or p_room !~ '^[0-9]{1,4}(-?[abAB])?$' then
     return jsonb_build_object('ok', false, 'error', 'camera mancante');
@@ -121,6 +139,19 @@ begin
     return jsonb_build_object('ok', false, 'error', 'camera non valida');
   end if;
 
+  -- Il controllo nuovo. Si applica solo se l'app ha detto da dove sta agendo.
+  -- DIREZIONE non passa di qui: la portineria usa book_as_direzione().
+  if p_actor_room is not null and p_actor_room <> '' and p_actor_room <> 'DIREZIONE' then
+    v_actor := laundry_for_room(p_actor_room);
+    if v_actor is not null and v_actor <> v_l.id then
+      return jsonb_build_object(
+        'ok', false,
+        'error', 'altra lavanderia',
+        'lavanderia', v_l.name
+      );
+    end if;
+  end if;
+
   if p_day not between 0 and 6 or p_slot not between 0 and v_l.n_slots - 1 then
     return jsonb_build_object('ok', false, 'error', 'parametri non validi');
   end if;
@@ -129,8 +160,7 @@ begin
   --  - bookable=false: la macchina non esiste fisicamente (es. W-B alla Manica).
   --    Prenotarla non ha senso, si rifiuta.
   --  - is_oos=true: la macchina c'è ma è guasta. Si può prenotare lo stesso,
-  --    il client mostra un avviso. Serve a non bloccare chi vuole mettersi in
-  --    coda per quando sarà riparata, e a non perdere lo slot nel frattempo.
+  --    il client mostra un avviso.
   select * into v_m from machine where laundry_id = v_l.id and code = p_machine;
   if not found or not v_m.bookable then
     return jsonb_build_object('ok', false, 'error', 'macchina non valida');
@@ -138,21 +168,10 @@ begin
 
   v_ws := current_week_start(v_l.tz);
 
-  -- Quota settimanale: era solo lato client (LaundryView), quindi aggirabile.
-  -- Il limite di turni a settimana NON viene applicato qui.
-  --
-  -- Era stato spostato lato server perché il controllo client era aggirabile.
-  -- Ma aggirabile lo resta comunque: senza autenticazione la camera è
-  -- auto-dichiarata in localStorage, quindi chi vuole superare il limite
-  -- cambia numero e riprova. Il blocco fermava solo chi lo rispettava già,
-  -- e impediva casi legittimi (due turni nello stesso giorno, o prenotare
-  -- per un coinquilino).
-  --
-  -- Il client continua a mostrare la quota come indicazione. Se un domani
-  -- arriverà un'identità vera, è qui che il controllo andrà rimesso.
+  -- La quota settimanale NON viene applicata qui: senza autenticazione la
+  -- camera è auto-dichiarata, quindi il blocco fermava solo chi la rispettava
+  -- già. Resta un'indicazione lato client.
 
-  -- Il cuore: insert atomica. Se lo slot è già preso il vincolo unique blocca,
-  -- ON CONFLICT DO NOTHING non restituisce nulla e sappiamo di aver perso la corsa.
   insert into laundry_booking (laundry_id, week_start, day, slot, machine_code, room, created_by)
   values (v_l.id, v_ws, p_day, p_slot, p_machine, p_room,
           case when p_as_admin then 'admin' else 'user' end)
@@ -165,14 +184,10 @@ begin
     where laundry_id = v_l.id and week_start = v_ws
       and day = p_day and slot = p_slot and machine_code = p_machine;
 
-    -- La stringa 'occupata' è matchata da errMsg() nel client per localizzare
-    -- il messaggio: non cambiarla. La vecchia new-laundry mandava invece
-    -- 'Turno già occupato', che infatti sfuggiva alla traduzione.
+    -- La stringa 'occupata' è matchata da errMsg() nel client: non cambiarla.
     return jsonb_build_object('ok', false, 'error', 'occupata', 'by', v_by);
   end if;
 
-  -- Prenotazione riuscita su macchina guasta: il client usa `warning` per
-  -- mostrare l'avviso, ma la prenotazione è valida a tutti gli effetti.
   return jsonb_build_object(
     'ok', true,
     'week', week_snapshot(v_l.id, v_ws),
@@ -184,16 +199,22 @@ begin
 end;
 $$;
 
+-- Versione consolidata dalla migrazione 006. Vedi supabase/migrations/
+-- per il perche' del cambiamento: qui c'e' solo il risultato.
 create or replace function clear_laundry(
-  p_room text, p_day int, p_slot int, p_machine text
+  p_room     text,
+  p_day      integer,
+  p_slot     integer,
+  p_machine  text,
+  p_as_admin boolean default false
 ) returns jsonb language plpgsql as $$
 declare
   v_l  laundry%rowtype;
   v_ws date;
+  v_di text;
 begin
-  -- Il client attuale chiama clearBooking(day, slot, machine) SENZA camera:
-  -- si ricade sulla lavanderia principale finche' la fase 5 non la aggiunge.
-  -- Ricaduta innocua: se la prenotazione stava nell'altra lavanderia il
+  -- Il client attuale può chiamare senza camera: si ricade sulla lavanderia
+  -- principale. Ricaduta innocua — se la prenotazione stava nell'altra, il
   -- laundry_id non combacia e la delete non tocca nulla.
   select * into v_l from laundry
   where id = coalesce(laundry_for_room(p_room), (select id from laundry where slug = 'valentino'));
@@ -203,15 +224,17 @@ begin
 
   v_ws := current_week_start(v_l.tz);
 
-  -- Cancellazione permissiva, come oggi: chiunque può liberare qualunque slot.
-  --
-  -- Deliberato, non una svista. L'app non ha login: la camera è auto-dichiarata
-  -- in localStorage e chiunque può scriverci il numero che vuole. Un controllo
-  -- di proprietà non proteggerebbe niente, si aggirerebbe cambiando una stringa
-  -- nel browser — aggiungerebbe solo attrito per chi usa l'app onestamente.
-  -- Se un domani arrivasse un'autenticazione vera, è qui che andrebbe il controllo.
-  --
-  -- p_room serve comunque, per sapere di quale lavanderia si parla.
+  -- Di chi è il turno che si sta per liberare.
+  select room into v_di
+  from laundry_booking
+  where laundry_id = v_l.id and week_start = v_ws
+    and day = p_day and slot = p_slot and machine_code = p_machine;
+
+  if v_di = 'DIREZIONE' and not p_as_admin then
+    return jsonb_build_object('ok', false, 'error', 'riservata alla direzione');
+  end if;
+
+  -- Per tutto il resto resta permissiva, come prima e per le stesse ragioni.
   delete from laundry_booking
   where laundry_id = v_l.id and week_start = v_ws
     and day = p_day and slot = p_slot and machine_code = p_machine;
@@ -254,6 +277,8 @@ $$;
 -- Sale cinema e musica
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- Versione consolidata dalla migrazione 004. Vedi supabase/migrations/
+-- per il perche' del cambiamento: qui c'e' solo il risultato.
 create or replace function space_bookings(p_slug text)
 returns jsonb language plpgsql stable as $$
 declare
@@ -272,7 +297,8 @@ begin
       'start', b.start_min,
       'end',   b.end_min,
       'name',  b.name,
-      'type',  b.btype
+      'type',  b.btype,
+      'group', b.group_id::text
     )) order by b.day, b.start_min)
     from space_booking b
     where b.space_id = v_sid and b.week_start = v_ws
@@ -280,14 +306,26 @@ begin
 end;
 $$;
 
+-- Versione consolidata dalla migrazione 004. Vedi supabase/migrations/
+-- per il perche' del cambiamento: qui c'e' solo il risultato.
 create or replace function book_space(
-  p_slug text, p_day int, p_start int, p_end int, p_name text, p_type text default null
+  p_slug  text,
+  p_day   integer,
+  p_start integer,
+  p_end   integer,
+  p_name  text,
+  p_type  text default null
 ) returns jsonb language plpgsql as $$
 declare
-  v_s   room_space%rowtype;
-  v_ws  date;
-  v_end int := p_end;
-  v_cnt int;
+  v_s     room_space%rowtype;
+  v_ws    date;
+  v_end   int := p_end;
+  v_cnt   int;
+  v_name  text;
+  v_type  text;
+  v_gid   uuid;
+  v_day2  int;
+  v_coda  int;
 begin
   select * into v_s from room_space where slug = p_slug;
   if not found then return jsonb_build_object('ok', false, 'error', 'sala non valida'); end if;
@@ -298,31 +336,59 @@ begin
   if p_day not between 0 and 6 then
     return jsonb_build_object('ok', false, 'error', 'giorno non valido');
   end if;
+  if p_start is null or p_start < 0 or p_start > 1439 then
+    return jsonb_build_object('ok', false, 'error', 'orario non valido');
+  end if;
 
-  -- Conserva la semantica di parseRange_: un turno che scavalca mezzanotte
-  -- ha end <= start, e si porta a end + 1440.
+  -- Semantica di parseRange_: una fascia che scavalca la mezzanotte arriva con
+  -- end <= start e si riporta a end + 1440.
   if v_end <= p_start then v_end := v_end + 1440; end if;
   if v_end - p_start > 1440 then
     return jsonb_build_object('ok', false, 'error', 'durata non valida');
   end if;
 
-  v_ws := current_week_start('Europe/Rome');
+  v_ws   := current_week_start('Europe/Rome');
+  v_name := left(btrim(p_name), 40);
+  v_type := case when v_s.has_type then p_type else null end;
 
+  -- Il giorno dopo, con la domenica che rientra sul lunedì della stessa
+  -- settimana: la griglia è settimanale e non ha un "giorno 7" dove mettere le
+  -- ore piccole della notte fra domenica e lunedì.
+  v_day2 := (p_day + 1) % 7;
+  v_coda := v_end - 1440;   -- > 0 solo se si scavalca
+
+  -- Il tetto giornaliero va verificato su TUTTI i giorni che la prenotazione
+  -- tocca, non solo su quello di partenza.
   select count(*) into v_cnt
   from space_booking
-  where space_id = v_s.id and week_start = v_ws and day = p_day;
+  where space_id = v_s.id and week_start = v_ws
+    and day = any(case when v_coda > 0 then array[p_day, v_day2] else array[p_day] end)
+  group by day
+  order by count(*) desc
+  limit 1;
 
-  if v_cnt >= v_s.max_per_day then
+  if coalesce(v_cnt, 0) >= v_s.max_per_day then
     return jsonb_build_object('ok', false, 'error', 'full');
   end if;
 
   begin
-    insert into space_booking (space_id, week_start, day, start_min, end_min, name, btype)
-    values (v_s.id, v_ws, p_day, p_start, v_end, left(btrim(p_name), 40),
-            case when v_s.has_type then p_type else null end);
+    if v_coda > 0 then
+      v_gid := gen_random_uuid();
+
+      -- Testa: dall'inizio fino a mezzanotte.
+      insert into space_booking (space_id, week_start, day, start_min, end_min, name, btype, group_id)
+      values (v_s.id, v_ws, p_day, p_start, 1440, v_name, v_type, v_gid);
+
+      -- Coda: da mezzanotte alla fine, sul giorno successivo. È questa riga a
+      -- rendere la notte visibile al vincolo anti-sovrapposizione del giorno
+      -- dopo — il motivo per cui esiste la divisione.
+      insert into space_booking (space_id, week_start, day, start_min, end_min, name, btype, group_id)
+      values (v_s.id, v_ws, v_day2, 0, v_coda, v_name, v_type, v_gid);
+    else
+      insert into space_booking (space_id, week_start, day, start_min, end_min, name, btype)
+      values (v_s.id, v_ws, p_day, p_start, v_end, v_name, v_type);
+    end if;
   exception
-    -- Sollevata dall'exclude constraint: due turni che si accavallano non possono
-    -- coesistere, punto. Sostituisce il controllo read-then-write di Code.gs.
     when exclusion_violation then
       return jsonb_build_object('ok', false, 'error', 'overlap');
   end;
@@ -331,16 +397,28 @@ begin
 end;
 $$;
 
+-- Versione consolidata dalla migrazione 004. Vedi supabase/migrations/
+-- per il perche' del cambiamento: qui c'e' solo il risultato.
 create or replace function delete_space_booking(p_slug text, p_id text)
 returns jsonb language plpgsql as $$
 declare
   v_sid smallint;
+  v_bid bigint;
+  v_gid uuid;
 begin
   select id into v_sid from room_space where slug = p_slug;
   if not found then return jsonb_build_object('ok', false, 'error', 'sala non valida'); end if;
 
-  delete from space_booking
-  where space_id = v_sid and id = nullif(regexp_replace(p_id, '\D', '', 'g'), '')::bigint;
+  v_bid := nullif(regexp_replace(p_id, '\D', '', 'g'), '')::bigint;
+
+  select group_id into v_gid
+  from space_booking where space_id = v_sid and id = v_bid;
+
+  if v_gid is not null then
+    delete from space_booking where space_id = v_sid and group_id = v_gid;
+  else
+    delete from space_booking where space_id = v_sid and id = v_bid;
+  end if;
 
   return space_bookings(p_slug);
 end;

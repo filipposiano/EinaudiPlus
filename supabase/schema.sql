@@ -1,3 +1,13 @@
+-- ─────────────────────────────────────────────────────────────────────────────
+-- FILE CONSOLIDATO: contiene lo stato ATTUALE, non quello iniziale.
+--
+-- Le migrazioni in migrations/ sono gia' incorporate qui. Non vanno riapplicate
+-- sopra a questo file, e questo file non va rieseguito su un database gia' in
+-- produzione: le due cose insieme creerebbero doppioni di funzione (due
+-- overload della stessa RPC = errore PGRST203, che PostgREST non sa risolvere).
+--
+-- Ordine di ricostruzione e ruolo di ciascun file: vedi README.md.
+-- ─────────────────────────────────────────────────────────────────────────────
 -- EinaudiPlus — schema Postgres (Supabase)
 -- Sostituisce i 4 deployment Google Apps Script e i relativi fogli.
 --
@@ -131,6 +141,13 @@ create table space_booking (
   btype      text     check (btype in ('private','open')),
   created_at timestamptz not null default now(),
   created_by text not null default 'user' check (created_by in ('user','admin')),
+  -- Consolidato dalla migrazione 004. Una prenotazione che scavalca la
+  -- mezzanotte diventa DUE righe (giovedì 21:00→24:00 e venerdì 00:00→01:00)
+  -- legate da questo group_id: il vincolo qui sotto lavora dentro un singolo
+  -- giorno, quindi due righe con `day` diverso non venivano mai confrontate e
+  -- la stessa ora della stessa notte era prenotabile due volte. Spezzandola,
+  -- il vincolo che esiste già fa il lavoro giusto su entrambi i giorni.
+  group_id   uuid,
   -- Sovrapposizioni impossibili per costruzione: sostituisce sia il controllo
   -- read-then-write di Code.gs sia il doppione client-side in roomsApi.hasOverlap
   exclude using gist (
@@ -141,7 +158,8 @@ create table space_booking (
   )
 );
 
-create index space_booking_week_idx on space_booking (space_id, week_start);
+create index space_booking_week_idx  on space_booking (space_id, week_start);
+create index space_booking_group_idx on space_booking (group_id);
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Notifiche
