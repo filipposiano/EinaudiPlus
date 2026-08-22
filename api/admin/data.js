@@ -91,6 +91,24 @@ export default async function handler(req, res) {
     }
   }
 
+  // Il log non dipende dal risultato dell'azione (usa solo i parametri della
+  // richiesta, gia' qui disponibili): prima partiva DOPO l'azione principale
+  // e la aspettava prima di rispondere, cioe' due andate e ritorni verso
+  // Supabase in fila invece che uno solo — il pannello sembrava lento
+  // proprio sulle scritture (aggiungere un incontro alla sala polivalente,
+  // creare un account, ...). Partendo insieme costano quanto il piu' lento
+  // dei due, non la somma. Le password non finiscono mai nel log, nemmeno
+  // hashate: un filtro sul nome del campo resta valido anche se in futuro se
+  // ne aggiunge un'altra ("password", "password_attuale", "password_nuova").
+  const logPromise = MUTATIONS.has(action)
+    ? rpc("admin_log", {
+        p_actor: me.u, p_action: action,
+        p_detail: Object.fromEntries(
+          Object.entries(body).filter(([k]) => k !== "action" && !k.toLowerCase().includes("password"))
+        ),
+      }).catch(() => { /* il log non deve far fallire l'operazione */ })
+    : null;
+
   try {
     let result;
 
@@ -332,20 +350,7 @@ export default async function handler(req, res) {
         return fail(res, "azione sconosciuta");
     }
 
-    if (MUTATIONS.has(action)) {
-      // Le password non devono mai finire nell'audit log, nemmeno hashate:
-      // chi lo legge deve sapere CHE un account e' stato creato o ha
-      // cambiato password, non conoscerne il segreto. Un filtro sul nome del
-      // campo invece di elencare ogni possibile chiave ("password",
-      // "password_attuale", "password_nuova", ...) resta valido anche se in
-      // futuro se ne aggiunge un'altra.
-      const detail = Object.fromEntries(
-        Object.entries(body).filter(([k]) => k !== "action" && !k.toLowerCase().includes("password"))
-      );
-      try {
-        await rpc("admin_log", { p_actor: me.u, p_action: action, p_detail: detail });
-      } catch { /* il log non deve far fallire l'operazione */ }
-    }
+    if (logPromise) await logPromise;
 
     return json(res, 200, result);
   } catch (err) {

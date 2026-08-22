@@ -860,6 +860,12 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
   data: string; eventi: Occorrenza[]; onCambiato: (agenda: Agenda) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  // Quale "Elimina" mostra il proprio stato di attesa: con un solo `busy`
+  // condiviso, cancellare un evento faceva sembrare in corso anche gli altri
+  // pulsanti Elimina della stessa lista, oltre a non dire nulla su quale dei
+  // due (aggiungi/elimina) stesse effettivamente aspettando la rete — il
+  // motivo per cui sembrava che il pannello "non desse nessun segnale".
+  const [eliminando, setEliminando] = useState<number | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [titolo, setTitolo] = useState("");
   const [inizio, setInizio] = useState("14:00");
@@ -882,10 +888,10 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
   }
 
   async function elimina(id: number) {
-    setBusy(true); setMsg(null);
+    setBusy(true); setEliminando(id); setMsg(null);
     try { onCambiato(await call<Agenda>("conferenzaDelete", { id })); }
     catch (e: any) { setMsg(e.message); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setEliminando(null); }
   }
 
   return (
@@ -904,12 +910,19 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
                 {o.note && <span style={{ display: "block", fontSize: 12, ...S.sub }}>{o.note}</span>}
               </span>
               <span className="adm-rule__act">
-                <button style={S.danger} disabled={busy} onClick={() => elimina(o.id)}>Elimina</button>
+                <button style={S.danger} disabled={busy} onClick={() => elimina(o.id)}>
+                  {eliminando === o.id ? "Elimino…" : "Elimina"}
+                </button>
               </span>
             </div>
           ))}
         </div>
       )}
+
+      {/* Linea netta fra "cosa c'e' gia'" e "cosa sto per aggiungere": senza,
+          le due sezioni si leggevano come un blocco solo e non si capiva a
+          colpo d'occhio dove finisse l'elenco e cominciasse il modulo. */}
+      <div style={{ borderTop: "1px solid var(--border)", margin: "4px 0 16px" }} />
 
       <p style={{ fontSize: 12, fontWeight: 700, ...S.sub, marginBottom: 8 }}>AGGIUNGI EVENTO</p>
       <input style={{ ...S.input, marginBottom: 8 }} placeholder="Titolo (es. Corsi PFP)" value={titolo}
@@ -930,7 +943,9 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
       <input style={{ ...S.input, marginBottom: 12 }} placeholder="Note (facoltative)" value={note}
              maxLength={300} onChange={(e) => setNote(e.target.value)} />
       <button style={{ ...S.btn, width: "100%", background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
-              disabled={busy} onClick={aggiungi}>Aggiungi evento</button>
+              disabled={busy} onClick={aggiungi}>
+        {busy && eliminando === null ? "Aggiungo…" : "Aggiungi evento"}
+      </button>
     </>
   );
 }
@@ -1059,7 +1074,13 @@ function Accounts({ me }: { me: string | null }) {
           {items.map((a) => (
             <div key={a.id}>
               <div className="adm-rule" style={{ opacity: a.attivo ? 1 : 0.5 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, ...S.sub, textTransform: "uppercase" }}>{a.ruolo}</span>
+                {/* Larghezza fissa: "SISTEMISTA" e "FDO" hanno lunghezze
+                    molto diverse, e senza un minimo comune ogni riga faceva
+                    iniziare il nome utente a un punto diverso — la colonna
+                    non era una colonna. */}
+                <span style={{ fontSize: 11, fontWeight: 700, ...S.sub, textTransform: "uppercase", minWidth: "9ch", flexShrink: 0 }}>
+                  {a.ruolo}
+                </span>
                 <span className="adm-rule__what">
                   {a.username}{a.username === me && <span style={{ ...S.sub }}> (tu)</span>}
                   {/* Chi non ha ancora fatto il primo accesso non ha ancora
