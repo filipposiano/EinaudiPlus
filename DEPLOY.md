@@ -33,32 +33,31 @@ possono contenere segreti.
 | `SUPABASE_SECRET_KEY` | chiedere a Filippo — **segreto**, bypassa la RLS |
 | `CRON_SECRET` | chiedere a Filippo — **segreto**, condiviso col job pg_cron |
 | `APP_TOKEN` | stesso valore di `VITE_SECRET_TOKEN` |
-| `FDO_USER` | `fdo` — front desk |
-| `FDO_PASSWORD_HASH` | chiedere a Filippo — è un hash scrypt, non la password |
-| `SYSADMIN_USER` | `sistemista` — super admin |
-| `SYSADMIN_PASSWORD_HASH` | chiedere a Filippo — hash scrypt |
 | `ADMIN_SESSION_SECRET` | chiedere a Filippo — **segreto**, firma i cookie di sessione |
 
-> `ADMIN_USER`/`ADMIN_PASSWORD_HASH` si chiamavano così prima: l'account
-> "portineria" è diventato FDO (Front Desk Officer) da tutte le parti, incluse
-> queste due variabili. Un vecchio cookie di sessione con il ruolo precedente
-> smette semplicemente di essere valido — chi lo aveva rifà login, non serve
-> nessun'altra azione.
+> `FDO_USER`/`FDO_PASSWORD_HASH`, `STAFF_USER`/`STAFF_PASSWORD_HASH` e
+> `SYSADMIN_USER`/`SYSADMIN_PASSWORD_HASH` **non esistono più come
+> meccanismo di login** (migrazione 011, agosto 2026): gli account
+> amministrativi vivono nella tabella `admin_account` e si gestiscono dal
+> pannello (sessione sistemista → scheda **Account**), non da qui. Se quelle
+> variabili sono ancora impostate su Vercel per inerzia, si possono
+> rimuovere: il codice non le legge più, e uno username/password rimasti lì
+> non fanno più entrare nessuno.
 
-I due account hanno poteri diversi:
+Ruoli e poteri (fdo e staff sono identici, restano account distinti perché
+l'audit log registra CHI ha fatto cosa):
 
-| | FDO | sistemista |
+| | fdo / staff | sistemista |
 |---|---|---|
-| Macchine fuori servizio, prenotazioni, segnalazioni, sale | ✓ | ✓ |
-| Regole ricorrenti | | ✓ |
-| Pulizia dei dati | | ✓ |
+| Macchine fuori servizio, prenotazioni, segnalazioni, sale, sala conferenze | ✓ | ✓ |
+| Regole ricorrenti, pulizia dei dati, gestione account | | ✓ |
 
 Il controllo è sul server, in `api/admin/data.js`: nascondere le schede nel
 pannello non sarebbe un'autorizzazione.
 
-> La password del pannello è passata da una chat durante lo sviluppo. Vale la
-> pena cambiarla: `node scripts/hash-password.cjs "nuova-password"` rigenera
-> l'hash, che poi va incollato in `FDO_PASSWORD_HASH`.
+> Un account creato o con la password reimpostata dal pannello deve
+> cambiarla al primo accesso: il sistemista non arriva mai a conoscere la
+> password definitiva di chi crea.
 
 ### Chiavi VAPID — non toccare
 

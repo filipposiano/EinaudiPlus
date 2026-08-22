@@ -41,13 +41,12 @@ export default async function handler(req, res) {
     peek("SUPABASE_SECRET_KEY", { prefix: 12 }),   // sb_secret_ vs sb_publishable_ vs eyJ… (legacy)
     peek("APP_TOKEN", { prefix: 4 }),
     peek("CRON_SECRET", { prefix: 4 }),
-    peek("FDO_USER", { secret: false }),
-    peek("FDO_PASSWORD_HASH", { prefix: 7 }),    // deve iniziare per "scrypt$"
-    peek("STAFF_USER", { secret: false }),
-    peek("STAFF_PASSWORD_HASH", { prefix: 7 }),
+    // FDO_USER/STAFF_USER/SYSADMIN_USER (e i relativi _PASSWORD_HASH) non si
+    // controllano piu' qui: dalla migrazione 011 gli account amministrativi
+    // vivono solo in `admin_account`, e queste variabili — anche se ancora
+    // impostate su Vercel — non fanno piu' entrare nessuno. Vederle "presenti"
+    // in questa diagnostica avrebbe suggerito il contrario.
     peek("ADMIN_SESSION_SECRET", { prefix: 4 }),
-    peek("SYSADMIN_USER", { secret: false }),
-    peek("SYSADMIN_PASSWORD_HASH", { prefix: 7 }),
     peek("VAPID_PUBLIC_KEY", { prefix: 8 }),
     peek("VAPID_PRIVATE_KEY", { prefix: 4 }),
     peek("VAPID_SUBJECT", { secret: false }),

@@ -2,8 +2,12 @@
 //
 // Gli account vivono nella tabella `admin_account` (migrazione 008): il
 // sistemista li crea, disattiva e reimposta dal pannello. Le tre variabili
-// d'ambiente storiche (FDO/STAFF/SYSADMIN_USER e _PASSWORD_HASH) restano
-// come rete di sicurezza — vedi authenticate() piu' sotto.
+// d'ambiente storiche (FDO/STAFF/SYSADMIN_USER e _PASSWORD_HASH) sono state
+// il meccanismo originale, tenuto come rete di sicurezza durante la
+// migrazione; con tutti gli account passati al database, quella rete e'
+// stata tolta di proposito (migrazione 011 in produzione) — un vecchio
+// account via env var non entra piu', anche se le variabili sono ancora
+// impostate su Vercel.
 //
 // scrypt invece di bcrypt: e' nella libreria standard di Node, quindi zero
 // dipendenze da mantenere e nessun modulo nativo che si rompe in build.
@@ -141,13 +145,11 @@ export function isSysadmin(claims) {
   return claims?.r === "sistemista";
 }
 
+// Il segreto di sessione e' l'unica cosa ancora necessaria per accettare un
+// login: senza, non c'e' modo di firmare il cookie qualunque sia la fonte
+// dell'account.
 export function adminConfigured() {
-  return Boolean(
-    process.env.ADMIN_SESSION_SECRET &&
-    ((process.env.FDO_USER && process.env.FDO_PASSWORD_HASH) ||
-     (process.env.STAFF_USER && process.env.STAFF_PASSWORD_HASH) ||
-     (process.env.SYSADMIN_USER && process.env.SYSADMIN_PASSWORD_HASH))
-  );
+  return Boolean(process.env.ADMIN_SESSION_SECRET);
 }
 
 // Hash fisso, di nessun account: serve solo a far passare verifyPassword()
@@ -157,47 +159,30 @@ export function adminConfigured() {
 const HASH_FASULLO = `scrypt$${"00".repeat(16)}$${"00".repeat(64)}`;
 
 /**
- * Riconosce l'utente e ne restituisce il ruolo.
+ * Riconosce l'utente e ne restituisce il ruolo, leggendo la tabella
+ * `admin_account`. L'account deve esistere ed essere attivo.
  *
- * Due fonti, controllate entrambe sempre:
- *  1. La tabella `admin_account`, dove il sistemista crea e gestisce gli
- *     account dal pannello.
- *  2. Le tre variabili d'ambiente storiche (FDO/STAFF/SYSADMIN), che restano
- *     come rete di sicurezza: se il database non risponde, o la tabella e'
- *     ancora vuota subito dopo la migrazione, non si resta tutti fuori.
- *
- * Le password si verificano SEMPRE entrambe le fonti, anche quando l'username
- * non corrisponde a nessuna: uscire prima renderebbe il tempo di risposta un
- * indizio su quali account esistono. (La rete verso Supabase introduce comunque
- * una variabilita' di per se', ma non e' un motivo per smettere di provarci.)
+ * Se il database non risponde l'accesso fallisce: non c'e' piu' una rete di
+ * sicurezza via env var che lo aggiri. E' una scelta esplicita — un login
+ * ancora possibile con una password "storica" quando qualcuno l'ha appena
+ * cambiata dal pannello era la falla, non la sicurezza.
  */
 export async function authenticate(username, password) {
-  let dbRole = null;
+  let row = null;
   try {
-    const row = await rpc("account_by_username", { p_username: username });
-    if (row?.id) {
-      const ok = verifyPassword(password, row.password_hash);
-      if (ok && row.attivo) dbRole = row.ruolo;
-    } else {
-      verifyPassword(password, HASH_FASULLO);
-    }
+    row = await rpc("account_by_username", { p_username: username });
   } catch {
-    // Database irraggiungibile: si scende comunque al controllo delle env
-    // var qui sotto, che e' pensato apposta per non dipendere dal database.
+    return null;
   }
 
-  const accounts = [
-    { user: process.env.FDO_USER, hash: process.env.FDO_PASSWORD_HASH, role: "fdo" },
-    { user: process.env.STAFF_USER, hash: process.env.STAFF_PASSWORD_HASH, role: "staff" },
-    { user: process.env.SYSADMIN_USER, hash: process.env.SYSADMIN_PASSWORD_HASH, role: "sistemista" },
-  ];
-
-  let envRole = null;
-  for (const a of accounts) {
-    if (!a.user || !a.hash) continue;
-    const ok = verifyPassword(password, a.hash);
-    if (ok && a.user === username) envRole = a.role;
+  if (!row?.id) {
+    // Utente inesistente: si passa comunque da scrypt, con lo stesso costo
+    // di una password sbagliata su un account vero, cosi' il tempo di
+    // risposta non rivela quali username esistono.
+    verifyPassword(password, HASH_FASULLO);
+    return null;
   }
 
-  return dbRole || envRole;
+  if (!row.attivo) return null;
+  return verifyPassword(password, row.password_hash) ? row.ruolo : null;
 }
