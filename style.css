@@ -504,3 +504,67 @@
   padding-bottom: 2px;
   box-shadow: 0 -8px 12px -8px color-mix(in srgb, var(--foreground) 25%, transparent);
 }
+
+/* ── Foglio impegni: a schermo e sulla carta ──────────────────────────────── */
+
+.tabella-impegni { width: 100%; border-collapse: collapse; }
+.tabella-impegni td {
+  padding: 5px 6px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--foreground);
+  vertical-align: baseline;
+}
+.tabella-impegni .col-data {
+  white-space: nowrap;
+  color: var(--gray-accessible-text);
+  text-transform: capitalize;
+  width: 5.5rem;
+}
+.tabella-impegni .col-ora {
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  width: 6.5rem;
+}
+.tabella-impegni .col-cosa { overflow-wrap: anywhere; }
+.tabella-impegni .nota { color: var(--gray-accessible-text); }
+
+/* L'intestazione con titolo e data serve solo sulla carta: a schermo il
+   modale ha gia' la sua, e ripeterla sarebbe rumore. */
+.solo-in-stampa { display: none; }
+
+@media print {
+  /* Si stampa SOLO il foglio degli impegni.
+     `visibility` invece di `display: none` sugli antenati: nascondere il
+     contenitore nasconderebbe anche il figlio che vogliamo tenere, mentre
+     visibility si puo' riaccendere sul discendente. */
+  body * { visibility: hidden; }
+  #foglio-stampa, #foglio-stampa * { visibility: visible; }
+  #foglio-stampa {
+    position: absolute;
+    left: 0; top: 0;
+    width: 100%;
+    padding: 0;
+  }
+
+  /* Lo sfondo del modale e la penombra non devono finire sulla carta. */
+  .schermo-solo { background: none !important; }
+
+  .solo-in-stampa { display: block; margin-bottom: 14px; }
+  .solo-in-stampa h1 { font-size: 20px; font-weight: 700; margin: 0 0 2px; }
+  .solo-in-stampa .sottotitolo { font-size: 12px; color: #444; margin: 0; }
+
+  /* Nero su bianco: le variabili del tema puntano al chiaro o allo scuro a
+     seconda del telefono, e stampare testo chiaro su carta bianca lo
+     renderebbe illeggibile. */
+  #foglio-stampa, #foglio-stampa * { color: #000 !important; background: transparent !important; }
+  .tabella-impegni td { border-bottom: 1px solid #bbb; }
+  .tabella-impegni .col-data, .tabella-impegni .nota { color: #444 !important; }
+
+  /* Un mese non si spezza a meta' fra due pagine se puo' evitarlo. */
+  #foglio-stampa > div { break-inside: avoid; }
+
+  @page { margin: 16mm; }
+}

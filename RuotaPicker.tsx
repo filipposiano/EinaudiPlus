@@ -131,3 +131,48 @@ export default function RuotaPicker({ valori, indice, onCambia, ariaLabel }: {
     </div>
   );
 }
+
+// ─── Orario a due ruote (ore : minuti) ────────────────────────────────────────
+//
+// Sostituisce `<input type="time">` dove serve un orario libero. Il pannello
+// di sistema di quell'input, su alcuni telefoni, si apre oltre il bordo
+// inferiore e resta invisibile: e' il difetto segnalato. Due ruote HTML vivono
+// dentro il modale e non possono uscirne.
+//
+// Minuti da 0 a 59, non a passi di cinque: in sala esistono gia' orari come
+// 13:59, e un selettore che non sa rappresentare i dati che ha davanti
+// costringerebbe a cambiarli per poterli salvare.
+
+const ORE    = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, "0"));
+const MINUTI = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, "0"));
+
+export function RuotaOrario({ valore, onCambia, etichetta }: {
+  /** "HH:MM" */
+  valore: string;
+  onCambia: (hhmm: string) => void;
+  etichetta?: string;
+}) {
+  const [hh, mm] = (valore || "00:00").split(":");
+  const iOra = Math.max(0, ORE.indexOf(hh));
+  const iMin = Math.max(0, MINUTI.indexOf(mm));
+
+  return (
+    <div>
+      {etichetta && (
+        <label style={{ display: "block", fontSize: 11, color: "var(--gray-accessible-text)", marginBottom: 4 }}>
+          {etichetta}
+        </label>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6 }}>
+        <RuotaPicker
+          valori={ORE} indice={iOra} ariaLabel={(etichetta ?? "") + " — ore"}
+          onCambia={(i) => onCambia(ORE[i] + ":" + MINUTI[iMin])}
+        />
+        <RuotaPicker
+          valori={MINUTI} indice={iMin} ariaLabel={(etichetta ?? "") + " — minuti"}
+          onCambia={(i) => onCambia(ORE[iOra] + ":" + MINUTI[i])}
+        />
+      </div>
+    </div>
+  );
+}

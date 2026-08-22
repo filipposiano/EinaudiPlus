@@ -11,6 +11,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Occorrenza } from "./conferenzeApi";
+import { RuotaOrario } from "./RuotaPicker";
 
 // ─── Tipi ────────────────────────────────────────────────────────────────────
 
@@ -812,8 +813,10 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
           <select style={S.input} value={sDay} onChange={(e) => setSDay(Number(e.target.value))}>
             {DAYS.map((d, i) => <option key={i} value={i}>Ogni {d.toLowerCase()}</option>)}
           </select>
-          <input style={S.input} type="time" value={sStart} onChange={(e) => setSStart(e.target.value)} />
-          <input style={S.input} type="time" value={sEnd} onChange={(e) => setSEnd(e.target.value)} />
+          {/* Ruote anche qui, per lo stesso motivo del modulo polivalente:
+              il pannello nativo su alcuni telefoni finisce fuori schermo. */}
+          <RuotaOrario valore={sStart} onCambia={setSStart} etichetta="Inizio" />
+          <RuotaOrario valore={sEnd}   onCambia={setSEnd}   etichetta="Fine" />
           <input style={S.input} placeholder="Nome" value={sName} onChange={(e) => setSName(e.target.value)} />
           <button style={{ ...S.btn, background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
                   disabled={busy} onClick={addSpace}>Aggiungi</button>
@@ -1213,18 +1216,14 @@ export function GiornoSheetAdmin({ data, eventi, onCambiato }: {
       <input style={{ ...S.input, marginBottom: 8 }} placeholder="Titolo (es. Corsi PFP)" value={titolo}
              maxLength={60} onChange={(e) => setTitolo(e.target.value)} />
 
-      {/* Inizio e fine restano SEMPRE affiancati (vedi .conf-incontro__orari in
-          style.css): su telefono finivano uno sotto l'altro senza etichetta e
-          sembravano due numeri scollegati invece di un intervallo. */}
+      {/* Ruote al posto di <input type="time">: il pannello di sistema di
+          quell'input, su alcuni telefoni, si apre oltre il bordo inferiore e
+          resta invisibile. Le ruote sono HTML nostro e vivono dentro il
+          modale, quindi non possono uscirne. Inizio e fine restano affiancati
+          per leggersi come un intervallo. */}
       <div className="conf-incontro__orari" style={{ marginBottom: 8 }}>
-        <div>
-          <label>Orario di inizio</label>
-          <input style={S.input} type="time" value={inizio} onChange={(e) => setInizio(e.target.value)} />
-        </div>
-        <div>
-          <label>Orario di fine</label>
-          <input style={S.input} type="time" value={fine} onChange={(e) => setFine(e.target.value)} />
-        </div>
+        <RuotaOrario valore={inizio} onCambia={setInizio} etichetta="Orario di inizio" />
+        <RuotaOrario valore={fine}   onCambia={setFine}   etichetta="Orario di fine" />
       </div>
 
       {/* In modifica la data si puo' spostare: e' il "cambia giorno". In

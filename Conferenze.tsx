@@ -12,7 +12,7 @@
 // è importato in lazy dal pannello admin: chi non ha una sessione (la
 // stragrande maggioranza di chi apre questa pagina) non lo scarica.
 import { useState, useEffect, useCallback, lazy, Suspense } from "react";
-import { Loader2, AlertTriangle, ChevronLeft, ChevronRight, X } from "lucide-react";
+import { Loader2, AlertTriangle, ChevronLeft, ChevronRight, X, Printer, Download } from "lucide-react";
 import * as conferenze from "./conferenzeApi";
 import type { Occorrenza, Agenda } from "./conferenzeApi";
 import { T, type Lang } from "./i18n";
@@ -62,6 +62,7 @@ export default function Conferenze({ lang, adminRole }: { lang: Lang; adminRole:
   const [loading, setLoading] = useState(true);
   const [errore, setErrore] = useState(false);
   const [selezionato, setSelezionato] = useState<string | null>(null);
+  const [stampaAperta, setStampaAperta] = useState(false);
 
   const oggi = oggiISO();
   const [oa, om] = oggi.split("-").map(Number);
@@ -236,6 +237,25 @@ export default function Conferenze({ lang, adminRole }: { lang: Lang; adminRole:
         })}
       </div>
 
+      {/* Il foglio da stampare o esportare, per chiunque amministri. Serve al
+          caso concreto per cui una sala si programma: appenderne l'elenco
+          fuori dalla porta, o mandarlo a chi non usa l'app. */}
+      {adminRole !== null && (
+        <button onClick={() => setStampaAperta(true)}
+          className="w-full mt-5 py-3 rounded-2xl text-sm font-semibold border flex items-center justify-center gap-2"
+          style={{ borderColor: DIV, color: SUB, background: "transparent" }}>
+          <Printer size={15} /> Stampa o esporta gli impegni
+        </button>
+      )}
+
+      {stampaAperta && (
+        <FoglioStampa
+          occorrenze={agenda?.occorrenze ?? []}
+          lang={lang}
+          onClose={() => setStampaAperta(false)}
+        />
+      )}
+
       {/* Foglio giorno: dettaglio in lettura per chiunque, modulo di
           aggiunta/rimozione in più per chi ha una sessione admin. */}
       {selezionato && (
@@ -257,6 +277,134 @@ export default function Conferenze({ lang, adminRole }: { lang: Lang; adminRole:
           onCambiato={carica}
         />
       )}
+    </div>
+  );
+}
+
+// ─── Foglio da stampare o esportare ──────────────────────────────────────────
+//
+// Il caso concreto per cui una sala si programma: appendere l'elenco fuori
+// dalla porta, o mandarlo a chi in app non ci entra mai. Sono due formati
+// perche' sono due usi diversi — la stampa e' per il muro, il CSV e' per chi
+// deve rimaneggiare le date in un foglio di calcolo.
+//
+// La stampa non apre una pagina nuova: `@media print` in style.css nasconde
+// tutto il resto dell'app e lascia solo questo riquadro. Una finestra nuova
+// avrebbe voluto dire ricostruire li' dentro font, temi e stili, e su iOS
+// viene spesso bloccata come popup.
+
+function FoglioStampa({ occorrenze, lang, onClose }: {
+  occorrenze: Occorrenza[]; lang: Lang; onClose: () => void;
+}) {
+  const t = T[lang];
+  const oggi = oggiISO();
+
+  // Solo da oggi in avanti: un foglio da appendere non ha ragione di
+  // elencare gli impegni della settimana scorsa.
+  const righe = occorrenze
+    .filter((o) => o.data >= oggi)
+    .sort((a, b) => a.data.localeCompare(b.data) || a.inizio.localeCompare(b.inizio));
+
+  const perMese = new Map<string, Occorrenza[]>();
+  for (const o of righe) {
+    const k = o.data.slice(0, 7);
+    (perMese.get(k) ?? perMese.set(k, []).get(k)!).push(o);
+  }
+
+  const nomeMese = (chiave: string) => {
+    const [a, m] = chiave.split("-").map(Number);
+    return new Date(a, m - 1, 1).toLocaleDateString(LOCALE_PER_LINGUA[lang], { month: "long", year: "numeric" });
+  };
+
+  function scaricaCsv() {
+    // Punto e virgola, non virgola: Excel in locale italiano apre i file con
+    // la virgola mettendo tutto in una colonna sola, ed e' il primo posto
+    // dove questo foglio finira'.
+    const esc = (v: string) => '"' + String(v ?? "").replace(/"/g, '""') + '"';
+    const testo = [
+      ["Data", "Inizio", "Fine", "Attivita", "Note"].join(";"),
+      ...righe.map((o) => [o.data, o.inizio, o.fine, o.titolo, o.note ?? ""].map(esc).join(";")),
+    ].join("\r\n");
+    // BOM: senza, Excel legge il file come ANSI e le accentate si rompono.
+    const blob = new Blob(["﻿" + testo], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sala-polivalente-${oggi}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div className="absolute inset-0 z-50 flex items-end schermo-solo" style={{ background: "rgba(0,0,0,0.6)" }} onClick={onClose}>
+      <div className="foglio-modale w-full rounded-t-3xl px-6" style={{ background: "var(--background)" }} onClick={(e) => e.stopPropagation()}>
+        <div className="foglio-modale__testa pt-6">
+          <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }} />
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-base font-bold" style={{ color: FG }}>Impegni della sala</p>
+            <button onClick={onClose} className="p-1.5 rounded-lg" style={{ color: SUB, background: CHIP }}><X size={16} /></button>
+          </div>
+        </div>
+
+        <div className="foglio-modale__corpo pb-4">
+          {righe.length === 0 ? (
+            <p className="text-sm py-6 text-center" style={{ color: SUB }}>{t.nessunaOccupazione}</p>
+          ) : (
+            <>
+              <p className="text-xs mb-3" style={{ color: SUB }}>
+                {righe.length} impegn{righe.length === 1 ? "o" : "i"} da oggi in avanti.
+              </p>
+              {/* Questo e' anche cio' che finisce sul foglio: l'anteprima non
+                  e' una versione ridotta, e' esattamente la stampa. */}
+              <div id="foglio-stampa">
+                <div className="solo-in-stampa">
+                  <h1>{t.salaConferenze}</h1>
+                  <p className="sottotitolo">
+                    Impegni dal {new Date(oggi + "T00:00:00").toLocaleDateString(LOCALE_PER_LINGUA[lang], { day: "numeric", month: "long", year: "numeric" })}
+                  </p>
+                </div>
+
+                {[...perMese.entries()].map(([mese, elenco]) => (
+                  <div key={mese} className="mb-4">
+                    <p className="text-[11px] font-mono tracking-widest uppercase mb-1.5 capitalize" style={{ color: SUB }}>
+                      {nomeMese(mese)}
+                    </p>
+                    <table className="tabella-impegni">
+                      <tbody>
+                        {elenco.map((o, i) => (
+                          <tr key={o.id + "-" + o.data + "-" + i}>
+                            <td className="col-data">
+                              {new Date(o.data + "T00:00:00").toLocaleDateString(LOCALE_PER_LINGUA[lang], { weekday: "short", day: "numeric" })}
+                            </td>
+                            <td className="col-ora">{o.inizio}–{o.fine}</td>
+                            <td className="col-cosa">
+                              {o.titolo}
+                              {o.note && <span className="nota"> · {o.note}</span>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="foglio-modale__piede pb-7 pt-3 flex gap-2">
+          <button onClick={scaricaCsv} disabled={righe.length === 0}
+            className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold border"
+            style={{ borderColor: DIV, color: SUB, background: "transparent", opacity: righe.length ? 1 : 0.5 }}>
+            <Download size={15} /> CSV
+          </button>
+          <button onClick={() => window.print()} disabled={righe.length === 0}
+            className="flex-[2] flex items-center justify-center gap-2 py-3 rounded-2xl text-sm font-semibold"
+            style={{ background: RED, color: "var(--primary-foreground)", opacity: righe.length ? 1 : 0.5 }}>
+            <Printer size={15} /> Stampa
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
