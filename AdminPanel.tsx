@@ -50,7 +50,7 @@ type Recurring = {
 // `staff` ha gli stessi poteri di `fdo`; solo `sistemista` puo' di piu'.
 // Restano account distinti perche' l'audit log registra chi ha fatto cosa.
 export type Role = "fdo" | "staff" | "sistemista";
-export type Tab = "macchine" | "segnalazioni" | "programmazione" | "account" | "ricorrenti" | "manutenzione";
+export type Tab = "macchine" | "segnalazioni" | "account" | "ricorrenti" | "manutenzione";
 
 // ─── Chiamate ────────────────────────────────────────────────────────────────
 
@@ -870,14 +870,15 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
 
 const oggiISO = () => new Date().toLocaleDateString("sv-SE");
 
-/** "7 ott 2026" — compatta, per le righe dell'elenco. */
+/** "sab 7 ott 2026" — il giorno della settimana aiuta a leggere l'elenco
+ *  come un calendario invece che come una lista di date isolate. */
 const dataBreve = (iso: string) =>
-  new Date(iso + "T00:00:00").toLocaleDateString("it-IT", { day: "numeric", month: "short", year: "numeric" });
+  new Date(iso + "T00:00:00").toLocaleDateString("it-IT", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 
 type Incontro = { data: string; inizio: string; fine: string };
 const incontroVuoto = (): Incontro => ({ data: oggiISO(), inizio: "14:00", fine: "18:00" });
 
-function SalaConferenze() {
+export function SalaConferenze() {
   const [items, setItems] = useState<ConfRule[]>([]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -955,10 +956,18 @@ function SalaConferenze() {
     return `${cadenza}, ${dataBreve(r.dal)} → ${dataBreve(r.al)}`;
   };
 
+  // Per giorno d'inizio: una regola vecchio stile (dal ≠ al) finisce nel
+  // gruppo del suo primo giorno, non in uno per ciascuno — quando() sulla
+  // singola riga dice il resto.
+  const perGiorno = new Map<string, ConfRule[]>();
+  for (const r of items) {
+    (perGiorno.get(r.dal) ?? perGiorno.set(r.dal, []).get(r.dal)!).push(r);
+  }
+
   return (
     <>
       <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
-        La sala conferenze non si prenota: la programma la direzione, i residenti la
+        La sala polivalente non si prenota: la programma la direzione, i residenti la
         vedono in sola lettura con l'agenda fino a un anno avanti. Dai un nome
         all'attività e aggiungi i suoi incontri, uno per uno: ciascuno con la propria
         data e fascia oraria.
@@ -973,16 +982,31 @@ function SalaConferenze() {
                value={nomeAttivita} maxLength={60} onChange={(e) => setNomeAttivita(e.target.value)} />
 
         <p style={{ fontSize: 12, fontWeight: 700, ...S.sub, marginBottom: 8 }}>INCONTRI</p>
-        <div style={{ display: "grid", gap: 8, marginBottom: 8 }}>
+        <div style={{ display: "grid", gap: 12, marginBottom: 8 }}>
           {incontri.map((inc, i) => (
-            <div key={i} className="adm-form" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))" }}>
-              <input style={S.input} type="date" value={inc.data} onChange={(e) => aggiornaIncontro(i, "data", e.target.value)} />
-              <input style={S.input} type="time" value={inc.inizio} onChange={(e) => aggiornaIncontro(i, "inizio", e.target.value)} />
-              <input style={S.input} type="time" value={inc.fine} onChange={(e) => aggiornaIncontro(i, "fine", e.target.value)} />
+            <div key={i} className="conf-incontro">
+              <div className="conf-incontro__campo">
+                <label>Data</label>
+                <input style={S.input} type="date" value={inc.data} onChange={(e) => aggiornaIncontro(i, "data", e.target.value)} />
+              </div>
+              {/* Inizio e fine restano SEMPRE affiancati (vedi .conf-incontro__orari
+                  in style.css): su telefono, prima, finivano uno sotto l'altro senza
+                  etichetta e sembravano due numeri scollegati invece di un intervallo. */}
+              <div className="conf-incontro__orari">
+                <div>
+                  <label>Orario di inizio</label>
+                  <input style={S.input} type="time" value={inc.inizio} onChange={(e) => aggiornaIncontro(i, "inizio", e.target.value)} />
+                </div>
+                <div>
+                  <label>Orario di fine</label>
+                  <input style={S.input} type="time" value={inc.fine} onChange={(e) => aggiornaIncontro(i, "fine", e.target.value)} />
+                </div>
+              </div>
               {/* Il primo incontro non si toglie: il modulo deve sempre avere
                   almeno una riga da compilare. */}
               {incontri.length > 1 && (
-                <button type="button" style={S.danger} onClick={() => rimuoviIncontro(i)} aria-label="Togli incontro">✕</button>
+                <button type="button" style={S.danger} className="conf-incontro__rimuovi"
+                        onClick={() => rimuoviIncontro(i)} aria-label="Togli incontro">✕</button>
               )}
             </div>
           ))}
@@ -1002,17 +1026,34 @@ function SalaConferenze() {
       <div style={{ ...S.card, padding: 18 }}>
         <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>In programma ({items.length})</h2>
         {items.length === 0 && <p style={{ fontSize: 13, ...S.sub }}>Niente in programma.</p>}
-        <div style={{ display: "grid", gap: 6 }}>
-          {items.map((r) => (
-            <div key={r.id} className="adm-rule">
-              <span style={{ fontSize: 13, fontWeight: 700 }}>{r.inizio}–{r.fine}</span>
-              <span className="adm-rule__what">
-                {r.titolo} · {quando(r)}
-                {r.note && <span style={{ display: "block", fontSize: 12, ...S.sub }}>{r.note}</span>}
-              </span>
-              <span className="adm-rule__act">
-                <button style={S.danger} disabled={busy} onClick={() => elimina(r)}>Elimina</button>
-              </span>
+        {/* Raggruppato per giorno, come la vista dei residenti: prima ogni riga
+            ripeteva la propria data ("· 22 ago 2026") anche quando la riga sopra
+            era lo stesso giorno, e con più incontri vicini diventava un elenco
+            da decifrare invece che un calendario da scorrere. */}
+        <div style={{ display: "grid", gap: 14 }}>
+          {[...perGiorno.entries()].map(([giorno, righe]) => (
+            <div key={giorno}>
+              <p style={{ fontSize: 12, fontWeight: 700, ...S.sub, marginBottom: 6, textTransform: "capitalize" }}>
+                {dataBreve(giorno)}
+              </p>
+              <div style={{ display: "grid", gap: 6 }}>
+                {righe.map((r) => (
+                  <div key={r.id} className="adm-rule">
+                    <span style={{ fontSize: 13, fontWeight: 700 }}>{r.inizio}–{r.fine}</span>
+                    <span className="adm-rule__what">
+                      {r.titolo}
+                      {/* Solo per le regole ricorrenti create prima della migrazione
+                          010 (dal ≠ al): un incontro nuovo è sempre un solo giorno,
+                          e il gruppo qui sopra basta a dirlo. */}
+                      {r.dal !== r.al && <span style={{ display: "block", fontSize: 11, ...S.sub }}>{quando(r)}</span>}
+                      {r.note && <span style={{ display: "block", fontSize: 12, ...S.sub }}>{r.note}</span>}
+                    </span>
+                    <span className="adm-rule__act">
+                      <button style={S.danger} disabled={busy} onClick={() => elimina(r)}>Elimina</button>
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -1333,7 +1374,7 @@ export async function adminLogout() {
 // comunicargliela. Al primo accesso, prima di poter fare qualunque altra
 // cosa, il titolare deve sceglierne una sua — da quel momento il sistemista
 // smette di conoscerla.
-function CambiaPasswordObbligata({ onFatto }: { onFatto: () => void }) {
+export function CambiaPasswordObbligata({ onFatto }: { onFatto: () => void }) {
   const [attuale, setAttuale] = useState("");
   const [nuova, setNuova] = useState("");
   const [conferma, setConferma] = useState("");
@@ -1522,7 +1563,6 @@ export function AdminScreens({ tab, onSession }: {
       {tab === "segnalazioni" && (!staff
         ? <Segnalazioni laundries={laundries} reload={loadOverview} />
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata a FDO e sistemista.</p>)}
-      {tab === "programmazione" && <SalaConferenze />}
       {tab === "account" && (sistemista
         ? <Accounts me={username} />
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata al sistemista.</p>)}

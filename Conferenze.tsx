@@ -1,18 +1,29 @@
-// Conferenze.tsx — la sala conferenze, in sola lettura.
+// Conferenze.tsx — la sala polivalente.
 //
-// A differenza di cinema e musica qui non c'è niente da prenotare: la sala la
-// programma la direzione. Quindi la schermata risponde a una domanda sola, e la
-// mette in cima grande: **adesso è libera?**
+// A differenza di cinema e musica qui i residenti non prenotano: la sala la
+// programma la direzione. Quindi per loro la schermata risponde a una domanda
+// sola, e la mette in cima grande: **adesso è libera?**
 //
-// Sotto, il calendario delle prossime occupazioni. La programmazione può
-// arrivare a un anno, quindi si guarda un mese per volta e si può allungare.
-
-import { useState, useEffect, useCallback } from "react";
+// Sotto, il calendario dei prossimi impegni. La programmazione può arrivare
+// a un anno, quindi si guarda un mese per volta e si può allungare.
+//
+// Chi ha una sessione admin (fdo, staff o sistemista) trova qui sotto anche
+// il modulo per programmarla: prima viveva in una scheda a sé nel pannello
+// amministrativo ("Programmazione"), separata dalla pagina che chiunque
+// guarda per sapere se la sala è libera — due posti per la stessa sala.
+// `SalaConferenze` e' importata in lazy dal pannello admin: chi non ha una
+// sessione (la stragrande maggioranza di chi apre questa pagina) non la
+// scarica.
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { Loader2, AlertTriangle, CalendarDays } from "lucide-react";
 import * as conferenze from "./conferenzeApi";
 import type { Occorrenza } from "./conferenzeApi";
 import { T, type Lang } from "./i18n";
 import { RED, GREEN, GREEN_T, OOS_C, OOS_T, FG, SUB, DIV, SURF } from "./tema";
+import type { Role as AdminRole } from "./AdminPanel";
+
+const SalaConferenzeAdmin = lazy(() => import("./AdminPanel").then((m) => ({ default: m.SalaConferenze })));
+const CambiaPasswordObbligata = lazy(() => import("./AdminPanel").then((m) => ({ default: m.CambiaPasswordObbligata })));
 
 /** "lun 7 ott" — data breve, nella lingua scelta. */
 function dataBreve(iso: string, lang: Lang) {
@@ -24,7 +35,7 @@ function dataBreve(iso: string, lang: Lang) {
 
 const oggiISO = () => new Date().toLocaleDateString("sv-SE");   // "2026-10-07"
 
-export default function Conferenze({ lang }: { lang: Lang }) {
+export default function Conferenze({ lang, adminRole }: { lang: Lang; adminRole: AdminRole | null }) {
   const t = T[lang];
   const [agenda, setAgenda] = useState<conferenze.Agenda | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,6 +43,21 @@ export default function Conferenze({ lang }: { lang: Lang }) {
   // Un mese per volta: la programmazione può arrivare a un anno, ma mostrarla
   // tutta insieme sarebbe un muro. Si allunga quando serve.
   const [giorni, setGiorni] = useState(30);
+
+  // Un account con la password appena creata o reimpostata dal sistemista
+  // deve cambiarla prima di poter fare qualunque altra cosa — vedi
+  // CambiaPasswordObbligata. Quel controllo vive dentro AdminScreens, che
+  // qui non c'è: la programmazione della sala e' raggiungibile da questa
+  // pagina anche senza mai passare da una scheda amministrativa, quindi va
+  // ripetuto qui.
+  const [deveCambiare, setDeveCambiare] = useState(false);
+  const controllaSessione = useCallback(() => {
+    if (adminRole === null) return;
+    fetch("/api/admin/auth").then((r) => r.json())
+      .then((d) => setDeveCambiare(Boolean(d.deve_cambiare_password)))
+      .catch(() => {});
+  }, [adminRole]);
+  useEffect(() => { controllaSessione(); }, [controllaSessione]);
 
   const carica = useCallback(async (g: number) => {
     setLoading(true);
@@ -147,6 +173,21 @@ export default function Conferenze({ lang }: { lang: Lang }) {
           style={{ borderColor: DIV, color: SUB, background: "transparent" }}>
           {loading ? "…" : giorni < 90 ? t.guardaTreMesi : t.guardaAnno}
         </button>
+      )}
+
+      {/* Solo per chi ha una sessione admin: la programmazione vera e propria
+          vive qui, non altrove — vedi la nota in cima al file. */}
+      {adminRole !== null && (
+        <div className="mt-8 pt-6 border-t" style={{ borderColor: DIV }}>
+          <p className="text-[11px] font-mono tracking-widest uppercase mb-3" style={{ color: SUB }}>
+            {t.amministrazione}
+          </p>
+          <Suspense fallback={null}>
+            {deveCambiare
+              ? <CambiaPasswordObbligata onFatto={controllaSessione} />
+              : <SalaConferenzeAdmin />}
+          </Suspense>
+        </div>
       )}
     </div>
   );

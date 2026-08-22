@@ -316,6 +316,47 @@
 }
 .adm-form > * { min-width: 0; }
 
+/* Riga di un incontro (sala polivalente): data + orario di inizio/fine.
+   Prima usava .adm-form generico, e su telefono i due orari finivano ognuno
+   su una riga propria senza etichetta: si vedeva un "14:00" e un "18:00" uno
+   sotto l'altro, senza modo di capire a colpo d'occhio quale fosse l'inizio
+   e quale la fine. Qui la data prende la riga se serve, ma gli orari restano
+   SEMPRE affiancati (due colonne, mai una sola): due campi ora non hanno
+   bisogno di andare a capo, e restando appaiati si leggono come un intervallo
+   invece che come due numeri scollegati. */
+.conf-incontro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+}
+.conf-incontro__campo { flex: 1 1 150px; min-width: 0; }
+.conf-incontro__orari {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  flex: 2 1 220px;
+  min-width: 0;
+}
+.conf-incontro label {
+  display: block;
+  font-size: 11px;
+  color: var(--gray-accessible-text);
+  margin-bottom: 4px;
+}
+.conf-incontro__rimuovi { flex: 0 0 auto; }
+
+/* L'icona nativa di calendario/orologio di type="date" e type="time" e'
+   disegnata scura, pensata per uno sfondo chiaro: in tema notte lo sfondo del
+   campo diventa scuro ma l'icona resta scura anche lei, e sparisce — il testo
+   dentro al campo si legge benissimo, e' solo il selettore ad essere
+   invisibile. color-scheme dice al browser di ridisegnare quei controlli
+   nativi (icona compresa) con la sua stessa palette scura. */
+.dark input[type="date"],
+.dark input[type="time"] {
+  color-scheme: dark;
+}
+
 /* Riga di una regola ricorrente. Su schermo stretto va su più righe: la
    descrizione prende una riga tutta sua e i comandi si allineano a destra.
    Da 720px in su torna una riga sola, che è come si legge meglio un elenco. */

@@ -45,7 +45,7 @@ const AdminLoginSheet = lazy(() => import("./AdminPanel").then((m) => ({ default
 // Lavanderia, Cinema e Musica.
 type Facility = "laundry" | "cinema" | "music" | "conferenze" | AdminTab;
 
-const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "programmazione", "account", "ricorrenti", "manutenzione"];
+const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "account", "ricorrenti", "manutenzione"];
 const isAdminFacility = (f: Facility): f is AdminTab => (ADMIN_TABS as string[]).includes(f);
 
 /** Etichetta della camera nell'intestazione. Chi amministra è la Direzione. */
@@ -1940,7 +1940,7 @@ const FACILITIES: {
 // controllo vero resta sul server: nascondere una voce non è un'autorizzazione.
 const ADMIN_SECTIONS: {
   id: AdminTab; icon: any;
-  chiave: "navMacchine" | "navSegnalazioni" | "navProgrammazione" | "navAccount" | "navRicorrenti" | "navManutenzione";
+  chiave: "navMacchine" | "navSegnalazioni" | "navAccount" | "navRicorrenti" | "navManutenzione";
   sistemistaOnly?: boolean;
   // Macchine e segnalazioni restano affari di FDO e sistemista: lo staff
   // prenota per conto della Direzione come l'FDO, ma non deve vedere lo
@@ -1949,9 +1949,9 @@ const ADMIN_SECTIONS: {
 }[] = [
   { id: "macchine",       icon: Wrench,        chiave: "navMacchine",     staffEsclusa: true },
   { id: "segnalazioni",   icon: MessageSquare, chiave: "navSegnalazioni", staffEsclusa: true },
-  // Aperta a qualunque admin (fdo, staff, sistemista): è il "solo gli admin
-  // possono segnare" della sala conferenze, non una faccenda da sistemista.
-  { id: "programmazione", icon: Presentation,  chiave: "navProgrammazione" },
+  // La programmazione della sala polivalente non e' piu' una scheda a se':
+  // vive dentro la sezione "Polivalente" stessa (vedi Conferenze.tsx), visibile
+  // li' a chiunque abbia una sessione admin — non serve piu' una voce qui.
   // Chi crea e disattiva gli account e' una decisione dello stesso livello di
   // "chi puo' cancellare tutto": resta al sistemista.
   { id: "account",        icon: UserCog,       chiave: "navAccount",      sistemistaOnly: true },
@@ -2301,7 +2301,7 @@ export default function App() {
     bodyContent = <div className="px-5 pt-4"><Suspense fallback={null}><AdminScreens tab={facility} onSession={handleAdminSession}/></Suspense></div>;
   } else if (facility === "conferenze") {
     isPienaPagina = true;
-    bodyContent = <Conferenze lang={lang}/>;
+    bodyContent = <Conferenze lang={lang} adminRole={adminRole}/>;
   } else if (facility === "cinema" || facility === "music") {
     isPienaPagina = true;
     bodyContent = <RoomView room={facility} lang={lang} roomNumber={roomNumber}/>;
