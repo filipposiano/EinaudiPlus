@@ -45,6 +45,12 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
   const [reminderState, setReminderState] = useState<push.ReminderState>("unknown");
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Il motivo per cui l'attivazione non e' andata a buon fine, quando a dirlo e'
+  // stato il server (oggi: troppi dispositivi sulla stessa camera). Arriva gia'
+  // scritto per un residente, e si mostra com'e': tradurlo in sei lingue
+  // vorrebbe dire tenere allineate sei stringhe per un caso che si vede una
+  // volta ogni mai — e nel frattempo il silenzio sarebbe peggio.
+  const [pushErr, setPushErr] = useState<string | null>(null);
   const standalone = typeof window !== "undefined" &&
     (window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true);
 
@@ -53,11 +59,19 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
   async function toggleReminders() {
     if (busy || !room) return;
     setBusy(true);
+    setPushErr(null);
     try {
       if (reminderState === "on") { await push.disableReminders(); setReminderState("off"); }
       else { await push.enableReminders(room); setReminderState(await push.getReminderState()); }
     } catch (e: any) {
       if (String(e?.message) === "denied") setReminderState("denied");
+      // Un rifiuto del server: enableReminders ha gia' disfatto l'iscrizione del
+      // browser, quindi lo stato riletto dice il vero ("non attive"). Qui resta
+      // da dire PERCHE', altrimenti si tocca "attiva" e non succede nulla.
+      else if (e?.rifiutato) {
+        setPushErr(String(e.message));
+        setReminderState(await push.getReminderState());
+      }
     } finally { setBusy(false); }
   }
 
@@ -157,6 +171,7 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
 
       {remindersOpen && (
         <RemindersSheet lang={lang} room={room} state={reminderState} busy={busy}
+          err={pushErr}
           onToggle={toggleReminders} onClose={() => setRemindersOpen(false)} />
       )}
     </div>
@@ -169,9 +184,9 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
 // web app funzionano solo se l'app è stata installata dalla schermata Home e
 // restano capricciose. Il collegamento passa da un codice usa-e-getta: senza,
 // chiunque potrebbe scrivere al bot "sono la 112" e ricevere i promemoria altrui.
-function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
+function RemindersSheet({ lang, room, state, busy, err, onToggle, onClose }: {
   lang: Lang; room: string | null; state: push.ReminderState;
-  busy: boolean; onToggle: () => void; onClose: () => void;
+  busy: boolean; err: string | null; onToggle: () => void; onClose: () => void;
 }) {
   const [code, setCode] = useState<string | null>(null);
   const [tgBusy, setTgBusy] = useState(false);
@@ -255,6 +270,12 @@ function RemindersSheet({ lang, room, state, busy, onToggle, onClose }: {
                 </button>
               )}
             </div>
+
+            {err && (
+              <p className="text-xs mt-3" style={{ color:RED }}>
+                {err}
+              </p>
+            )}
           </div>
 
           {/* Telegram */}

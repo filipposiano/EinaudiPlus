@@ -7,6 +7,24 @@ self.addEventListener("activate", (event) => event.waitUntil(self.clients.claim(
 // richiesta da Chrome per considerare la PWA installabile (beforeinstallprompt).
 self.addEventListener("fetch", () => { /* lascia gestire la richiesta al browser */ });
 
+// L'URL su cui portare chi tocca la notifica, ricondotto sempre a questa origine.
+//
+// Oggi chi spedisce e' solo /api/cron, che manda "/" fisso: il payload non e'
+// scrivibile da fuori (per firmare una push serve la chiave VAPID privata).
+// Il controllo c'e' lo stesso perche' la fiducia qui e' mal riposta per
+// costruzione — una notifica che l'utente legge come "dell'app" e che apre un
+// sito altrui e' phishing perfetto, e basterebbe un mittente nuovo, o una
+// regressione, per aprirla. Costa tre righe e chiude la categoria.
+function urlSicuro(raw) {
+  try {
+    const u = new URL(String(raw || "/"), self.location.origin);
+    if (u.origin !== self.location.origin) return "/";
+    return u.pathname + u.search + u.hash;
+  } catch {
+    return "/";
+  }
+}
+
 // Un'icona per ciascuno dei tre passi del ciclo.
 //
 // I tre promemoria condividono il `tag` — serve a farli SOSTITUIRE nel centro
@@ -42,7 +60,7 @@ self.addEventListener("push", (event) => {
     badge: "/icon-badge.svg",
     tag: data.tag || "laundry-reminder",
     renotify: true,
-    data: { url: data.url || "/" },
+    data: { url: urlSicuro(data.url) },
 
     // AGGIUNTE PER RISOLVERE IL PROBLEMA DEL SILENZIO:
     vibrate: [200, 100, 200, 100, 200, 100, 200], // Pattern di vibrazione (vibra-pausa-vibra...)
@@ -53,7 +71,9 @@ self.addEventListener("push", (event) => {
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = (event.notification.data && event.notification.data.url) || "/";
+  // Ricontrollato anche qui: la notifica potrebbe essere stata creata da una
+  // versione precedente del service worker, quando il campo non era filtrato.
+  const url = urlSicuro(event.notification.data && event.notification.data.url);
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
       for (const c of list) {

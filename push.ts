@@ -105,7 +105,23 @@ export async function enableReminders(room: string): Promise<void> {
       applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
     });
   }
-  await api.subscribePush(room, sub.toJSON());
+  try {
+    await api.subscribePush(room, sub.toJSON());
+  } catch (err) {
+    // Il server ha rifiutato (oggi: il tetto di dispositivi per camera).
+    // Va disfatta anche l'iscrizione del browser, altrimenti getReminderState()
+    // trova una subscription e risponde "on" per sempre, mentre il server non
+    // ha nulla da spedire: il modo peggiore di fallire, perche' l'utente vede
+    // scritto "attive" e aspetta notifiche che non arriveranno.
+    //
+    // Solo sul rifiuto, non sulla rete caduta: quella si ripara da sola alla
+    // prossima apertura dell'app, e buttare via l'iscrizione per un tunnel
+    // costerebbe all'utente un giro nelle impostazioni per nulla.
+    if ((err as { rifiutato?: boolean })?.rifiutato) {
+      try { await sub.unsubscribe(); } catch { /* best effort */ }
+    }
+    throw err;
+  }
 }
 
 /**

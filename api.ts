@@ -38,9 +38,16 @@ async function postAction(action: string, payload: Record<string, unknown>) {
 
   const data = await res.json();
   if (!data.ok) {
-    const err = new Error(data.error || "Errore durante l'operazione") as Error & { by?: string };
+    const err = new Error(data.error || "Errore durante l'operazione") as Error & {
+      by?: string; rifiutato?: boolean;
+    };
     // Il chiamante puo' leggere `by` per dire CHI ha occupato lo slot.
     err.by = data.by;
+    // Il server ha risposto, e ha detto di no. Distingue questo caso dalla rete
+    // caduta, che arriva qui come TypeError di fetch: chi chiama deve poter
+    // reagire in modo diverso — un rifiuto e' definitivo, una rete caduta si
+    // ritenta da sola al prossimo avvio.
+    err.rifiutato = true;
     throw err;
   }
   return data;

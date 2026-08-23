@@ -449,17 +449,49 @@ $$;
 -- Iscrizioni push e segnalazioni
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- Versione consolidata dalla migrazione 017: c'e' un tetto di sei iscrizioni
+-- per camera. Non impedisce a un estraneo di attaccarsi a una camera che non e'
+-- la sua — senza account per i residenti non e' possibile, e la griglia della
+-- settimana e' comunque pubblica — ma impedisce che UNO solo ne registri
+-- centinaia e faccia esplodere il fan-out di /api/cron. Il perche' dei dettagli
+-- (sei, potatura a 90 giorni, rifiuto invece di sfratto) sta nella migrazione.
 create or replace function upsert_push_sub(
   p_room text, p_endpoint text, p_p256dh text, p_auth text
 ) returns jsonb language plpgsql as $$
 declare
-  v_id smallint;
+  v_id   smallint;
+  v_old  text;
+  v_n    int;
+  c_max  constant int := 6;
 begin
   if p_endpoint is null or p_endpoint = '' then
     return jsonb_build_object('ok', false, 'error', 'subscription mancante');
   end if;
 
   v_id := coalesce(laundry_for_room(p_room), (select id from laundry where slug = 'valentino'));
+
+  -- Dispositivi spariti: l'app non si apre da tre mesi su quell'endpoint.
+  -- refreshSubscription() rinfresca last_seen a ogni avvio, quindi qui cade
+  -- solo cio' che non c'e' piu' davvero.
+  delete from push_sub
+  where laundry_id = v_id
+    and room = p_room
+    and endpoint <> p_endpoint
+    and last_seen < now() - interval '90 days';
+
+  select room into v_old from push_sub where endpoint = p_endpoint;
+
+  -- Il tetto vale per le iscrizioni NUOVE su questa camera: il rinnovo di un
+  -- endpoint che gia' le appartiene non deve mai fallire.
+  if v_old is distinct from p_room then
+    select count(*) into v_n from push_sub where laundry_id = v_id and room = p_room;
+    if v_n >= c_max then
+      return jsonb_build_object(
+        'ok', false,
+        'error', 'troppi dispositivi collegati a questa camera: disattiva le notifiche su uno di quelli vecchi, oppure chiedi in portineria'
+      );
+    end if;
+  end if;
 
   insert into push_sub (endpoint, p256dh, auth, room, laundry_id)
   values (p_endpoint, p_p256dh, p_auth, p_room, v_id)
