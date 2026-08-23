@@ -431,6 +431,11 @@
           mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
 }
 .ruota__scorri::-webkit-scrollbar { display: none; }
+/* Da PC la ruota si tira col mouse (vedi RuotaPicker): il cursore lo dice
+   prima che qualcuno debba provarci. Su touch non si vede nessun cursore,
+   quindi non toglie niente. */
+.ruota__scorri { cursor: grab; }
+.ruota__scorri:active { cursor: grabbing; }
 .ruota__scorri:focus-visible { box-shadow: inset 0 0 0 2px var(--primary); border-radius: 14px; }
 
 .ruota__voce {
@@ -442,7 +447,7 @@
   font-size: 15px;
   font-variant-numeric: tabular-nums;
   color: var(--foreground);
-  cursor: pointer;
+  cursor: inherit;
   transition: opacity .12s ease, transform .12s ease;
   user-select: none;
 }

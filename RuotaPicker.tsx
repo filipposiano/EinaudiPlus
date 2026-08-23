@@ -82,6 +82,70 @@ export default function RuotaPicker({ valori, indice, onCambia, ariaLabel }: {
     el.scrollTo({ top: i * VOCE, behavior: "smooth" });
   };
 
+  // ───────────────────────────────────────────────────────────────────────────
+  // Trascinamento col mouse
+  //
+  // Col dito la ruota si scorre da sé: è un contenitore che scorre, e sul
+  // touch il browser traduce il trascinamento in scorrimento. Col mouse no —
+  // tenere premuto e tirare non è un gesto che il browser converta in
+  // scorrimento su nessun elemento, quindi da PC restavano la rotellina, le
+  // frecce e il clic su una voce.
+  //
+  // Il problema è che una ruota SEMBRA un rullo: chiunque la veda su uno
+  // schermo grande prova a tirarla, non ottiene niente, e la conclusione è
+  // che è rotta. Qui il trascinamento lo facciamo a mano, solo per il mouse:
+  // sul touch il browser fa già di meglio (inerzia, aggancio), e sovrapporsi
+  // vorrebbe dire peggiorarlo.
+  const trascina = useRef<{ y: number; top: number; mosso: boolean } | null>(null);
+  // Il clic arriva SEMPRE dopo il rilascio, anche quando si è trascinato: senza
+  // questa memoria, mollare il mouse sopra una voce ci saltava sopra, annullando
+  // il trascinamento appena fatto.
+  const appenaTrascinato = useRef(false);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.pointerType !== "mouse") return;
+    const el = box.current;
+    if (!el) return;
+    appenaTrascinato.current = false;
+    trascina.current = { y: e.clientY, top: el.scrollTop, mosso: false };
+    // La cattura serve a non perdere il trascinamento se il mouse esce dalla
+    // ruota mentre si tira. Se il puntatore non e' piu' attivo il browser
+    // solleva: non e' un caso che debba fermare il trascinamento.
+    try { el.setPointerCapture(e.pointerId); } catch { /* si tira lo stesso */ }
+  };
+
+  const onPointerMove = (e: React.PointerEvent) => {
+    const t = trascina.current, el = box.current;
+    if (!t || !el) return;
+    const dy = e.clientY - t.y;
+    // Tre pixel di tolleranza: un clic non è mai perfettamente fermo, e senza
+    // soglia ogni clic verrebbe scambiato per un trascinamento.
+    if (Math.abs(dy) > 3) t.mosso = true;
+    // Si tira la ruota, non la si spinge: trascinando verso il basso salgono
+    // le voci precedenti, come sul telefono.
+    el.scrollTop = t.top - dy;
+    e.preventDefault();
+  };
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    const t = trascina.current, el = box.current;
+    if (!t || !el) return;
+    trascina.current = null;
+    try { el.releasePointerCapture(e.pointerId); } catch { /* già rilasciato */ }
+    if (!t.mosso) return;
+    appenaTrascinato.current = true;
+    // Lo scorrimento imposto a mano non fa scattare l'aggancio da solo: la
+    // voce più vicina al centro va portata al centro esplicitamente.
+    const i = Math.max(0, Math.min(valori.length - 1, Math.round(el.scrollTop / VOCE)));
+    vaiA(i);
+    // E si dichiara la scelta senza aspettare l'evento di scorrimento. Sarebbe
+    // arrivato lo stesso — il trascinamento muove scrollTop, e onScroll legge
+    // di lì — ma passare da quel giro significa dipendere da un evento che qui
+    // abbiamo già anticipato: l'indice lo conosciamo, dirlo subito rende il
+    // rilascio immediato invece che 90ms dopo.
+    onCambia(i);
+  };
+
   // Frecce su/giù: la ruota è raggiungibile da tastiera come una lista, non
   // solo col dito. Conta anche per chi usa uno screen reader.
   const onKey = (e: React.KeyboardEvent) => {
@@ -104,6 +168,10 @@ export default function RuotaPicker({ valori, indice, onCambia, ariaLabel }: {
         tabIndex={0}
         onScroll={onScroll}
         onKeyDown={onKey}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
       >
         <div style={{ height: spazio }} aria-hidden="true" />
         {valori.map((v, i) => (
@@ -121,7 +189,7 @@ export default function RuotaPicker({ valori, indice, onCambia, ariaLabel }: {
               fontWeight: i === indice ? 700 : 500,
               transform: i === indice ? "scale(1.06)" : "scale(1)",
             }}
-            onClick={() => vaiA(i)}
+            onClick={() => { if (!appenaTrascinato.current) vaiA(i); }}
           >
             {v}
           </div>
