@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import * as roomsApi from "./roomsApi";
 import type { RoomKind, RoomBooking, CinemaType } from "./roomsApi";
+import RuotaPicker from "./RuotaPicker";
 
 // Le stesse sei lingue dell'app: il tipo arriva da i18n, cosi' non si puo'
 // aggiungere una lingua di la' e dimenticarla di qua.
@@ -533,9 +534,29 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   }, [room]);
 
   useEffect(() => { setLoading(true); refresh(); }, [refresh]);
+
+  // Cambiando sala il modulo torna agli orari tipici di QUELLA sala.
+  //
+  // Non e' pulizia per il gusto di pulire: le fasce ammesse sono diverse (la
+  // musica apre alle 9, il cinema a mezzanotte), quindi un orario rimasto
+  // dall'altra sala puo' non esistere qui. Con le tendine si vedeva come una
+  // casella vuota; con le ruote sarebbe peggio, perche' una ruota si posiziona
+  // comunque su una voce — mostrerebbe le 09:00 mentre il pulsante conferma le
+  // 02:00, e a essere prenotato sarebbe il secondo.
+  useEffect(() => {
+    setStart(room === "music" ? 16 * 60 : 18 * 60);
+    setEnd(room === "music" ? 18 * 60 : 20 * 60);
+  }, [room]);
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 2500); return () => clearTimeout(id); }, [toast]);
 
   const dayBookings = bookings.filter((b) => b.day === selDay).sort((a, b) => a.start - b.start);
+
+  // Le fasce di fine dipendono dall'inizio, quindi la lista cambia sotto i
+  // piedi alla ruota: si calcola qui una volta sola, e serve anche per sapere
+  // su quale riga posizionarla.
+  const endOpts = endOptions(start, cfg);
+  const iEnd = Math.max(0, endOpts.indexOf(end));
+  const iStart = Math.max(0, startOpts.indexOf(start));
 
   async function submit() {
     const who = myRoom ? (bookingRoom.trim() || myRoom) : name.trim();
@@ -648,24 +669,56 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
         <div className="rounded-2xl border p-4 mb-4" style={{ background: surf, borderColor: div }}>
           <p className="text-[11px] font-mono tracking-widest uppercase mb-3" style={{ color: sub }}>{t.newBooking}</p>
 
-          <div className="flex gap-3 mb-3">
-            <label className="flex-1">
+          {/* Le stesse ruote del turno preferito, al posto di due tendine.
+              Una tendina nativa, su parecchi telefoni, si apre come pannello di
+              sistema ancorato al fondo dello schermo: dentro un foglio che
+              scorre finisce sotto il bordo, ed e' il difetto che le ruote hanno
+              gia' risolto in lavanderia e in sala polivalente. In piu' qui le
+              voci sono tante — la fine, per una serata che scavalca, arriva a
+              una quarantina — e scorrerle con lo snap e' piu' rapido che
+              trascinare una tendina lunga quanto lo schermo.
+
+              Le etichette restano corte ("00:30", non "00:30 (del giorno
+              successivo)"): a 34px di riga non ci starebbero, e la frase per
+              esteso si legge comunque due volte piu' sotto — nella riga qui
+              sotto e sul pulsante di conferma. Dentro una stessa lista un
+              orario non si ripete mai, quindi la forma breve non e' ambigua. */}
+          <div className="flex gap-3 mb-1">
+            <label className="flex-1 min-w-0">
               <span className="text-[11px]" style={{ color: sub }}>{t.start}</span>
-              <select value={start} onChange={(e) => setStart(Number(e.target.value))}
-                className="w-full mt-1 rounded-xl px-3 py-2.5 text-sm font-mono outline-none"
-                style={{ background: chip, color: fg, border: `1px solid ${div}` }}>
-                {startOpts.map((m) => <option key={m} value={m}>{fmtMin(m)}</option>)}
-              </select>
+              <div className="mt-1">
+                <RuotaPicker
+                  key={`inizio-${room}`}
+                  valori={startOpts.map((m) => fmtMin(m))}
+                  indice={iStart}
+                  onCambia={(i) => setStart(startOpts[i])}
+                  ariaLabel={t.start}
+                />
+              </div>
             </label>
-            <label className="flex-1">
+            <label className="flex-1 min-w-0">
               <span className="text-[11px]" style={{ color: sub }}>{t.end}</span>
-              <select value={end} onChange={(e) => setEnd(Number(e.target.value))}
-                className="w-full mt-1 rounded-xl px-3 py-2.5 text-sm font-mono outline-none"
-                style={{ background: chip, color: fg, border: `1px solid ${div}` }}>
-                {endOptions(start, cfg).map((m) => <option key={m} value={m}>{fmtEnd(m, lang)}</option>)}
-              </select>
+              <div className="mt-1">
+                {/* `key` legata a sala e inizio: la ruota non si lascia
+                    pilotare da fuori (vedi RuotaPicker, il ciclo
+                    scorrimento->indice), e quando cambia l'uno o l'altro
+                    cambiano sia la lista sia la riga scelta. Rimontarla e' il
+                    modo previsto per riallinearla. */}
+                <RuotaPicker
+                  key={`fine-${room}-${start}`}
+                  valori={endOpts.map((m) => (m === 24 * 60 ? "24:00" : fmtMin(m)))}
+                  indice={iEnd}
+                  onCambia={(i) => setEnd(endOpts[i])}
+                  ariaLabel={t.end}
+                />
+              </div>
             </label>
           </div>
+
+          {/* Detto a parole solo quando serve davvero. */}
+          <p className="text-[11px] mb-3 h-4" style={{ color: sub }}>
+            {end > 24 * 60 ? `${t.end}: ${fmtEnd(end, lang)}` : ""}
+          </p>
 
           {direzione ? (
             /* Testo libero, non maiuscolo e non monospaziato: qui non si scrive
