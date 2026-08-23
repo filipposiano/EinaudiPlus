@@ -531,6 +531,51 @@
 .tabella-impegni .col-cosa { overflow-wrap: anywhere; }
 .tabella-impegni .nota { color: var(--gray-accessible-text); }
 
+/* Griglia settimanale della lavanderia: sette giorni per diciannove turni.
+   Qui le righe HANNO bisogno di bordi su tutti i lati, al contrario
+   dell'elenco degli impegni: si legge per incroci ("giovedi' alle 14"), e
+   senza le linee verticali l'occhio perde la colonna a meta' pagina.
+
+   `table-layout: fixed`: senza, le colonne dei giorni pieni si allargavano a
+   spese di quelli vuoti e la griglia usciva storta — su carta, dove non si
+   puo' scorrere, era anche peggio. */
+.tabella-settimana { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.tabella-settimana th,
+.tabella-settimana td {
+  border: 1px solid var(--border);
+  padding: 3px 4px;
+  font-size: 10px;
+  vertical-align: top;
+  text-align: left;
+}
+.tabella-settimana th {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gray-accessible-text);
+  white-space: nowrap;
+}
+.tabella-settimana .col-ora {
+  width: 11%;
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  color: var(--gray-accessible-text);
+}
+/* Una macchina per riga dentro la cella: "A 112" sotto "B 205". Affiancate
+   diventavano illeggibili nelle colonne strette. */
+.tabella-settimana .turno {
+  display: block;
+  font-family: var(--font-mono, monospace);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Otto colonne non stanno in un telefono: a schermo l'anteprima scorre di
+   lato. Sta fuori da #foglio-stampa apposta — sulla carta la tabella e' larga
+   quanto la pagina e non deve ereditare nessuno scorrimento. */
+.anteprima-scorri { overflow-x: auto; }
+
 /* L'intestazione con titolo e data serve solo sulla carta: a schermo il
    modale ha gia' la sua, e ripeterla sarebbe rumore. */
 .solo-in-stampa { display: none; }
@@ -562,6 +607,18 @@
   #foglio-stampa, #foglio-stampa * { color: #000 !important; background: transparent !important; }
   .tabella-impegni td { border-bottom: 1px solid #bbb; }
   .tabella-impegni .col-data, .tabella-impegni .nota { color: #444 !important; }
+
+  /* I bordi vanno riscritti a mano: la regola qui sopra azzera colori e
+     sfondi di tutto cio' che sta in #foglio-stampa, e una griglia senza
+     linee sarebbe una lista di numeri sospesi nel vuoto. */
+  .tabella-settimana th,
+  .tabella-settimana td { border: 1px solid #999 !important; }
+  .tabella-settimana th, .tabella-settimana .col-ora { color: #333 !important; }
+
+  /* Se la griglia dovesse sfociare su una seconda pagina, l'intestazione coi
+     giorni ci va dietro: una tabella oraria senza intestazione non si legge. */
+  .tabella-settimana thead { display: table-header-group; }
+  .tabella-settimana tr { break-inside: avoid; }
 
   /* Un mese non si spezza a meta' fra due pagine se puo' evitarlo. */
   #foglio-stampa > div { break-inside: avoid; }
