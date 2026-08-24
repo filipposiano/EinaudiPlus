@@ -130,8 +130,8 @@ create table room_space (
 );
 
 insert into room_space (slug, name, has_type, open_min, close_min) values
-  ('cinema', 'Sala Cinema', true,   0, 1440),
-  ('music',  'Sala Musica', false, 540, 1380);
+  ('cinema', 'Sala Cinema', true,  0, 1440),
+  ('music',  'Sala Musica', false, 0, 1440);
 
 create table space_booking (
   id         bigserial primary key,

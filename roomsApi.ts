@@ -23,6 +23,11 @@ export interface RoomBooking {
    * questo identificativo: giovedì 21:00–24:00 e venerdì 00:00–01:00 sono la
    * stessa serata, salvate su due giorni perché è così che il vincolo
    * anti-sovrapposizione riesce a vederle entrambe. Assente per tutte le altre.
+   *
+   * Della notte fra domenica e lunedì qui ne arriva UNA sola metà, e non è un
+   * errore: la coda sta sul lunedì della settimana dopo, che questa lista non
+   * comprende. Ricompare da sé quando la settimana gira — cioè quando quelle
+   * ore arrivano davvero. Vedi migrations/018.
    */
   group?: string;
 }

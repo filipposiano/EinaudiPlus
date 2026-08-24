@@ -327,8 +327,8 @@ begin
 end;
 $$;
 
--- Versione consolidata dalla migrazione 004. Vedi supabase/migrations/
--- per il perche' del cambiamento: qui c'e' solo il risultato.
+-- Versione consolidata dalle migrazioni 004 e 018. Vedi supabase/migrations/
+-- per il perche' dei cambiamenti: qui c'e' solo il risultato.
 create or replace function book_space(
   p_slug  text,
   p_day   integer,
@@ -346,6 +346,7 @@ declare
   v_type  text;
   v_gid   uuid;
   v_day2  int;
+  v_ws2   date;
   v_coda  int;
 begin
   select * into v_s from room_space where slug = p_slug;
@@ -372,21 +373,28 @@ begin
   v_name := left(btrim(p_name), 40);
   v_type := case when v_s.has_type then p_type else null end;
 
-  -- Il giorno dopo, con la domenica che rientra sul lunedì della stessa
-  -- settimana: la griglia è settimanale e non ha un "giorno 7" dove mettere le
-  -- ore piccole della notte fra domenica e lunedì.
+  -- Il giorno dopo. Dopo la domenica non c'è un "giorno 7" nella griglia
+  -- settimanale: c'è il lunedì della settimana SEGUENTE, che è una riga con un
+  -- altro week_start. È l'unico posto in cui quelle ore esistono davvero, e
+  -- metterla sul lunedì della settimana in corso — sei giorni PRIMA — è il
+  -- difetto che ha corretto la migrazione 018.
   v_day2 := (p_day + 1) % 7;
+  v_ws2  := case when p_day = 6 then v_ws + 7 else v_ws end;
   v_coda := v_end - 1440;   -- > 0 solo se si scavalca
 
   -- Il tetto giornaliero va verificato su TUTTI i giorni che la prenotazione
-  -- tocca, non solo su quello di partenza.
-  select count(*) into v_cnt
-  from space_booking
-  where space_id = v_s.id and week_start = v_ws
-    and day = any(case when v_coda > 0 then array[p_day, v_day2] else array[p_day] end)
-  group by day
-  order by count(*) desc
-  limit 1;
+  -- tocca, non solo su quello di partenza — e ogni giorno con la SUA settimana,
+  -- perché per la domenica i due non stanno più nella stessa.
+  select max(n) into v_cnt from (
+    select count(*) as n
+    from space_booking
+    where space_id = v_s.id and week_start = v_ws and day = p_day
+    union all
+    select count(*)
+    from space_booking
+    where v_coda > 0
+      and space_id = v_s.id and week_start = v_ws2 and day = v_day2
+  ) t;
 
   if coalesce(v_cnt, 0) >= v_s.max_per_day then
     return jsonb_build_object('ok', false, 'error', 'full');
@@ -404,7 +412,7 @@ begin
       -- rendere la notte visibile al vincolo anti-sovrapposizione del giorno
       -- dopo — il motivo per cui esiste la divisione.
       insert into space_booking (space_id, week_start, day, start_min, end_min, name, btype, group_id)
-      values (v_s.id, v_ws, v_day2, 0, v_coda, v_name, v_type, v_gid);
+      values (v_s.id, v_ws2, v_day2, 0, v_coda, v_name, v_type, v_gid);
     else
       insert into space_booking (space_id, week_start, day, start_min, end_min, name, btype)
       values (v_s.id, v_ws, p_day, p_start, v_end, v_name, v_type);

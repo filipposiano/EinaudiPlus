@@ -266,6 +266,57 @@ section("Sale cinema e musica");
       check("cancellarne una toglie tutta la serata", resta === 0, `rimaste ${resta}`);
     }
   }
+
+  // ── La notte fra domenica e lunedi' ───────────────────────────────────────
+  //
+  // Il caso che il giro qui sopra non prova mai: sceglie la PRIMA notte libera
+  // della settimana, che in pratica e' sempre il lunedi'. La domenica e'
+  // l'unico giorno in cui il "giorno dopo" non sta nella stessa settimana, ed
+  // e' esattamente li' che stava il difetto (vedi migrations/018): la coda
+  // finiva sul lunedi' di QUELLA settimana, cioe' sei giorni prima.
+  //
+  // Da fuori non si vede il week_start, quindi la prova e' indiretta ma
+  // decisiva: la coda NON deve comparire fra le prenotazioni della settimana
+  // corrente. Se ricompare come lunedi' 00:00, e' tornata indietro nel tempo.
+  const gd = await call(rooms, { method: "GET", query: { token: TOKEN, space: "music" } });
+  const occDom = gd.body?.bookings || [];
+  const domLibera = !occDom.some((b) => b.day === 6 && b.end > 22 * 60);
+
+  if (!domLibera) {
+    console.log("  salto  (domenica sera gia' occupata in sala musica)");
+  } else {
+    const tagD = "TESTD-" + Math.random().toString(36).slice(2, 7);
+    const bd = await call(rooms, {
+      query: { token: TOKEN, space: "music", action: "book" },
+      body: { day: 6, start: 21 * 60, end: 26 * 60, name: tagD },   // dom 21:00 -> lun 02:00
+    });
+    check("domenica notte si prenota", bd.body?.ok === true, JSON.stringify(bd.body).slice(0, 120));
+
+    const suoi = (bd.body?.bookings || []).filter((x) => x.name === tagD);
+    check("di domenica resta la sola testa nella settimana corrente",
+      suoi.length === 1 && suoi[0].day === 6 && suoi[0].start === 21 * 60 && suoi[0].end === 1440,
+      JSON.stringify(suoi.map((x) => [x.day, x.start, x.end])));
+    check("la coda non torna indietro sul lunedi' appena passato",
+      !suoi.some((x) => x.day === 0),
+      JSON.stringify(suoi.map((x) => [x.day, x.start, x.end])));
+
+    // Cancellando la testa deve sparire anche la coda, che sta in un'altra
+    // settimana: se delete_space_booking filtrasse per week_start resterebbe
+    // li' per sempre, invisibile e capace di far fallire la prossima domenica.
+    if (suoi.length) {
+      await call(rooms, { query: { token: TOKEN, space: "music", action: "clear" }, body: { id: suoi[0].id } });
+      const ri = await call(rooms, {
+        query: { token: TOKEN, space: "music", action: "book" },
+        body: { day: 6, start: 21 * 60, end: 26 * 60, name: tagD + "-2" },
+      });
+      check("dopo la cancellazione la stessa notte torna libera", ri.body?.ok === true,
+        JSON.stringify(ri.body).slice(0, 120));
+      const suoi2 = (ri.body?.bookings || []).filter((x) => x.name === tagD + "-2");
+      if (suoi2.length) {
+        await call(rooms, { query: { token: TOKEN, space: "music", action: "clear" }, body: { id: suoi2[0].id } });
+      }
+    }
+  }
 }
 
 // ─── Cron ────────────────────────────────────────────────────────────────────

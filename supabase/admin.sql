@@ -155,11 +155,27 @@ begin
 end;
 $$;
 
+-- Consolidata dalla migrazione 018: si cancella per group_id quando c'e'.
+--
+-- Una prenotazione che scavalca la mezzanotte e' DUE righe (vedi 004);
+-- cancellandone una sola l'altra restava orfana, e per la notte fra domenica e
+-- lunedi' era pure invisibile ad admin_spaces, che guarda solo la settimana
+-- corrente mentre la coda sta in quella dopo. Occupava la sala e non c'era
+-- modo di toglierla dal pannello.
 create or replace function admin_delete_space_booking(p_id bigint)
 returns jsonb language plpgsql as $$
-declare v_n int;
+declare
+  v_n   int;
+  v_gid uuid;
 begin
-  delete from space_booking where id = p_id;
+  select group_id into v_gid from space_booking where id = p_id;
+
+  if v_gid is not null then
+    delete from space_booking where group_id = v_gid;
+  else
+    delete from space_booking where id = p_id;
+  end if;
+
   get diagnostics v_n = row_count;
   return jsonb_build_object('ok', v_n > 0);
 end;

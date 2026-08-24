@@ -3,7 +3,7 @@
 // Come gestiamo le fasce libere:
 //  • il tempo è in MINUTI dalla mezzanotte; ogni prenotazione è un blocco [start,end);
 //  • una TIMELINE giornaliera mostra a colpo d'occhio i blocchi occupati nella finestra
-//    oraria della sala (Cinema 0–24, Musica 9–23);
+//    oraria della sala (0–24 per entrambe);
 //  • due SELETTORI "Inizio/Fine" (step 30') generano il blocco; un controllo di
 //    sovrapposizione (client + server) impedisce i conflitti;
 //  • si vede solo la settimana corrente: le vecchie le pota il database.
@@ -34,17 +34,19 @@ const TODAY = (new Date().getDay() + 6) % 7; // 0 = Lunedì
 // `overnight`: se la sala si può tenere oltre la mezzanotte. Vero per
 // entrambe: una prova che finisce all'una capita quanto una proiezione.
 //
-// `winStart`/`winEnd` restano diversi perché sono l'orario di apertura: la
-// musica non si prenota prima delle 9, e la sua griglia arriva alle 23. Ma
-// quello limita quando si COMINCIA, non quando si finisce — la coda oltre la
-// mezzanotte la costruisce endOptions() a parte, e sconfina di proposito.
+// Le due sale ora hanno la STESSA finestra, 0–24. La musica apriva alle 9 e
+// chiudeva alle 23; il limite è stato tolto, e da lì in poi tenerle diverse
+// non descriveva più niente — le regole di prenotazione della musica sono
+// quelle del cinema. Resta diverso solo ciò che è davvero diverso: gli
+// strumenti non in cuffia (STRUMENTI_DA/A più sotto), che è un vincolo sul
+// rumore, non sull'apertura della sala.
 //
 // Nota: questi valori vivono solo qui. Le colonne open_min/close_min di
 // room_space dicono le stesse ore ma non le applica nessuno — il database
 // accetta qualunque fascia dentro le 24 ore.
 const ROOM_CFG: Record<RoomKind, { winStart: number; winEnd: number; step: number; overnight: boolean }> = {
-  cinema: { winStart: 0,       winEnd: 24 * 60, step: 30, overnight: true },
-  music:  { winStart: 9 * 60,  winEnd: 23 * 60, step: 30, overnight: true },
+  cinema: { winStart: 0, winEnd: 24 * 60, step: 30, overnight: true },
+  music:  { winStart: 0, winEnd: 24 * 60, step: 30, overnight: true },
 };
 
 function timeOptions(winStart: number, winEnd: number, step: number) {
@@ -71,10 +73,11 @@ function endOptions(start: number, cfg: { winEnd: number; step: number; overnigh
   const out: number[] = [];
   for (let m = start + cfg.step; m <= cfg.winEnd; m += cfg.step) out.push(m);
   if (!cfg.overnight) return out;
-  // La coda riparte da dove finisce la griglia della sala, non dalla
-  // mezzanotte: per il cinema le due cose coincidono (chiude alle 24), per la
-  // musica no. Partendo fisso da 24:00 la lista della musica saltava da 23:00
-  // a 00:30, perdendo per strada le 23:30 e la mezzanotte esatta.
+  // La coda riparte da dove finisce la griglia della sala, non da un 24:00
+  // fisso. Oggi per entrambe le sale le due cose coincidono, ma la regola
+  // scritta così regge anche una sala che chiudesse prima: partendo fisso da
+  // 24:00, per una griglia che finisce alle 23:00 la lista saltava da 23:00 a
+  // 00:30, perdendo per strada le 23:30 e la mezzanotte esatta.
   //
   // Si ferma prima di richiudere il cerchio sull'orario di partenza: una
   // prenotazione di 24 ore esatte non ha senso e il database la rifiuterebbe.
@@ -260,8 +263,10 @@ const T = {
 // cortesia, per chi l'italiano non lo legge bene. Se la direzione cambia una
 // regola, si cambia l'italiano e poi le traduzioni — mai il contrario.
 //
-// Il napoletano non c'è di proposito: `regolamentoPer()` ripiega
-// sull'italiano, che è la lingua in cui le regole sono state scritte.
+// Vale anche per il napoletano, che prima qui non c'era e ricadeva
+// sull'italiano: chi mette l'app in napoletano si trovava l'unica schermata di
+// testo lungo in un'altra lingua. È una cortesia come le altre cinque — se
+// c'è dubbio su cosa dice una regola, fa fede l'italiano.
 type Regolamento = { rules: string[]; tips?: string[] };
 
 const RULES: Record<RoomKind, Partial<Record<Lang, Regolamento>>> = {
@@ -331,12 +336,25 @@ const RULES: Record<RoomKind, Partial<Record<Lang, Regolamento>>> = {
         "Para conectar el ordenador al equipo de audio: activad el Bluetooth en el ordenador, encended la barra de sonido y pulsad en el mando la tecla con el símbolo de Bluetooth (*). En la pantalla aparecerá «BT PAIRING»; buscad entonces la barra entre los dispositivos del ordenador.",
       ],
     },
+    nap: {
+      rules: [
+        "'A sala se pò prenotà a qualunque ora.",
+        "Dint'â sala nce sta nu proiettore (cu 'o cavo HDMI già 'ncoppa) e n'impianto audio (s'attacca cu 'o Bluetooth). Arricurdateve 'e purtà 'o PC vuosto.",
+        "Chi prenota risponne d''e danne e d''a pulizia d''a sala.",
+        "Pe' prenotà, mettite l'ora ca pensate 'e ce sta', 'o nomme vuosto e si è pe' vuje sulo o si è na proiezione aperta a tuttu quante (pe' dì, 'e partite).",
+        "'E prenotazioni se azzerano ogne lunnerì 'e notte.",
+      ],
+      tips: [
+        "Pe' attaccà 'o PC ô proiettore: appicciate 'o proiettore c''o telecomando, scegliete \"Source\" e po' HDMI 2 (s'avess'a attaccà da sulo).",
+        "Pe' attaccà 'o PC a l'impianto audio: appicciate 'o Bluetooth ncopp'ô PC, appicciate 'a soundbar, e ppo' schiaffate 'o tasto d''o telecomando c''o segno d''o Bluetooth (*). Ncopp'ô schermo d''a soundbar esce \"BT PAIRING\": a chillu punto cercate 'a soundbar 'nmiez'ê dispositive d''o PC.",
+      ],
+    },
   },
   music: {
     it: {
       rules: [
         "Potete prenotarla quando volete.",
-        "Si può utilizzare dalle 9:00 alle 23:00 (ATTENZIONE: l'uso di strumenti NON in cuffia è consentito SOLO dalle 16:00 alle 20:00).",
+        "Si può utilizzare a qualsiasi ora (ATTENZIONE: l'uso di strumenti NON in cuffia è consentito SOLO dalle 16:00 alle 20:00).",
         "Chi prenota è responsabile di eventuali danni e della pulizia della sala.",
         "Le prenotazioni si resettano ogni lunedì notte.",
       ],
@@ -344,7 +362,7 @@ const RULES: Record<RoomKind, Partial<Record<Lang, Regolamento>>> = {
     en: {
       rules: [
         "You can reserve it whenever you want.",
-        "It can be used from 9:00 to 23:00 (NOTE: using instruments NOT with headphones is allowed ONLY from 16:00 to 20:00).",
+        "It can be used at any hour (NOTE: using instruments NOT with headphones is allowed ONLY from 16:00 to 20:00).",
         "Whoever reserves the room is responsible for any damages and the cleaning of the room.",
         "The schedule resets every Monday night.",
       ],
@@ -352,7 +370,7 @@ const RULES: Record<RoomKind, Partial<Record<Lang, Regolamento>>> = {
     fr: {
       rules: [
         "Vous pouvez la réserver quand vous voulez.",
-        "Elle est utilisable de 9h00 à 23h00 (ATTENTION : les instruments SANS casque ne sont autorisés QUE de 16h00 à 20h00).",
+        "Elle est utilisable à toute heure (ATTENTION : les instruments SANS casque ne sont autorisés QUE de 16h00 à 20h00).",
         "La personne qui réserve est responsable des éventuels dégâts et du nettoyage de la salle.",
         "Les réservations sont remises à zéro chaque lundi dans la nuit.",
       ],
@@ -360,7 +378,7 @@ const RULES: Record<RoomKind, Partial<Record<Lang, Regolamento>>> = {
     de: {
       rules: [
         "Ihr könnt ihn buchen, wann ihr wollt.",
-        "Nutzbar von 9:00 bis 23:00 Uhr (ACHTUNG: Instrumente OHNE Kopfhörer sind NUR von 16:00 bis 20:00 Uhr erlaubt).",
+        "Zu jeder Uhrzeit nutzbar (ACHTUNG: Instrumente OHNE Kopfhörer sind NUR von 16:00 bis 20:00 Uhr erlaubt).",
         "Wer bucht, haftet für eventuelle Schäden und für die Sauberkeit des Raums.",
         "Die Buchungen werden jeden Montag in der Nacht zurückgesetzt.",
       ],
@@ -368,9 +386,17 @@ const RULES: Record<RoomKind, Partial<Record<Lang, Regolamento>>> = {
     es: {
       rules: [
         "Podéis reservarla cuando queráis.",
-        "Se puede usar de 9:00 a 23:00 (ATENCIÓN: el uso de instrumentos SIN auriculares está permitido SOLO de 16:00 a 20:00).",
+        "Se puede usar a cualquier hora (ATENCIÓN: el uso de instrumentos SIN auriculares está permitido SOLO de 16:00 a 20:00).",
         "Quien reserva es responsable de los posibles daños y de la limpieza de la sala.",
         "Las reservas se reinician cada lunes por la noche.",
+      ],
+    },
+    nap: {
+      rules: [
+        "'A putite prenotà quanno vulite.",
+        "Se pò ausà a qualunque ora (ATTIENTE: 'e strumente SENZA cuffie se ponno sunà SULO 'a 16:00 ê 20:00).",
+        "Chi prenota risponne d''e danne e d''a pulizia d''a sala.",
+        "'E prenotazioni se azzerano ogne lunnerì 'e notte.",
       ],
     },
   },
@@ -434,8 +460,10 @@ function Timeline({ room, bookings }: { room: RoomKind; bookings: RoomBooking[] 
   const spanEnd = bookings.reduce((mx, b) => Math.max(mx, endOf(b)), winEnd);
   const span = spanEnd - winStart;
   const pct = (m: number) => `${((m - winStart) / span) * 100}%`;
-  // tick ogni 3 ore (cinema) o 2 ore (musica)
-  const stepH = room === "cinema" ? 3 : 2;
+  // Un tick ogni 3 ore. Prima la musica ne aveva uno ogni 2, perché la sua
+  // griglia copriva 14 ore invece di 24; ora che copre la giornata intera come
+  // il cinema, lo stesso passo darebbe tredici etichette appiccicate.
+  const stepH = 3;
   const ticks: number[] = [];
   for (let m = winStart; m <= spanEnd; m += stepH * 60) ticks.push(m);
   // 1440 = mezzanotte di fine giornata → mostrala come "24:00" sull'asse.
@@ -537,12 +565,11 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
 
   // Cambiando sala il modulo torna agli orari tipici di QUELLA sala.
   //
-  // Non e' pulizia per il gusto di pulire: le fasce ammesse sono diverse (la
-  // musica apre alle 9, il cinema a mezzanotte), quindi un orario rimasto
-  // dall'altra sala puo' non esistere qui. Con le tendine si vedeva come una
-  // casella vuota; con le ruote sarebbe peggio, perche' una ruota si posiziona
-  // comunque su una voce — mostrerebbe le 09:00 mentre il pulsante conferma le
-  // 02:00, e a essere prenotato sarebbe il secondo.
+  // Ora che le due griglie sono identiche non serve piu' a evitare un orario
+  // inesistente: serve a proporre l'ora giusta. Per la musica sono le 16–18,
+  // dentro la fascia in cui gli strumenti non in cuffia sono ammessi; per il
+  // cinema le 18–20, che e' quando si guarda un film. Sono suggerimenti, non
+  // limiti: da entrambe le ruote si raggiunge qualunque ora del giorno.
   useEffect(() => {
     setStart(room === "music" ? 16 * 60 : 18 * 60);
     setEnd(room === "music" ? 18 * 60 : 20 * 60);
@@ -586,10 +613,20 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
     // Una fascia che scavalca la mezzanotte occupa due giorni, e vanno
     // controllati entrambi: il server li divide comunque in due righe, ma
     // scoprirlo dopo il giro di rete è peggio che dirlo subito.
+    //
+    // Tranne la notte fra domenica e lunedì: quella coda cade sul lunedì della
+    // settimana SEGUENTE, e `bookings` contiene solo la settimana corrente —
+    // qui non c'è proprio niente contro cui confrontarla. Prima si controllava
+    // `(selDay + 1) % 7`, che di domenica è il lunedì appena passato: una
+    // prenotazione di lunedì mattina faceva rifiutare la serata di domenica
+    // con "si sovrappone", parlando di ore che non c'entravano nulla. Meglio
+    // nessun controllo che uno che guarda il giorno sbagliato — il vincolo del
+    // database copre comunque il caso vero, e la risposta torna con "overlap".
     const sforo = end - 24 * 60;
+    const codaControllabile = sforo > 0 && selDay < 6;
     const collide =
       roomsApi.hasOverlap(bookings, selDay, start, Math.min(end, 24 * 60)) ||
-      (sforo > 0 && roomsApi.hasOverlap(bookings, (selDay + 1) % 7, 0, sforo));
+      (codaControllabile && roomsApi.hasOverlap(bookings, selDay + 1, 0, sforo));
     if (collide) { setToast(t.overlap); return; }
     setBusy(true);
     try {
