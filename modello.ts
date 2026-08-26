@@ -60,7 +60,7 @@ export const TIME_SLOTS = buildSlots();
  */
 export const WEEKLY_QUOTA = 2;
 
-export const APP_VERSION = "0.9.4";
+export const APP_VERSION = "0.9.5";
 
 // ─── "Adesso" ────────────────────────────────────────────────────────────────
 //

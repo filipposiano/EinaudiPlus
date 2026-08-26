@@ -44,6 +44,16 @@ const it = {
   oosWasherWarn:(m: string): string => `La lavatrice ${m} è fuori servizio: potrebbe non partire.`,
   currentSlot: "Turno corrente", prevSlot: "Turno precedente", now: "ora", prev: "prec.",
   yourBookings: "Le tue prenotazioni",
+  // Le due chiamate all'azione sotto il turno corrente. Dicono "prenota"
+  // perche' e' la parola che si cerca, e nominano il QUANDO perche' e' la
+  // cosa che si sceglie: il vecchio "+ Prenota" accanto alla macchina non
+  // diceva ne' l'uno ne' l'altro.
+  bookToday:     "Prenota per oggi",
+  bookTodayHint: "Scegli l'orario fra quelli liberi di oggi",
+  bookOtherDay:     "Prenota per un altro giorno",
+  bookOtherDayHint: "Guarda tutta la settimana e scegli",
+  backToDashboard:  "Torna alla dashboard",
+  machinesInfo: "Stato in tempo reale. Per prenotare usa i pulsanti qui sopra.",
   inProgressNow: "In corso ora",
   noActiveBookings: "Nessuna prenotazione attiva",
   freeTodayLabel: "turni liberi oggi",
@@ -99,7 +109,7 @@ const it = {
   legendOos:      "Rosso — Fuori servizio — Puoi prenotarla comunque, a tuo rischio.",
   legendAuto:     "Asciugatrice automatica — prenotando una lavatrice, quella corrispondente viene riservata per il turno successivo.",
   lgFree: "Libera", lgInUse: "In uso", lgOos: "Fuori servizio", lgPrev: "Turno precedente",
-  lgFreeD: "Puoi prenotarla subito.",
+  lgFreeD: "Nessuno l'ha presa per questo turno.",
   lgInUseD: (t: string): string => `Turno in corso, fine alle ${t}.`,
   lgOosD: "Guasto confermato dall'amministrazione. Puoi prenotarla comunque, a tuo rischio.",
   lgPrevD: "La camera che aveva lo slot prima di te.",

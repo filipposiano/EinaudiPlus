@@ -52,7 +52,7 @@ const nap: Partial<Testi> = {
   legendOos:      "Russ — Nun funzion — A può pur prenotà, ma nun funzion.",
   legendAuto:     "Asciugatrice automatica — quann prenuot a lavatrice, se prenota pur l'asciugatrice",
   lgFree: "Libbera", lgInUse: "Sta 'nfunziona", lgOos: "Nun funzion", lgPrev: "Chill primm e te",
-  lgFreeD: "A può prenotà momò.",
+  lgFreeD: "Nisciuno s'ha pigliato stu turno.",
   lgInUseD: (t: string): string => `Turno 'e mo, fernesce ê ${t}.`,
   lgOosD: "U uast è confermat. A può pur prenotà, ma nun funzion.",
   lgPrevD: "A cammr che stav primm e te.",
@@ -79,6 +79,12 @@ const nap: Partial<Testi> = {
 
   promemoriaDesc: "T'avvisamm poco prima che o turno tuo abbia.",
   yourBookings: "'E prenotazioni toie",
+  bookToday:     "Prenota pe' oggi",
+  bookTodayHint: "Piglia n'orario 'e chille libbere 'e oggi",
+  bookOtherDay:     "Prenota pe' n'atu juorno",
+  bookOtherDayHint: "Guarda tutta 'a semmana e scegli",
+  backToDashboard:  "Torna â dashboard",
+  machinesInfo: "Comme stanno mo'. Pe' prenutà usa 'e buttune ccà 'ncoppa.",
   notifichePhone: "Notifiche ru telefono",
   nonDisponibili: "Ngoppa stu cos non va",
 

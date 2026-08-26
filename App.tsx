@@ -3,7 +3,7 @@ import {
   Wind, Clock, CalendarDays,
   Plus, CheckCircle2, AlertTriangle,
   LayoutGrid, Delete, X, Wrench, Loader2, Star,
-  History, Timer, Trash2, Film, Music,
+  History, Timer, Trash2, Film, Music, ChevronRight, ArrowLeft,
   MessageSquare, Send, LogOut, Printer, Download,
   Settings, Repeat, Eraser, Presentation, UserCog,
 } from "lucide-react";
@@ -615,18 +615,19 @@ function FeedbackModal({ lang, room, onClose }: { lang: Lang; room: string | nul
 // Senza, bastava aprire Impostazioni o far comparire un pannello per
 // ridisegnare da capo anche la griglia settimanale, che sono 7x19 celle: lavoro
 // buttato, e su un telefono lento si sente.
-const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, onClear, onStatus, isAdmin }: {
+const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, onClear, onStatus, onGoDay, onGoWeek }: {
   theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
   favs: Fav[]; onToggleFav: (day:number, slot:number)=>void;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
   onClear: (day:number, slot:number, machine:string)=>Promise<void>;
   onStatus: (machine:string, oos:boolean, nota?:string)=>Promise<void>;
-  isAdmin: boolean;
+  // Le due strade per prenotare. La dashboard non prenota piu' da sola: porta
+  // dove l'orario si sceglie.
+  onGoDay: ()=>void; onGoWeek: ()=>void;
 }) {
   const t = T[lang];
   const [now, setNow]           = useState(new Date());
   const [toast, setToast]       = useState<string | null>(null);
-  const [booking, setBooking]   = useState<Machine | null>(null);
   const [segnalaOpen, setSegnalaOpen] = useState(false);
   const [favPicker, setFavPicker] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -649,11 +650,6 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
   }, []);
 
   const machines = deriveMachines(week, status, TODAY_DOW, CUR_SLOT, roomNumber);
-
-  async function confirmBooking(m: Machine, room: string) {
-    try { await onBook(TODAY_DOW, CUR_SLOT, m.id, room); setBooking(null); setToast(t.booked(m.label)); }
-    catch (e) { setBooking(null); setToast(errMsg(e, lang)); }
-  }
 
   const slot       = TIME_SLOTS[CUR_SLOT];
   const slotEndsMs = slotEndDate(CUR_SLOT).getTime() - now.getTime();
@@ -696,19 +692,6 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
     <div className="flex flex-col pb-6">
       {toast     && <Toast msg={toast} onClose={()=>setToast(null)}/>}
       {segnalaOpen && <SegnalaGuastoSheet lang={lang} status={status} onStatus={onStatus} onClose={()=>setSegnalaOpen(false)} roomNumber={roomNumber}/>}
-      {booking && (
-        <BookModal
-          target={{ slotIdx:CUR_SLOT, machineId:booking.id }}
-          bookings={week}
-          status={status}
-          isDark={false}
-          lang={lang}
-          myRoom={roomNumber}
-          isAdmin={isAdmin}
-          onConfirm={(r)=>confirmBooking(booking,r)}
-          onClose={()=>setBooking(null)}
-        />
-      )}
       {favPicker && (
         <FavPicker lang={lang} favs={favs} onClose={()=>setFavPicker(false)}
           onAdd={(d, s)=>{ if (!favs.some((f)=>f.day===d && f.slot===s)) onToggleFav(d, s); setFavPicker(false); }}/>
@@ -751,6 +734,48 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
             </p>
             <p className="text-2xl font-mono font-bold tabular-nums leading-none" style={{ color:RED }}>{fmtCountdown(slotEndsMs)}</p>
           </div>
+        </div>
+
+        {/* Le due strade per prenotare.
+
+            Stanno qui, subito sotto il turno corrente, perche' e' il primo
+            posto dove l'occhio arriva dopo aver letto che ore sono — e la
+            domanda che uno si fa a quel punto e' "e io quando lavo?". Prima la
+            risposta era un "+ Prenota" in fondo alla pagina, accanto a una
+            macchina, che prendeva il turno in corso senza chiedere: la scelta
+            dell'orario, che e' la cosa che interessa, non compariva da nessuna
+            parte.
+
+            Due pulsanti e non uno perche' sono due intenzioni diverse: "mi
+            serve adesso" porta al giorno, "devo organizzarmi" porta alla
+            settimana. Il primo e' pieno perche' e' il caso piu' comune.
+
+            Non sono legati alla camera: chi entra con "continua senza
+            accedere" non prenota, ma la griglia la deve poter guardare — e da
+            quando la barra in fondo non c'e' piu', questi pulsanti sono
+            l'unica strada che ci porta. */}
+        <div className="grid gap-2 mt-3">
+          <button onClick={onGoDay}
+            className="w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all active:scale-[0.98]"
+            style={{ background:RED, color:RED_FG }}>
+            <CalendarDays size={20} className="shrink-0"/>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-bold leading-tight">{t.bookToday}</span>
+              <span className="block text-[11px] leading-tight" style={{ opacity:0.8 }}>{t.bookTodayHint}</span>
+            </span>
+            <ChevronRight size={18} className="shrink-0" style={{ opacity:0.7 }}/>
+          </button>
+
+          <button onClick={onGoWeek}
+            className="w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 text-left transition-all active:scale-[0.98] border"
+            style={{ background:surf, borderColor:div, color:fg }}>
+            <LayoutGrid size={20} className="shrink-0" style={{ color:RED }}/>
+            <span className="flex-1 min-w-0">
+              <span className="block text-sm font-bold leading-tight">{t.bookOtherDay}</span>
+              <span className="block text-[11px] leading-tight" style={{ color:sub }}>{t.bookOtherDayHint}</span>
+            </span>
+            <ChevronRight size={18} className="shrink-0" style={{ color:sub }}/>
+          </button>
         </div>
       </div>
 
@@ -898,7 +923,10 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
           già così. L'intestazione col gruppo resta perché tiene insieme la
           coppia, ma non è più l'unico posto dove leggere la lettera. */}
       <section className="px-5 mb-4">
-        <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color:sub }}>{t.machines}</p>
+        <p className="text-[11px] font-mono tracking-widest uppercase" style={{ color:sub }}>{t.machines}</p>
+        {/* Senza questa riga la sezione sembra solo aver perso i pulsanti. Con,
+            dice cosa e': un tabellone di stato, e dove si prenota davvero. */}
+        <p className="text-[11px] mb-2" style={{ color:sub }}>{t.machinesInfo}</p>
         <div className="flex flex-col gap-3">
           {machinesFor(roomNumber).washers.map((id) => id[2]).map((L) => {
             const wm = washers.find((m) => m.label === L);
@@ -907,10 +935,10 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
               <div key={L} className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
                 {wm && <MachineRow key={wm.id} machine={wm} lang={lang}
                   groupLabel={`${t.washerLabel} ${L}`}
-                  isLast={false} divColor={div} onBook={() => setBooking(wm)}/>}
+                  isLast={false} divColor={div}/>}
                 {dm && <MachineRow key={dm.id} machine={dm} lang={lang}
                   groupLabel={`${t.dryerLabel} ${L}`}
-                  isLast divColor={div} onBook={() => {}}/>}
+                  isLast divColor={div}/>}
               </div>
             );
           })}
@@ -978,8 +1006,18 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
   );
 });
 
-function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
-  machine: Machine; lang: Lang; isLast: boolean; divColor: string; onBook:()=>void; groupLabel?: string;
+// La riga di una macchina: QUANTO sta succedendo adesso, e nient'altro.
+//
+// Fino alla 0.9.5 qui c'era un "+ Prenota" verde che prenotava il turno IN
+// CORSO senza chiedere niente. Chi lo premeva si aspettava di scegliere
+// l'orario — e' quello che significa "prenota" ovunque altro nell'app — e si
+// ritrovava invece un turno addosso, quello che stava finendo. Il pulsante
+// diceva una cosa e ne faceva un'altra.
+//
+// Adesso da qui non si prenota: si guarda. Chi vuole prenotare passa dalle due
+// chiamate all'azione sotto il turno corrente, dove l'orario si sceglie.
+function MachineRow({ machine, lang, isLast, divColor, groupLabel }: {
+  machine: Machine; lang: Lang; isLast: boolean; divColor: string; groupLabel?: string;
 }) {
   const t = T[lang];
   const fg  = "var(--foreground)";
@@ -1004,10 +1042,6 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
     : isFree ? t.free : `${t.room} ${machine.room}`;
   // Finisce su testo (l'etichetta di stato della riga), quindi variante scura.
   const statusColor = isFree ? GREEN_T : isOOO ? OOS_T : fg;
-
-  // Prenotabile: e' una lavatrice e nessuno l'ha ancora presa. Che sia guasta
-  // non toglie il diritto di prenotarla, cambia solo il colore del pulsante.
-  const canBook = machine.type === "washer" && !machine.room;
 
   return (
     <div style={{ borderBottom:isLast?"none":`1px solid ${divColor}`, background:rowBg }}>
@@ -1046,37 +1080,41 @@ function MachineRow({ machine, lang, isLast, divColor, onBook, groupLabel }: {
               <span className="text-[11px] font-mono font-semibold">{machine.prevRoom}</span>
             </span>
           )}
-          {/* Il pulsante resta anche quando la macchina è guasta: cambia solo
-              colore ed etichetta. Rosso perché non è l'azione consigliata, ma
-              la scelta spetta a chi prenota — a volte la macchina funziona
-              lo stesso, o si preferisce tenere il turno. */}
-          {canBook && (
-            <button onClick={onBook}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold shrink-0 transition-all active:scale-95"
-              style={isOOO
-                ? { background:OOS_C, color:"var(--destructive-foreground)" }
-                : { background:`color-mix(in srgb, ${GREEN} 18%, transparent)`, color:GREEN_T }}>
-              {isOOO ? <AlertTriangle size={12}/> : <Plus size={12}/>}
-              {isOOO ? t.bookAnyway : t.book}
-            </button>
-          )}
-          {/* Guasta e non prenotabile (asciugatrice, o gia' occupata):
-              resta il triangolo come promemoria visivo. */}
-          {isOOO && !canBook && <AlertTriangle size={15} style={{ color:OOS_T }}/>}
+          {/* Il triangolo resta: e' l'unico segnale che il guasto e' stato
+              verificato dall'amministrazione, e vale per tutte le macchine
+              ora che non c'e' piu' un pulsante a distinguerle. */}
+          {isOOO && <AlertTriangle size={15} style={{ color:OOS_T }}/>}
         </div>
       </div>
     </div>
   );
 }
 
+// ─── Ritorno alla dashboard ───────────────────────────────────────────────────
+
+// Con la barra in fondo sparita, questo e' il modo di tornare indietro: sta in
+// cima a entrambe le viste, nello stesso punto, e dice dove porta invece di
+// essere una freccia sola da interpretare.
+function TornaAllaDashboard({ lang, onBack }: { lang: Lang; onBack: ()=>void }) {
+  return (
+    <button onClick={onBack}
+      className="flex items-center gap-1.5 rounded-xl px-2.5 py-1.5 -ml-2.5 text-xs font-semibold transition-all active:scale-95"
+      style={{ color:"var(--gray-accessible-text)" }}>
+      <ArrowLeft size={14} className="shrink-0"/>
+      {T[lang].backToDashboard}
+    </button>
+  );
+}
+
 // ─── Day Schedule ──────────────────────────────────────────────────────────────
 
-const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: sessionRoom, favs, onToggleFav, onBook, onClear, isAdmin }: {
+const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: sessionRoom, favs, onToggleFav, onBook, onClear, isAdmin, onBack }: {
   theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
   favs: Fav[]; onToggleFav: (day:number, slot:number)=>void;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
   onClear: (day:number, slot:number, machine:string)=>Promise<void>;
   isAdmin: boolean;
+  onBack: ()=>void;
 }) {
   const t = T[lang];
   const [selDay, setSelDay]       = useState(TODAY_DOW);
@@ -1127,7 +1165,8 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
       )}
 
       <div className="px-5 pt-3 pb-2 shrink-0">
-        <h2 className="text-base font-bold mb-2" style={{ color:fg }}>{t.daily}</h2>
+        <TornaAllaDashboard lang={lang} onBack={onBack}/>
+        <h2 className="text-base font-bold mb-2 mt-1" style={{ color:fg }}>{t.daily}</h2>
         <div className="grid grid-cols-7 gap-1">
           {t.days.map((d, i) => {
             const isActive = i===selDay;
@@ -1307,11 +1346,12 @@ function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify,
 
 // ─── Week Overview ─────────────────────────────────────────────────────────────
 
-const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber: sessionRoom, onBook, onClear, isAdmin }: {
+const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber: sessionRoom, onBook, onClear, isAdmin, onBack }: {
   theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
   onClear: (day:number, slot:number, machine:string)=>Promise<void>;
   isAdmin: boolean;
+  onBack: ()=>void;
 }) {
   const t = T[lang];
   const [target, setTarget]           = useState<BookTarget | null>(null);
@@ -1402,7 +1442,11 @@ const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber
         <FoglioSettimana lang={lang} week={week} onClose={() => setStampaAperta(false)} />
       )}
 
-      <div className="px-5 pt-3 pb-2 shrink-0 flex items-center justify-between gap-3">
+      <div className="px-5 pt-3 shrink-0">
+        <TornaAllaDashboard lang={lang} onBack={onBack}/>
+      </div>
+
+      <div className="px-5 pt-1 pb-2 shrink-0 flex items-center justify-between gap-3">
         <h2 className="text-base font-bold" style={{ color:fg }}>{t.overview}</h2>
         {/* Il foglio da appendere, per chi amministra — come quello della sala
             polivalente, e per lo stesso motivo: se l'app non risponde, in
@@ -1956,33 +2000,23 @@ function LoginScreen({ lang, onLogin, onAdmin }: {
   );
 }
 
-// ─── Bottom nav ───────────────────────────────────────────────────────────────
-
-function BottomNav({ active, onChange, lang }: { active:number; onChange:(i:number)=>void; theme?:Theme; lang:Lang }) {
-  const t = T[lang];
-  const tabs = [
-    { icon:Clock,        label:"Dashboard" },
-    { icon:CalendarDays, label:t.daily     },
-    { icon:LayoutGrid,   label:t.weekly    },
-  ];
-  return (
-    // paddingBottom con la safe-area: su iPhone l'ultima riga di pulsanti
-    // finiva sotto la barra dell'indicatore home, che la copre a metà. Su
-    // tutto il resto env() vale 0 e non cambia niente.
-    <div className="flex shrink-0 border-t"
-      style={{
-        background:"var(--background)", borderColor:"var(--border)",
-        paddingBottom:"env(safe-area-inset-bottom, 0px)",
-      }}>
-      {tabs.map((tab,i)=>{ const Icon=tab.icon; return (
-        <button key={i} onClick={()=>onChange(i)} className="flex-1 flex flex-col items-center gap-1 py-3 transition-colors"
-          style={{ color:active===i?RED:"var(--gray-accessible-text)" }}>
-          <Icon size={19}/><span className="text-[9px] font-medium tracking-wide">{tab.label}</span>
-        </button>
-      ); })}
-    </div>
-  );
-}
+// ─── Perche' non c'e' piu' una barra in fondo ─────────────────────────────────
+//
+// C'erano tre voci — Dashboard, Giornaliero, Settimana — e nessuna diceva
+// "prenota". Chi apriva l'app cercava di prenotare, e non trovando quella
+// parola in fondo la cercava nella pagina: la trovava sul "+ Prenota" accanto
+// alle macchine, che pero' prendeva il turno in corso senza chiedere l'orario.
+// La barra offriva le due schermate giuste col nome sbagliato.
+//
+// Adesso quelle due schermate si chiamano "Prenota per oggi" e "Prenota per un
+// altro giorno", e stanno in mezzo alla dashboard invece che in fondo allo
+// schermo. Una barra che ripete le stesse destinazioni con nomi peggiori non
+// aggiunge niente, quindi e' sparita: si scende dalla dashboard e si risale
+// col pulsante in cima a ciascuna vista.
+//
+// Su desktop la sidebar resta: li' e' una colonna sempre visibile accanto al
+// contenuto, non una riga che ruba spazio verticale a un telefono, e serve
+// anche a cambiare struttura (lavanderia, cinema, musica, sale).
 
 // ─── Sidebar desktop ──────────────────────────────────────────────────────────
 
@@ -2219,6 +2253,13 @@ function FacilitySwitcher({ facility, onChange, lang, adminRole }: {
 
 export default function App() {
   const [screen, setScreen]   = useState(0);
+  // 0 dashboard, 1 giornaliero, 2 settimana. Con useCallback perche' le tre
+  // viste sono `memo`: un callback creato al volo dentro il JSX cambierebbe a
+  // ogni render e le farebbe ridisegnare da capo — cioe' proprio il lavoro che
+  // quel memo evita (la griglia settimanale sono 7x19 celle).
+  const vaiAllaDashboard = useCallback(() => setScreen(0), []);
+  const vaiAlGiorno      = useCallback(() => setScreen(1), []);
+  const vaiAllaSettimana = useCallback(() => setScreen(2), []);
   const [facility, setFacility] = useState<Facility>("laundry");
   const [accessibilityOpen, setAccessibilityOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -2485,9 +2526,9 @@ export default function App() {
     <LoginScreen lang={lang} onLogin={chooseRoom} onAdmin={() => setAdminLoginOpen(true)}/>
   ) : (
     <>
-      {screen===0 && <Dashboard   theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} onStatus={handleStatus} isAdmin={isAdmin}/>}
-      {screen===1 && <DaySchedule theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} isAdmin={isAdmin}/>}
-      {screen===2 && <WeekOverview theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} onBook={handleBook} onClear={handleClear} isAdmin={isAdmin}/>}
+      {screen===0 && <Dashboard   theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} onStatus={handleStatus} onGoDay={vaiAlGiorno} onGoWeek={vaiAllaSettimana}/>}
+      {screen===1 && <DaySchedule theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} isAdmin={isAdmin} onBack={vaiAllaDashboard}/>}
+      {screen===2 && <WeekOverview theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} onBook={handleBook} onClear={handleClear} isAdmin={isAdmin} onBack={vaiAllaDashboard}/>}
     </>
   );
 
@@ -2496,10 +2537,11 @@ export default function App() {
   // pagina. Un if/else unico invece di due booleani (isRoom, isPienaPagina)
   // derivati dallo stesso confronto ripetuto: quella forma confondeva il
   // narrowing di TypeScript, che finiva per segnare "conferenze" irraggiungibile.
+  //
+  // `isPienaPagina` e' sparito con la barra in fondo: serviva solo a nasconderla
+  // nelle viste a corpo intero, e adesso non c'e' piu' niente da nascondere.
   let bodyContent: React.ReactNode;
-  let isPienaPagina: boolean;
   if (isAdminFacility(facility)) {
-    isPienaPagina = false;
     // px-5 come le sezioni della lavanderia: senza, le schede amministrative
     // toccavano i bordi dello schermo sul telefono — il corpo pagina non ha
     // padding proprio, se lo mettono le viste.
@@ -2508,13 +2550,10 @@ export default function App() {
     // ai selettori qui sopra.
     bodyContent = <div className="px-5 pt-4"><Suspense fallback={null}><AdminScreens tab={facility} onSession={handleAdminSession}/></Suspense></div>;
   } else if (facility === "conferenze") {
-    isPienaPagina = true;
     bodyContent = <Conferenze lang={lang} adminRole={adminRole}/>;
   } else if (facility === "cinema" || facility === "music") {
-    isPienaPagina = true;
     bodyContent = <RoomView room={facility} lang={lang} roomNumber={roomNumber}/>;
   } else {
-    isPienaPagina = false;
     bodyContent = mainContent;
   }
 
@@ -2625,7 +2664,6 @@ export default function App() {
           {bodyContent}
         </div>
 
-        {showChrome && !isPienaPagina && !isAdminFacility(facility) && <BottomNav active={screen} onChange={setScreen} theme={theme} lang={lang}/>}
         <div className="pb-2 hidden md:flex justify-center shrink-0">
           <div className="w-28 h-1 rounded-full" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
         </div>
