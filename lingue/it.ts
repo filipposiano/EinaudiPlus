@@ -24,7 +24,9 @@ const it = {
   installAndroidBody: "Apri il menu del browser e scegli «Aggiungi pagina a → Schermata Home» (o «Installa app»).",
   installAndroidStep: "Menu  →  Aggiungi a Schermata Home",
   installCta: "Installa", installLater: "Più tardi", installIosDone: "Ho capito",
-  addFav: "Aggiungi preferito", day: "Giorno", timeSlot: "Fascia oraria", favAlready: "Già nei preferiti",
+  favsIntro: "I turni che rivuoi ogni settimana.",
+  addFav: "Aggiungi preferito",
+  removeFav: "Togli dai preferiti", day: "Giorno", timeSlot: "Fascia oraria", favAlready: "Già nei preferiti",
   chooseWasher: "Scegli la lavatrice", noFreeWashers: "Nessuna lavatrice libera in questo turno.",
   feedback: "Feedback", feedbackBody: "Hai suggerimenti o hai trovato un problema? Scrivici.",
   feedbackPlaceholder: "Scrivi qui il tuo messaggio…", feedbackSend: "Invia", feedbackSending: "Invio feedback…",
@@ -53,14 +55,25 @@ const it = {
   bookOtherDay:     "Prenota per un altro giorno",
   bookOtherDayHint: "Guarda tutta la settimana e scegli",
   backToDashboard:  "Torna alla dashboard",
-  machinesInfo: "Stato in tempo reale. Per prenotare usa i pulsanti qui sopra.",
+  navStrutture: "Menu",
+  bookTitle: "Prenota",
+  feedbackApp: "Feedback sull'app",
+  machinesInfo: "Chi ha le macchine in questo turno, e chi le aveva prima.",
   inProgressNow: "In corso ora",
   noActiveBookings: "Nessuna prenotazione attiva",
   freeTodayLabel: "turni liberi oggi",
   favorites: "Preferiti",
   noFavs: "Tocca la ★ accanto a un orario nella scheda Giornaliero per aggiungerlo ai preferiti.",
+  // Sulla riga di un preferito ancora libero: dice che NON e' una
+  // prenotazione, che era la confusione da togliere.
+  bookSlot: "Prenota un turno",
+  bookAnother: "Prenota un altro turno",
+  favAvailable: "Il tuo turno preferito è libero",
   favFree: "Libero", favFull: "Pieno", favPast: "Passato",
   remainingChip: (n: number): string => n >= 0 ? `${n} rimast${n === 1 ? "a" : "e"}` : `${-n} in più`,
+  // "18:15" da solo non diceva se fosse l'inizio o la fine: la torta
+  // accanto misura la fine, quindi questo deve dire l'inizio, a parole.
+  slotFrom: (ora: string): string => `Turno delle ${ora}`,
   slotEndsIn: "Termina tra",
   remainingMsg: (n: number): string => n > 0
     ? `Puoi ancora prenotare ${n} ${n === 1 ? "turno" : "turni"} questa settimana (max ${WEEKLY_QUOTA} a camera).`

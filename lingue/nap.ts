@@ -84,7 +84,10 @@ const nap: Partial<Testi> = {
   bookOtherDay:     "Prenota pe' n'atu juorno",
   bookOtherDayHint: "Guarda tutta 'a semmana e scegli",
   backToDashboard:  "Torna â dashboard",
-  machinesInfo: "Comme stanno mo'. Pe' prenutà usa 'e buttune ccà 'ncoppa.",
+  navStrutture: "Menù",
+  bookTitle: "Prenota",
+  feedbackApp: "Che ne pienze 'e ll'app",
+  machinesInfo: "Chi tene 'e machine 'a stu turno, e chi 'e tenéva primma.",
   notifichePhone: "Notifiche ru telefono",
   nonDisponibili: "Ngoppa stu cos non va",
 
