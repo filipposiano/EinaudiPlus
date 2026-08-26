@@ -630,3 +630,40 @@
 
   @page { margin: 16mm; }
 }
+
+/* ── Menu laterale (telefono) ───────────────────────────────────────────────
+   Il pannello entra da sinistra invece di comparire. Senza, il passaggio da
+   "niente" a "mezzo schermo coperto" sembrava un errore di disegno: il
+   movimento dice da dove viene la cosa e dove tornera' chiudendola.
+   Durate corte: e' una tendina, non un effetto. */
+@keyframes menuEntra {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+@keyframes veloEntra {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.menu-pannello { animation: menuEntra .18s ease-out; }
+.menu-velo     { animation: veloEntra .18s ease-out; }
+
+/* Chi ha chiesto meno animazioni nel sistema operativo non le vuole nemmeno
+   qui: il menu compare e basta. */
+@media (prefers-reduced-motion: reduce) {
+  .menu-pannello, .menu-velo { animation: none; }
+}
+
+/* ── Il pallino del turno in corso ──────────────────────────────────────────
+   Lampeggia perché è l'unica cosa della schermata che sta succedendo proprio
+   adesso. Non è `animate-pulse` di Tailwind perché quello non guarda la
+   preferenza di sistema: chi ha chiesto meno animazioni non deve avere una
+   luce che pulsa in una lista che legge. */
+@keyframes lampeggio {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .25; }
+}
+.lampeggia { animation: lampeggio 1.6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .lampeggia { animation: none; }
+}
