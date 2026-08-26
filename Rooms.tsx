@@ -128,6 +128,9 @@ const T = {
     aNomeDi: "A nome di",
     aNomeDiPlaceholder: "Es. Formazione PFP",
     formatoCamera: "Formato camera non valido!",
+    durata: "Durata rapida",
+    unOra: "1 h", dueOreMezza: "2 h 30", tuttaLaSerata: "Tutta la serata",
+    liberaFascia: "Nessuna sovrapposizione: la fascia è libera.",
   },
   en: {
     cinema: "Cinema Room", music: "Music Room",
@@ -153,6 +156,9 @@ const T = {
     aNomeDi: "On behalf of",
     aNomeDiPlaceholder: "e.g. PFP Training",
     formatoCamera: "Invalid room format!",
+    durata: "Quick duration",
+    unOra: "1 h", dueOreMezza: "2 h 30", tuttaLaSerata: "All evening",
+    liberaFascia: "No overlap: the slot is free.",
   },
   fr: {
     cinema: "Salle Cinéma", music: "Salle Musique",
@@ -178,6 +184,9 @@ const T = {
     aNomeDi: "Au nom de",
     aNomeDiPlaceholder: "Ex. Formation PFP",
     formatoCamera: "Format de chambre invalide !",
+    durata: "Durée rapide",
+    unOra: "1 h", dueOreMezza: "2 h 30", tuttaLaSerata: "Toute la soirée",
+    liberaFascia: "Aucun chevauchement : le créneau est libre.",
   },
   de: {
     cinema: "Kinoraum", music: "Musikraum",
@@ -203,6 +212,9 @@ const T = {
     aNomeDi: "Im Namen von",
     aNomeDiPlaceholder: "z. B. PFP-Schulung",
     formatoCamera: "Ungültiges Zimmerformat!",
+    durata: "Schnelle Dauer",
+    unOra: "1 Std.", dueOreMezza: "2,5 Std.", tuttaLaSerata: "Ganzer Abend",
+    liberaFascia: "Keine Überschneidung: der Zeitraum ist frei.",
   },
   es: {
     cinema: "Sala de Cine", music: "Sala de Música",
@@ -228,6 +240,9 @@ const T = {
     aNomeDi: "En nombre de",
     aNomeDiPlaceholder: "P. ej. Formación PFP",
     formatoCamera: "¡Formato de habitación no válido!",
+    durata: "Duración rápida",
+    unOra: "1 h", dueOreMezza: "2 h 30", tuttaLaSerata: "Toda la tarde",
+    liberaFascia: "Sin solapamientos: la franja está libre.",
   },
   nap: {
     cinema: "Sala Cinema", music: "Sala Musica",
@@ -253,6 +268,9 @@ const T = {
     aNomeDi: "A nomme 'e",
     aNomeDiPlaceholder: "Es. Formazione PFP",
     formatoCamera: "'O formato d''a cammera nun va buono!",
+    durata: "Quanto adura",
+    unOra: "1 h", dueOreMezza: "2 h 30", tuttaLaSerata: "Tutta 'a serata",
+    liberaFascia: "Nun se 'ntoppa cu niente: 'a fascia è libbera.",
   },
 } as const;
 
@@ -585,6 +603,45 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   const iEnd = Math.max(0, endOpts.indexOf(end));
   const iStart = Math.max(0, startOpts.indexOf(start));
 
+  /**
+   * La fascia scelta si sovrappone a qualcosa?
+   *
+   * Era dentro `submit`, cioè si sapeva solo dopo aver premuto Prenota: chi
+   * sceglieva sopra una serata già presa lo scopriva da un toast rosso, e
+   * doveva ricominciare a indovinare. Lo stesso conto, fatto mentre si
+   * scelgono le ore, diventa una riga che dice sì o no in tempo reale.
+   *
+   * Il commento lungo dentro `submit` spiega perché la coda oltre la
+   * mezzanotte a volte non si può controllare: vale identico qui.
+   */
+  const sforo = end - 24 * 60;
+  const codaControllabile = sforo > 0 && selDay < 6;
+  const collide = end > start && (
+    roomsApi.hasOverlap(bookings, selDay, start, Math.min(end, 24 * 60)) ||
+    (codaControllabile && roomsApi.hasOverlap(bookings, selDay + 1, 0, sforo))
+  );
+
+  /**
+   * Le durate rapide.
+   *
+   * Le due ruote dicono "dalle" e "alle", che è il modo giusto di scegliere
+   * una fascia ma il modo sbagliato di scegliere una DURATA: per una serata di
+   * due ore e mezza si scorreva la seconda ruota contando a mente. Questi tre
+   * pulsanti tengono fermo l'inizio e spostano la fine.
+   *
+   * La fine si posa sull'opzione valida più vicina invece che sul minuto
+   * esatto: `endOpts` è già filtrata (passo di 30', finestra della sala,
+   * scavalcamento), e forzare un valore fuori lista rimonterebbe la ruota su
+   * un indice che non esiste.
+   */
+  function durata(minuti: number | "serata") {
+    const bersaglio = minuti === "serata" ? 24 * 60 : start + minuti;
+    if (endOpts.length === 0) return;
+    const scelto = endOpts.reduce((a, b) =>
+      Math.abs(b - bersaglio) < Math.abs(a - bersaglio) ? b : a);
+    setEnd(scelto);
+  }
+
   async function submit() {
     const who = myRoom ? (bookingRoom.trim() || myRoom) : name.trim();
     if (!who) { setToast(t.needName); return; }
@@ -622,11 +679,6 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
     // con "si sovrappone", parlando di ore che non c'entravano nulla. Meglio
     // nessun controllo che uno che guarda il giorno sbagliato — il vincolo del
     // database copre comunque il caso vero, e la risposta torna con "overlap".
-    const sforo = end - 24 * 60;
-    const codaControllabile = sforo > 0 && selDay < 6;
-    const collide =
-      roomsApi.hasOverlap(bookings, selDay, start, Math.min(end, 24 * 60)) ||
-      (codaControllabile && roomsApi.hasOverlap(bookings, selDay + 1, 0, sforo));
     if (collide) { setToast(t.overlap); return; }
     setBusy(true);
     try {
@@ -753,8 +805,36 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
           </div>
 
           {/* Detto a parole solo quando serve davvero. */}
-          <p className="text-[11px] mb-3 h-4" style={{ color: sub }}>
+          <p className="text-[11px] mb-2 h-4" style={{ color: sub }}>
             {end > 24 * 60 ? `${t.end}: ${fmtEnd(end, lang)}` : ""}
+          </p>
+
+          {/* Tre durate al volo: l'inizio resta quello scelto, si sposta solo
+              la fine. */}
+          <div className="flex gap-2 mb-2">
+            {([[60, t.unOra], [150, t.dueOreMezza], ["serata" as const, t.tuttaLaSerata]] as [number | "serata", string][])
+              .map(([m, label]) => {
+                const attivo = end === (m === "serata" ? 24 * 60 : start + m);
+                return (
+                  <button key={String(m)} onClick={() => durata(m)}
+                    className="flex-1 rounded-xl py-2 text-[11px] font-semibold transition-all active:scale-95 border"
+                    style={attivo
+                      ? { background: `color-mix(in srgb, var(--primary) 12%, transparent)`, borderColor: RED, color: RED }
+                      : { background: chip, borderColor: div, color: fg }}>
+                    {label}
+                  </button>
+                );
+              })}
+          </div>
+
+          {/* L'esito, mentre si sceglie. Verde o rosso, e sempre presente:
+              un'assenza di avviso non è una rassicurazione — è solo silenzio,
+              e davanti a una griglia piena il silenzio si legge come dubbio. */}
+          <p className="text-[11px] mb-3 flex items-start gap-1.5"
+            style={{ color: collide ? OOS : "var(--status-free-text)" }}>
+            {collide
+              ? <><AlertTriangle size={12} style={{ flexShrink: 0, marginTop: 1 }} />{t.overlap}</>
+              : <>✓ {t.liberaFascia}</>}
           </p>
 
           {direzione ? (

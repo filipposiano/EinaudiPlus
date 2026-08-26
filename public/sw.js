@@ -42,6 +42,57 @@ function iconFor(kind) {
   return "/icon-washer.svg";                            // 'pre': inizia il turno
 }
 
+// ─── Storico locale ──────────────────────────────────────────────────────────
+//
+// Il gemello di notifiche.ts, in JavaScript semplice perché qui non passa il
+// compilatore: stesso database, stesso store, stessi campi. Se cambia un nome
+// di là, cambia anche qua.
+//
+// Tutto è avvolto in try/catch e in promesse che non rifiutano mai: se
+// IndexedDB non c'è (navigazione privata, impostazioni restrittive) la
+// notifica deve comunque comparire. Lo storico è un di più, non la notifica.
+
+const DB_NOME = "einaudiplus";
+const DB_VERSION = 1;
+const STORE = "notifiche";
+const MAX_STORICO = 60;
+
+function apriDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NOME, DB_VERSION);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: "ts" });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function salvaNotifica(n) {
+  return apriDb().then((db) => new Promise((resolve) => {
+    const tx = db.transaction(STORE, "readwrite");
+    const st = tx.objectStore(STORE);
+    st.put(n);
+    // Potatura: si tengono le MAX_STORICO piu' recenti. Senza, un anno di
+    // promemoria resterebbe sul telefono per sempre.
+    const tutte = st.getAll();
+    tutte.onsuccess = () => {
+      const list = (tutte.result || []).sort((a, b) => b.ts - a.ts);
+      for (const vecchia of list.slice(MAX_STORICO)) st.delete(vecchia.ts);
+    };
+    tx.oncomplete = () => { db.close(); resolve(); };
+    tx.onerror = () => { db.close(); resolve(); };
+  })).catch(() => {});
+}
+
+/** Sveglia le finestre aperte: la campanella si accende senza ricaricare. */
+function avvisaFinestre() {
+  return self.clients.matchAll({ type: "window", includeUncontrolled: true })
+    .then((list) => { for (const c of list) c.postMessage({ tipo: "notifica" }); })
+    .catch(() => {});
+}
+
 self.addEventListener("push", (event) => {
   let data = {};
   try { data = event.data ? event.data.json() : {}; } catch (e) { data = {}; }
@@ -66,7 +117,17 @@ self.addEventListener("push", (event) => {
     vibrate: [200, 100, 200, 100, 200, 100, 200], // Pattern di vibrazione (vibra-pausa-vibra...)
     requireInteraction: true // Evita che la notifica sparisca da sola dopo pochi secondi
   };
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(Promise.all([
+    self.registration.showNotification(title, options),
+    salvaNotifica({
+      ts: Date.now(),
+      title,
+      body: options.body,
+      kind: data.kind || "",
+      url: options.data.url,
+      read: false,
+    }).then(avvisaFinestre),
+  ]));
 });
 
 self.addEventListener("notificationclick", (event) => {

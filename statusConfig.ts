@@ -16,9 +16,9 @@ export interface AccessibilityPrefs {
 // ─── Default ───────────────────────────────────────────────────────────────────
 
 export const DEFAULT_COLORS: Record<StatusKey, string> = {
-  free:  "#22c55e",
-  inuse: "#eab308",
-  oos:   "#ff4757",
+  free:  "#7a8a5e",
+  inuse: "#a19786",
+  oos:   "#a33b28",
 };
 
 export const DEFAULT_ICONS: Record<StatusKey, string> = {

@@ -51,6 +51,26 @@ function buildSlots() {
 export const TIME_SLOTS = buildSlots();
 
 /**
+ * Il primo turno NOTTURNO: quello che comincia dopo la mezzanotte.
+ *
+ * I 19 turni partono dalle 07:00 e vanno avanti di 75 minuti l'uno; dal
+ * quattordicesimo in poi si è passati alle ore piccole (00:30 – 06:45). Sono
+ * cinque turni che quasi nessuno prende, e in fondo a ogni griglia occupavano
+ * un terzo dello schermo: la vista li tiene ripiegati e li apre a richiesta.
+ *
+ * Si conta invece di scriverlo `14` a mano: se un giorno i turni durassero 90
+ * minuti, `buildSlots` cambierebbe da sé e questo numero verrebbe dietro.
+ */
+export const NIGHT_FROM = (() => {
+  let m = 7 * 60;
+  for (let i = 0; i < N_SLOTS; i++) { if (m >= 24 * 60) return i; m += 75; }
+  return N_SLOTS;
+})();
+
+export const N_NIGHT_SLOTS = N_SLOTS - NIGHT_FROM;
+export const isNightSlot = (slot: number) => slot >= NIGHT_FROM;
+
+/**
  * Quota settimanale per camera.
  *
  * È un'indicazione, non un limite: il server NON la applica. Senza un login
@@ -60,7 +80,7 @@ export const TIME_SLOTS = buildSlots();
  */
 export const WEEKLY_QUOTA = 2;
 
-export const APP_VERSION = "0.9.5";
+export const APP_VERSION = "0.10.0";
 
 // ─── "Adesso" ────────────────────────────────────────────────────────────────
 //
@@ -135,6 +155,45 @@ export function machinesFor(roomNumber: string | null | undefined): { washers: s
   return manica
     ? { washers: ["W-A"], dryers: ["D-A"] }
     : { washers: ["W-A", "W-B", "W-C"], dryers: ["D-A", "D-B", "D-C"] };
+}
+
+/**
+ * Il nome della lavanderia di una camera.
+ *
+ * La regola (1–99 Manica, dal 100 Valentino) è già in `machinesFor` e in
+ * `api.sameLaundry`; qui serve il NOME, perché è quello che si mostra a chi
+ * digita la camera nella schermata d'accesso — "214 → Valentino" dice, prima
+ * di entrare, che l'app ha capito di quale edificio si sta parlando.
+ *
+ * Torna null per la Direzione e per una camera non ancora scritta: lì non c'è
+ * un edificio da nominare, e inventarne uno sarebbe peggio del silenzio.
+ */
+export function laundryName(roomNumber: string | null | undefined): "Manica" | "Valentino" | null {
+  const num = parseInt(roomNumber?.match(/^(\d+)/)?.[1] || "0", 10);
+  if (!num) return null;
+  return num < 100 ? "Manica" : "Valentino";
+}
+
+/**
+ * Quanti turni liberi restano in un dato giorno, per la lavanderia di `room`.
+ *
+ * Conta le caselle (turno × lavatrice) ancora prendibili: né prenotate, né su
+ * una macchina guasta, né già passate. È il numero che compare sotto ogni
+ * giorno nel selettore — "giovedì 14" vuol dire che giovedì c'è ancora spazio,
+ * e si sceglie il giorno prima di aprirlo invece che dopo.
+ */
+export function freeSlotsOn(
+  week: WeekData, status: StatusData, room: string | null, day: number,
+  opts: { night?: boolean } = {},
+): number {
+  const washers = machinesFor(room).washers.filter((id) => status[id] !== "oos");
+  const last = opts.night === false ? NIGHT_FROM : N_SLOTS;
+  let n = 0;
+  for (let s = 0; s < last; s++) {
+    if (isPastBooking({ day, slot: s, mid: "W-A" })) continue;
+    for (const wid of washers) if (!week[day]?.[s]?.[wid]) n++;
+  }
+  return n;
 }
 
 /** Chi ha prenotato una certa macchina in un certo turno, se qualcuno. */

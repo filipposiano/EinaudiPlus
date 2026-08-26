@@ -3,6 +3,12 @@ import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './style.css'
 import { loadPrefs, applyToDOM } from './statusConfig'
+// Dati finti, solo con `VITE_DEMO=1 npm run dev`: serve a guardare
+// l'interfaccia senza backend e senza token. In produzione il file è vuoto —
+// il suo contenuto sta dietro `import.meta.env.DEV` e viene eliminato dal
+// bundle. Importato QUI, prima di React: deve sostituire `fetch` prima che il
+// primo componente chieda qualcosa.
+import './demo'
 
 // Una sola app, anche per gli amministratori: le schermate riservate si aprono
 // dal menu Impostazioni, non da una pagina /admin separata. Chi non ha una
