@@ -25,7 +25,7 @@ const MUTATIONS = new Set([
 // controllo sta qui: nascondere un pulsante non e' un'autorizzazione.
 const SOLO_SISTEMISTA = new Set([
   "recurringList", "recurringAddLaundry", "recurringAddSpace",
-  "recurringSetActive", "recurringDelete", "applyRecurring", "purge",
+  "recurringSetActive", "recurringDelete", "applyRecurring", "purge", "counts",
   "accountList", "accountCreate", "accountSetPassword",
   "accountSetActive", "accountDelete",
 ]);
@@ -407,7 +407,20 @@ export default async function handler(req, res) {
 
       // ── Sistemista: pulizia ──────────────────────────────────────────────
       case "purge":
-        result = await rpc("sysadmin_purge", { p_scope: String(body.scope || "") });
+        // `sala` assente = tutte, cioe' il comportamento storico. Il controllo
+        // su quali sale esistono sta nella funzione SQL, non qui: e' la stessa
+        // che deve rifiutare una sala inventata anche a chi chiama senza
+        // passare dal pannello.
+        result = await rpc("sysadmin_purge", {
+          p_scope: String(body.scope || ""),
+          p_sala: body.sala ? String(body.sala) : null,
+        });
+        break;
+
+      // Conteggio delle prenotazioni vive, per sala. Il pannello lo rilegge da
+      // solo: e' quello che va a zero quando la pulizia ha funzionato davvero.
+      case "counts":
+        result = await rpc("sysadmin_conteggi");
         break;
 
       default:

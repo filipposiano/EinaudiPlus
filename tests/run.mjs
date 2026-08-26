@@ -501,7 +501,7 @@ section("Separazione dei ruoli");
   if (!cookie) {
     console.log("  salto  (nessuna sessione FDO)");
   } else {
-    for (const action of ["recurringList", "purge", "applyRecurring"]) {
+    for (const action of ["recurringList", "purge", "applyRecurring", "counts"]) {
       const r = await call(adminData, { body: { action, scope: "settimana" }, cookie });
       check(`FDO non puo' '${action}' -> 403`, r.status === 403, `ricevuto ${r.status}`);
     }
@@ -587,6 +587,26 @@ section("Sistemista");
 
     check("ambito di pulizia inventato respinto",
       (await call(adminData, { body: { action: "purge", scope: "qualsiasi" }, cookie: sysCookie })).body?.ok === false);
+
+    // La pulizia per singola sala: qui si controllano solo i rifiuti, che non
+    // cancellano niente. Le quattro sale valide restano sotto TEST_ALLOW_PURGE.
+    check("sala inventata respinta",
+      (await call(adminData, { body: { action: "purge", scope: "settimana", sala: "piscina" }, cookie: sysCookie })).body?.ok === false);
+
+    check("la sala non vale per le segnalazioni",
+      (await call(adminData, { body: { action: "purge", scope: "segnalazioni", sala: "cinema" }, cookie: sysCookie })).body?.ok === false);
+
+    // Il contatore. Deve rispondere per tutte e quattro le sale: la
+    // polivalente e' quella che la pulizia non vedeva, e un contatore che la
+    // dimentica ripeterebbe lo stesso silenzio.
+    const conteggi = await call(adminData, { body: { action: "counts" }, cookie: sysCookie });
+    check("il contatore risponde", conteggi.body?.ok === true, JSON.stringify(conteggi.body));
+    for (const sala of ["lavanderia", "cinema", "musica", "polivalente"]) {
+      check(`il contatore conosce '${sala}'`,
+        typeof conteggi.body?.totale?.[sala] === "number" &&
+        typeof conteggi.body?.settimana?.[sala] === "number",
+        JSON.stringify(conteggi.body));
+    }
 
     // La pulizia deve ESEGUIRE davvero, non solo rispondere.
     //
