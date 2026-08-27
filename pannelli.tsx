@@ -95,15 +95,13 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
 
   // Non e' piu' un foglio che sale dal basso: e' una pagina come "Lavanderia",
   // raggiunta dallo stesso menu e lasciata allo stesso modo — riaprendo il
-  // menu e scegliendo altro. La X in alto resta come scorciatoia rapida.
+  // menu e scegliendo altro. Niente X in alto: era il residuo del foglio, e su
+  // una pagina prometteva una chiusura che non c'e' piu'.
   return (
     <>
       <div className="pb-6">
-        <div className="px-6 pt-4 pb-3 flex items-center justify-between">
+        <div className="px-6 pt-4 pb-3">
           <p className="text-lg font-bold" style={{ color:fg }}>{T[lang].impostazioni}</p>
-          <button onClick={onClose} className="p-2 rounded-xl" style={{ color:sub, background:"var(--secondary)" }}>
-            <X size={16}/>
-          </button>
         </div>
 
         <div className="rounded-2xl overflow-hidden border mx-5" style={{ borderColor:div }}>

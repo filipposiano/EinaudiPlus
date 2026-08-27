@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef, memo, lazy, Suspense } from "react";
 import {
-  Wind, Clock, CalendarDays,
+  Wind,
   Plus, CheckCircle2, AlertTriangle,
-  LayoutGrid, Delete, X, Wrench, Loader2, Star,
+  Delete, X, Wrench, Loader2, Star,
   History, Trash2, Film, Music, Menu,
   MessageSquare, Send, LogOut, Printer, Download,
   Settings, Repeat, Eraser, Presentation, UserCog, ChevronLeft,
@@ -1741,9 +1741,9 @@ function FoglioSettimana({ lang, week, onClose }: {
 
 // ─── Admin sheet (bottom sheet dalla dashboard) ───────────────────────────────
 
-function SegnalaGuastoSheet({ lang, status, onStatus, onClose, roomNumber }: {
+function SegnalaGuastoSheet({ lang, status, onStatus, roomNumber }: {
   theme?: Theme; lang: Lang; status: StatusData; roomNumber: string | null;
-  onStatus: (machine:string, oos:boolean, nota?:string)=>Promise<void>; onClose: () => void;
+  onStatus: (machine:string, oos:boolean, nota?:string)=>Promise<void>;
 }) {
   const t = T[lang];
   const [toast, setToast] = useState<string | null>(null);
@@ -1794,20 +1794,15 @@ function SegnalaGuastoSheet({ lang, status, onStatus, onClose, roomNumber }: {
         {toast && <Toast msg={toast} onClose={() => setToast(null)} />}
         <div className="pb-8">
           <div className="px-6 pt-4 pb-4">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="p-2 rounded-xl shrink-0"
-                  style={{ background:`color-mix(in srgb, var(--destructive) 12%, transparent)`, color:OOS_T }}>
-                  {nota.m.type === "washer" ? <WashingMachine size={18}/> : <Wind size={17}/>}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[11px] font-mono tracking-widest uppercase" style={{ color:sub }}>{t.reportOos}</p>
-                  <p className="text-lg font-bold truncate" style={{ color:fg }}>{etichetta}</p>
-                </div>
+            <div className="flex items-center gap-2.5 min-w-0 mb-1">
+              <div className="p-2 rounded-xl shrink-0"
+                style={{ background:`color-mix(in srgb, var(--destructive) 12%, transparent)`, color:OOS_T }}>
+                {nota.m.type === "washer" ? <WashingMachine size={18}/> : <Wind size={17}/>}
               </div>
-              <button onClick={onClose} className="p-2 rounded-xl shrink-0" style={{ color:sub, background:"var(--secondary)" }}>
-                <X size={16}/>
-              </button>
+              <div className="min-w-0">
+                <p className="text-[11px] font-mono tracking-widest uppercase" style={{ color:sub }}>{t.reportOos}</p>
+                <p className="text-lg font-bold truncate" style={{ color:fg }}>{etichetta}</p>
+              </div>
             </div>
           </div>
 
@@ -1836,20 +1831,17 @@ function SegnalaGuastoSheet({ lang, status, onStatus, onClose, roomNumber }: {
   }
 
   // Pagina come "Lavanderia": si raggiunge dal menu e si lascia allo stesso
-  // modo — riaprendo il menu. La X resta come scorciatoia.
+  // modo — riaprendo il menu. Nessuna X in alto: era il residuo di quando
+  // questo era un foglio sopra l'app, e su una pagina prometteva una chiusura
+  // che qui non vuol dire niente.
   return (
     <>
       {toast && <Toast msg={toast} onClose={() => setToast(null)} />}
       <div className="pb-8">
         <div className="px-6 pt-4 pb-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-mono tracking-widest uppercase mb-0.5" style={{ color:sub }}>{t.machineMgmt}</p>
-              <p className="text-lg font-bold" style={{ color:fg }}>{t.oos}</p>
-            </div>
-            <button onClick={onClose} className="p-2 rounded-xl" style={{ color:sub, background:"var(--secondary)" }}>
-              <X size={16}/>
-            </button>
+          <div>
+            <p className="text-[11px] font-mono tracking-widest uppercase mb-0.5" style={{ color:sub }}>{t.machineMgmt}</p>
+            <p className="text-lg font-bold" style={{ color:fg }}>{t.oos}</p>
           </div>
           <p className="text-xs mt-1" style={{ color:sub }}>{t.oosDesc}</p>
         </div>
@@ -2088,8 +2080,8 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
-function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility, onFacility, adminRole, onChangeRoom }: {
-  active: number; onChange: (i: number) => void; lang: Lang;
+function DesktopSidebar({ lang, roomNumber, showNav, facility, onFacility, adminRole, onChangeRoom }: {
+  lang: Lang;
   roomNumber: string | null; showNav: boolean;
   facility: Facility; onFacility: (f: Facility) => void;
   adminRole: AdminRole | null;
@@ -2099,7 +2091,6 @@ function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility,
   const fg  = "var(--foreground)";
   const sub = "var(--gray-accessible-text)";
   const div = "var(--border)";
-  const tabs = schermateLavanderia(lang);
   return (
     <aside className="w-60 shrink-0 h-dvh flex flex-col border-r" style={{ background:"var(--background)", borderColor:div }}>
       {/* Logo */}
@@ -2113,43 +2104,20 @@ function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility,
       {/* Navigazione */}
       <nav className="flex-1 px-3 py-4 flex flex-col gap-1 overflow-y-auto">
         {/* Strutture: Lavanderia / Cinema / Musica / Polivalente.
-            Le schede Dashboard/Giornaliero/Settimana sono annidate subito
-            sotto il pulsante Lavanderia (rientrate, e solo mentre e' la
-            struttura attiva) invece che spuntare in coda a tutte le
-            strutture: prima Cinema, Musica e Polivalente stavano IN MEZZO fra
-            Lavanderia e le sue stesse schede, e non si capiva a chi
-            appartenessero. Su mobile la stessa cosa e' ovvia perche' la barra
-            in basso cambia con la struttura scelta sopra; qui replichiamo lo
-            stesso legame visivo con il rientro. */}
+            Le schede Dashboard/Giornaliero/Settimana non sono piu' annidate
+            sotto Lavanderia: sul telefono sono sparite da un pezzo — si
+            arriva al giornaliero e alla settimana dai pulsanti della
+            dashboard, e si torna indietro dall'interruttore in cima a
+            ciascuna vista — e tenerle qui faceva del desktop una navigazione
+            diversa da quella del telefono, per le stesse tre schermate. */}
         {showNav && FACILITIES.map(({ id, icon: Icon, chiave }) => {
           const isActive = facility === id;
           return (
-            <div key={id}>
-              <button onClick={()=>onFacility(id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors text-left ${isActive ? "" : "desk-nav"}`}
-                style={isActive ? { background:RED, color:RED_FG } : { color:sub }}>
-                <Icon size={18}/>{T[lang][chiave]}
-              </button>
-              {/* Sempre visibile, non solo quando la lavanderia è la sezione
-                  attiva: comparendo e sparendo faceva saltare in su e in giù
-                  tutte le voci sotto, e da Cinema non si vedeva più che quelle
-                  tre schede esistono. Toccarne una porta in lavanderia. */}
-              {id === "laundry" && (
-                <div className="flex flex-col gap-1 mt-1 pl-3 ml-3.5 border-l" style={{ borderColor:div }}>
-                  {tabs.map((tab, i) => {
-                    const TabIcon = tab.icon;
-                    const tabAttiva = isActive && active === i;
-                    return (
-                      <button key={i} onClick={()=>{ onFacility("laundry"); onChange(i); }}
-                        className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-semibold transition-colors text-left ${tabAttiva ? "" : "desk-nav"}`}
-                        style={tabAttiva ? { background:`color-mix(in srgb, var(--primary) 15%, transparent)`, color:RED } : { color:sub }}>
-                        <TabIcon size={15}/>{tab.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            <button key={id} onClick={()=>onFacility(id)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors text-left ${isActive ? "" : "desk-nav"}`}
+              style={isActive ? { background:RED, color:RED_FG } : { color:sub }}>
+              <Icon size={18}/>{T[lang][chiave]}
+            </button>
           );
         })}
 
@@ -2273,15 +2241,6 @@ const PAGINE_UTILITA: { id: "guasto" | "impostazioni" | "feedback"; chiave: "rep
   { id: "guasto",        chiave: "reportOos" },
   { id: "impostazioni",  chiave: "impostazioni" },
   { id: "feedback",      chiave: "feedbackApp" },
-];
-
-// Le tre schermate della lavanderia. Stanno qui perche' le nominano sia il
-// menu del telefono sia la sidebar del desktop, e due elenchi che devono
-// restare uguali sono un elenco solo.
-const schermateLavanderia = (lang: Lang) => [
-  { icon: Clock,        label: "Dashboard" },
-  { icon: CalendarDays, label: T[lang].daily },
-  { icon: LayoutGrid,   label: T[lang].weekly },
 ];
 
 // Il menu laterale, su telefono.
@@ -2695,7 +2654,7 @@ export default function App() {
   } else if (facility === "guasto") {
     bodyContent = (
       <SegnalaGuastoSheet lang={lang} status={status} onStatus={handleStatus}
-        roomNumber={roomNumber} onClose={() => setFacility("laundry")}/>
+        roomNumber={roomNumber}/>
     );
   } else if (facility === "impostazioni") {
     bodyContent = (
@@ -2744,7 +2703,7 @@ export default function App() {
         {accessibilityModal}
         {adminLoginSheet}
         <DesktopSidebar
-          active={screen} onChange={setScreen} lang={lang}
+          lang={lang}
           roomNumber={roomNumber} showNav={showChrome}
           facility={facility} onFacility={setFacility}
           adminRole={adminRole}
