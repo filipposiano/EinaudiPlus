@@ -853,10 +853,12 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
         <p className="text-[11px] mb-2" style={{ color:sub }}>{t.machinesInfo}</p>
 
         {/* Macchine raggruppate per lettera: una card per gruppo (A, B, C),
-            lavatrice e asciugatrice impilate dentro. Erano righe intere una
-            sotto l'altra — sei righe da scorrere per tre lettere. In card
-            affiancate si vede tutto il gruppo in un colpo, senza scorrere. */}
-        <div className="grid grid-cols-3 gap-2">
+            lavatrice e asciugatrice impilate dentro. Erano tre per riga, in
+            colonne cosi' strette che testo e stato dovevano stare in 8-9px —
+            illeggibile. A tutta larghezza c'e' spazio per leggere senza
+            stringere gli occhi, e "chi l'aveva prima" sta accanto allo stato
+            invece che sotto, in fondo alla riga. */}
+        <div className="flex flex-col gap-3">
           {machinesFor(roomNumber).washers.map((id) => id[2]).map((L) => {
             const wm = washers.find((m) => m.label === L);
             const dm = dryers.find((m) => m.label === L);
@@ -1063,30 +1065,37 @@ function TortaTurno({ restaFrazione, colore, size = 15 }: {
 // con la stessa informazione che avevano le righe — stato, chi la usa, chi
 // l'aveva prima, il triangolo se e' guasta — solo compressa perche' tre card
 // affiancate raccontano l'intero gruppo senza dover scorrere.
+// Una card per gruppo (A, B, C), lavatrice e asciugatrice come due righe
+// dentro — a tutta larghezza, non tre card strette affiancate: qui il testo
+// puo' stare a dimensione normale invece che a 8-9px, e "chi l'aveva prima"
+// sta in fondo alla riga, accanto allo stato, non impilato sotto.
 function SchedaGruppoMacchine({ lettera, washer, dryer, lang }: {
   lettera: string; washer?: Machine; dryer?: Machine; lang: Lang;
 }) {
+  const div = "var(--border)";
   return (
-    <div className="rounded-2xl border flex flex-col items-center gap-2 px-1.5 py-2.5 min-w-0"
-      style={{ background:"var(--card)", borderColor:"var(--border)" }}>
-      <p className="text-[11px] font-mono font-bold" style={{ color:"var(--foreground)" }}>{lettera}</p>
-      {washer && <TesseraMacchina machine={washer} lang={lang}/>}
-      {dryer  && <TesseraMacchina machine={dryer}  lang={lang}/>}
+    <div className="rounded-2xl border overflow-hidden"
+      style={{ background:"var(--card)", borderColor:div }}>
+      {washer && <TesseraMacchina machine={washer} lettera={lettera} lang={lang} isLast={!dryer} divColor={div}/>}
+      {dryer  && <TesseraMacchina machine={dryer}  lettera={lettera} lang={lang} isLast divColor={div}/>}
     </div>
   );
 }
 
-function TesseraMacchina({ machine, lang }: { machine: Machine; lang: Lang }) {
+function TesseraMacchina({ machine, lettera, lang, isLast, divColor }: {
+  machine: Machine; lettera: string; lang: Lang; isLast: boolean; divColor: string;
+}) {
   const t = T[lang];
+  const fg = "var(--foreground)";
   const isFree = machine.status === "available";
   const isOOO  = machine.status === "out-of-order";
 
   // Stessa logica di prima: fuori servizio e occupata sono due fatti
   // indipendenti, e si dicono entrambi.
   const statusText = isOOO
-    ? (machine.room ? machine.room : t.oos)
-    : isFree ? t.free : machine.room;
-  const statusColor = isFree ? GREEN_T : isOOO ? OOS_T : "var(--foreground)";
+    ? (machine.room ? `${t.oos} · ${t.room} ${machine.room}` : t.oos)
+    : isFree ? t.free : `${t.room} ${machine.room}`;
+  const statusColor = isFree ? GREEN_T : isOOO ? OOS_T : fg;
   const dotColor    = isOOO ? OOS_C : isFree ? GREEN : YELLOW;
   const glifoColor  = isOOO ? OOS_T : isFree ? GREEN_T : YELLOW_T;
   const Icona = machine.type === "washer" ? WashingMachine : Wind;
@@ -1095,30 +1104,37 @@ function TesseraMacchina({ machine, lang }: { machine: Machine; lang: Lang }) {
   // scelto le forme al posto dei colori nelle impostazioni di accessibilità.
   const sk = isOOO ? "oos" : isFree ? "free" : "inuse";
   const ci = accessibilityPrefs.icons[sk as "free" | "inuse" | "oos"];
-
   const nome = machine.type === "washer" ? t.washerLabel : t.dryerLabel;
-  const etichetta = `${nome} ${machine.label} — ${statusText === machine.room ? `${t.room} ${machine.room}` : statusText}`
-    + (machine.prevRoom ? `. ${t.lgPrev}: ${machine.prevRoom}` : "");
 
   return (
-    <div className="flex flex-col items-center gap-1 w-full" aria-label={etichetta}>
-      <div className="relative" aria-hidden="true">
-        <Icona size={17} style={{ color: isOOO ? OOS_T : "var(--gray-accessible-text)" }}/>
-        {ci !== "●"
-          ? <span className="absolute -top-1 -right-2 text-[8px] leading-none" style={{ color:glifoColor }}>{ci}</span>
-          : <span className="absolute -top-0.5 -right-1 size-[7px] rounded-full" style={{ background:dotColor }}/>}
+    <div style={{ borderBottom: isLast ? "none" : `1px solid ${divColor}` }}>
+      <div className="flex items-center gap-3 px-4 py-3">
+        <div className="relative shrink-0" aria-hidden="true">
+          <Icona size={22} style={{ color: isOOO ? OOS_T : "var(--gray-accessible-text)" }}/>
+          {ci !== "●"
+            ? <span className="absolute -top-1 -right-1.5 text-[10px] leading-none" style={{ color:glifoColor }}>{ci}</span>
+            : <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full" style={{ background:dotColor }}/>}
+        </div>
+
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold leading-tight truncate" style={{ color:fg }}>{nome} {lettera}</p>
+          <p className="text-sm font-semibold leading-tight truncate" style={{ color:statusColor }}>{statusText}</p>
+        </div>
+
+        {/* Chi aveva il turno prima: accanto, in fondo alla riga — non piu'
+            impilato sotto lo stato. */}
+        <div className="flex items-center gap-2 shrink-0">
+          {machine.prevRoom && (
+            <span className="flex items-center gap-1 rounded-xl px-2 py-1.5"
+              style={{ background:`color-mix(in srgb, ${ORANGE} 12%, transparent)`, color:ORANGE_T }}
+              title={`${t.lgPrev}: ${machine.prevRoom}`}>
+              <History size={13} className="shrink-0"/>
+              <span className="text-[11px] font-mono font-semibold">{machine.prevRoom}</span>
+            </span>
+          )}
+          {isOOO && <AlertTriangle size={15} style={{ color:OOS_T }}/>}
+        </div>
       </div>
-      <p className="text-[9px] font-bold leading-tight text-center truncate w-full" style={{ color:statusColor }} aria-hidden="true">
-        {statusText}
-      </p>
-      {/* Chi aveva il turno prima: la stessa pastiglia di prima, in scala. */}
-      {machine.prevRoom && (
-        <span className="flex items-center gap-0.5" aria-hidden="true">
-          <History size={9} className="shrink-0" style={{ color:ORANGE_T }}/>
-          <span className="text-[8px] font-mono font-bold" style={{ color:ORANGE_T }}>{machine.prevRoom}</span>
-        </span>
-      )}
-      {isOOO && <AlertTriangle size={11} style={{ color:OOS_T }} aria-hidden="true"/>}
     </div>
   );
 }
