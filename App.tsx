@@ -853,12 +853,10 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
         <p className="text-[11px] mb-2" style={{ color:sub }}>{t.machinesInfo}</p>
 
         {/* Macchine raggruppate per lettera: una card per gruppo (A, B, C),
-            lavatrice e asciugatrice impilate dentro. Erano tre per riga, in
-            colonne cosi' strette che testo e stato dovevano stare in 8-9px —
-            illeggibile. A tutta larghezza c'e' spazio per leggere senza
-            stringere gli occhi, e "chi l'aveva prima" sta accanto allo stato
-            invece che sotto, in fondo alla riga. */}
-        <div className="flex flex-col gap-3">
+            lavatrice e asciugatrice impilate dentro, tre gruppi affiancati.
+            Testo e icone piu' grandi di prima, e "chi l'aveva prima" sta
+            accanto allo stato sulla stessa riga invece che sotto. */}
+        <div className="grid grid-cols-3 gap-2">
           {machinesFor(roomNumber).washers.map((id) => id[2]).map((L) => {
             const wm = washers.find((m) => m.label === L);
             const dm = dryers.find((m) => m.label === L);
@@ -1072,30 +1070,27 @@ function TortaTurno({ restaFrazione, colore, size = 15 }: {
 function SchedaGruppoMacchine({ lettera, washer, dryer, lang }: {
   lettera: string; washer?: Machine; dryer?: Machine; lang: Lang;
 }) {
-  const div = "var(--border)";
   return (
-    <div className="rounded-2xl border overflow-hidden"
-      style={{ background:"var(--card)", borderColor:div }}>
-      {washer && <TesseraMacchina machine={washer} lettera={lettera} lang={lang} isLast={!dryer} divColor={div}/>}
-      {dryer  && <TesseraMacchina machine={dryer}  lettera={lettera} lang={lang} isLast divColor={div}/>}
+    <div className="rounded-2xl border flex flex-col items-center gap-2.5 px-2 py-3 min-w-0"
+      style={{ background:"var(--card)", borderColor:"var(--border)" }}>
+      <p className="text-xs font-mono font-bold" style={{ color:"var(--foreground)" }}>{lettera}</p>
+      {washer && <TesseraMacchina machine={washer} lang={lang}/>}
+      {dryer  && <TesseraMacchina machine={dryer}  lang={lang}/>}
     </div>
   );
 }
 
-function TesseraMacchina({ machine, lettera, lang, isLast, divColor }: {
-  machine: Machine; lettera: string; lang: Lang; isLast: boolean; divColor: string;
-}) {
+function TesseraMacchina({ machine, lang }: { machine: Machine; lang: Lang }) {
   const t = T[lang];
-  const fg = "var(--foreground)";
   const isFree = machine.status === "available";
   const isOOO  = machine.status === "out-of-order";
 
   // Stessa logica di prima: fuori servizio e occupata sono due fatti
   // indipendenti, e si dicono entrambi.
   const statusText = isOOO
-    ? (machine.room ? `${t.oos} · ${t.room} ${machine.room}` : t.oos)
-    : isFree ? t.free : `${t.room} ${machine.room}`;
-  const statusColor = isFree ? GREEN_T : isOOO ? OOS_T : fg;
+    ? (machine.room ? machine.room : t.oos)
+    : isFree ? t.free : machine.room;
+  const statusColor = isFree ? GREEN_T : isOOO ? OOS_T : "var(--foreground)";
   const dotColor    = isOOO ? OOS_C : isFree ? GREEN : YELLOW;
   const glifoColor  = isOOO ? OOS_T : isFree ? GREEN_T : YELLOW_T;
   const Icona = machine.type === "washer" ? WashingMachine : Wind;
@@ -1104,41 +1099,38 @@ function TesseraMacchina({ machine, lettera, lang, isLast, divColor }: {
   // scelto le forme al posto dei colori nelle impostazioni di accessibilità.
   const sk = isOOO ? "oos" : isFree ? "free" : "inuse";
   const ci = accessibilityPrefs.icons[sk as "free" | "inuse" | "oos"];
+
   const nome = machine.type === "washer" ? t.washerLabel : t.dryerLabel;
+  const etichetta = `${nome} ${machine.label} — ${statusText === machine.room ? `${t.room} ${machine.room}` : statusText}`
+    + (machine.prevRoom ? `. ${t.lgPrev}: ${machine.prevRoom}` : "");
 
   return (
-    <div style={{ borderBottom: isLast ? "none" : `1px solid ${divColor}` }}>
-      <div className="flex items-center gap-3 px-4 py-3">
-        <div className="relative shrink-0" aria-hidden="true">
-          <Icona size={22} style={{ color: isOOO ? OOS_T : "var(--gray-accessible-text)" }}/>
-          {ci !== "●"
-            ? <span className="absolute -top-1 -right-1.5 text-[10px] leading-none" style={{ color:glifoColor }}>{ci}</span>
-            : <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full" style={{ background:dotColor }}/>}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold leading-tight truncate" style={{ color:fg }}>{nome} {lettera}</p>
-          <p className="text-sm font-semibold leading-tight truncate" style={{ color:statusColor }}>{statusText}</p>
-        </div>
-
-        {/* Chi aveva il turno prima: accanto, in fondo alla riga — non piu'
-            impilato sotto lo stato. */}
-        <div className="flex items-center gap-2 shrink-0">
-          {machine.prevRoom && (
-            <span className="flex items-center gap-1 rounded-xl px-2 py-1.5"
-              style={{ background:`color-mix(in srgb, ${ORANGE} 12%, transparent)`, color:ORANGE_T }}
-              title={`${t.lgPrev}: ${machine.prevRoom}`}>
-              <History size={13} className="shrink-0"/>
-              <span className="text-[11px] font-mono font-semibold">{machine.prevRoom}</span>
-            </span>
-          )}
-          {isOOO && <AlertTriangle size={15} style={{ color:OOS_T }}/>}
-        </div>
+    <div className="flex flex-col items-center gap-1.5 w-full" aria-label={etichetta}>
+      <div className="relative" aria-hidden="true">
+        <Icona size={22} style={{ color: isOOO ? OOS_T : "var(--gray-accessible-text)" }}/>
+        {ci !== "●"
+          ? <span className="absolute -top-1 -right-2 text-[10px] leading-none" style={{ color:glifoColor }}>{ci}</span>
+          : <span className="absolute -top-0.5 -right-1 size-2 rounded-full" style={{ background:dotColor }}/>}
       </div>
+      {/* Stato e "chi l'aveva prima" sulla stessa riga: si scrivono da soli
+          fianco a fianco quando ci stanno (sono corti — un numero di camera,
+          "Libera"), e vanno a capo solo se proprio non entrano — mai uno
+          sopra l'altro come prima. */}
+      <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5" aria-hidden="true">
+        <p className="text-[11px] font-bold leading-tight" style={{ color:statusColor }}>
+          {statusText}
+        </p>
+        {machine.prevRoom && (
+          <span className="flex items-center gap-0.5">
+            <History size={10} className="shrink-0" style={{ color:ORANGE_T }}/>
+            <span className="text-[10px] font-mono font-bold" style={{ color:ORANGE_T }}>{machine.prevRoom}</span>
+          </span>
+        )}
+      </div>
+      {isOOO && <AlertTriangle size={12} style={{ color:OOS_T }} aria-hidden="true"/>}
     </div>
   );
 }
-
 
 // ─── Torna alla dashboard + Giornaliero/Settimana ──────────────────────────────
 //
