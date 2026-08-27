@@ -1071,9 +1071,9 @@ function SchedaGruppoMacchine({ lettera, washer, dryer, lang }: {
   lettera: string; washer?: Machine; dryer?: Machine; lang: Lang;
 }) {
   return (
-    <div className="rounded-2xl border flex flex-col items-center gap-2.5 px-2 py-3 min-w-0"
+    <div className="rounded-2xl border flex flex-col items-center gap-3 px-2 py-3.5 min-w-0"
       style={{ background:"var(--card)", borderColor:"var(--border)" }}>
-      <p className="text-xs font-mono font-bold" style={{ color:"var(--foreground)" }}>{lettera}</p>
+      <p className="text-sm font-mono font-bold" style={{ color:"var(--foreground)" }}>{lettera}</p>
       {washer && <TesseraMacchina machine={washer} lang={lang}/>}
       {dryer  && <TesseraMacchina machine={dryer}  lang={lang}/>}
     </div>
@@ -1107,27 +1107,27 @@ function TesseraMacchina({ machine, lang }: { machine: Machine; lang: Lang }) {
   return (
     <div className="flex flex-col items-center gap-1.5 w-full" aria-label={etichetta}>
       <div className="relative" aria-hidden="true">
-        <Icona size={22} style={{ color: isOOO ? OOS_T : "var(--gray-accessible-text)" }}/>
+        <Icona size={28} style={{ color: isOOO ? OOS_T : "var(--gray-accessible-text)" }}/>
         {ci !== "●"
-          ? <span className="absolute -top-1 -right-2 text-[10px] leading-none" style={{ color:glifoColor }}>{ci}</span>
-          : <span className="absolute -top-0.5 -right-1 size-2 rounded-full" style={{ background:dotColor }}/>}
+          ? <span className="absolute -top-1 -right-2.5 text-xs leading-none" style={{ color:glifoColor }}>{ci}</span>
+          : <span className="absolute -top-0.5 -right-1.5 size-2.5 rounded-full" style={{ background:dotColor }}/>}
       </div>
       {/* Stato e "chi l'aveva prima" sulla stessa riga: si scrivono da soli
           fianco a fianco quando ci stanno (sono corti — un numero di camera,
           "Libera"), e vanno a capo solo se proprio non entrano — mai uno
           sopra l'altro come prima. */}
       <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5" aria-hidden="true">
-        <p className="text-[11px] font-bold leading-tight" style={{ color:statusColor }}>
+        <p className="text-sm font-bold leading-tight" style={{ color:statusColor }}>
           {statusText}
         </p>
         {machine.prevRoom && (
           <span className="flex items-center gap-0.5">
-            <History size={10} className="shrink-0" style={{ color:ORANGE_T }}/>
-            <span className="text-[10px] font-mono font-bold" style={{ color:ORANGE_T }}>{machine.prevRoom}</span>
+            <History size={11} className="shrink-0" style={{ color:ORANGE_T }}/>
+            <span className="text-xs font-mono font-bold" style={{ color:ORANGE_T }}>{machine.prevRoom}</span>
           </span>
         )}
       </div>
-      {isOOO && <AlertTriangle size={12} style={{ color:OOS_T }} aria-hidden="true"/>}
+      {isOOO && <AlertTriangle size={14} style={{ color:OOS_T }} aria-hidden="true"/>}
     </div>
   );
 }
