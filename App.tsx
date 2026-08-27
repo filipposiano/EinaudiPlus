@@ -1127,7 +1127,6 @@ function TesseraMacchina({ machine, lang }: { machine: Machine; lang: Lang }) {
           </span>
         )}
       </div>
-      {isOOO && <AlertTriangle size={14} style={{ color:OOS_T }} aria-hidden="true"/>}
     </div>
   );
 }
