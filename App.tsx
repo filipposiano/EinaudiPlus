@@ -778,15 +778,17 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
   // si mettono dentro un cassetto: compaiono sotto le proprie prenotazioni,
   // gia' pronte da prendere.
   //
-  // Solo quelli LIBERI e ancora da venire: un preferito pieno, o gia'
-  // passato, non e' una cosa da fare — quello resta nel pannello, dove si
-  // guarda l'elenco per intero.
-  const preferitiLiberi = favs
-    .filter((f) => !isPastBooking({ day: f.day, slot: f.slot, mid: "W-A" }))
-    .map((f) => ({ ...f, mid: firstFreeWasherAt(f.day, f.slot) }))
-    .filter((f): f is Fav & { mid: string } => f.mid !== null)
-    // Giorno e fascia crescono insieme al tempo, e il passato e' gia' fuori:
-    // ordinare per (giorno, fascia) e' ordinare per "quanto manca".
+  // Tutti i preferiti, con lo stato di ciascuno: libero (con la sigla di chi
+  // lo prenderesti), pieno, o passato. Prima si vedevano solo quelli liberi —
+  // gli altri sparivano del tutto dalla dashboard, e chi ne aveva segnato uno
+  // pieno o passato non trovava piu' traccia di averlo salvato.
+  const preferitiConStato = favs
+    .map((f) => {
+      const passato = isPastBooking({ day: f.day, slot: f.slot, mid: "W-A" });
+      return { ...f, passato, mid: passato ? null : firstFreeWasherAt(f.day, f.slot) };
+    })
+    // Giorno e fascia crescono insieme al tempo: ordinare per (giorno, fascia)
+    // ordina per "quanto manca", passato compreso (finisce per primo).
     .sort((a, b) => a.day - b.day || a.slot - b.slot);
 
   async function cancelBooking(b: MyBooking) {
@@ -950,14 +952,18 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
             )}
 
             {(senzaQuota || remaining > 0) && (
-              // Rosso, qui, leggeva come un avviso — la stessa tinta del
-              // cestino appena sopra. Grigio neutro come le altre azioni
-              // dell'app (Segnala guasto, Feedback): e' un invito, non un
-              // pericolo.
+              // Verde, come il pulsante "Prenota" sulle righe dei preferiti
+              // liberi qui sotto: e' la stessa tinta per la stessa intenzione,
+              // "questo si puo' prendere". Il rosso leggeva come un avviso —
+              // la stessa tinta del cestino appena sopra.
               <button onClick={onGoWeek}
                 className="w-full flex items-center justify-center gap-2 py-3 border-t transition-colors"
-                style={{ borderColor:div, background:"transparent", color:fg }}>
-                <Plus size={14} style={{ color:sub }}/>
+                style={{
+                  borderColor:div,
+                  background:`color-mix(in srgb, ${GREEN} 10%, transparent)`,
+                  color:GREEN_T,
+                }}>
+                <Plus size={14}/>
                 <span className="text-sm font-bold">
                   {activeBookings.length === 0 ? t.bookSlot : t.bookAnother}
                 </span>
@@ -978,34 +984,42 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
             </button>
           </div>
 
-          {/* FUORI dalla scheda, e con il bordo tratteggiato.
-          
-              Stavano dentro l'elenco qui sopra, righe verdi fra le righe delle
-              prenotazioni vere: sembravano turni gia' presi. Sono l'opposto —
-              turni che NON hai e che potresti prendere. Il tratteggio dice
-              "non e' ancora tuo" prima di qualunque parola, e la parola
-              comunque c'e'. */}
-          {preferitiLiberi.map((f) => {
+          {/* FUORI dalla scheda, e con il bordo tratteggiato: non sono
+              prenotazioni, sono turni segnati che potresti prendere.
+
+              Tutti quelli salvati, non solo i liberi: chi ne aveva uno pieno
+              o passato prima non lo vedeva piu' da nessuna parte in
+              dashboard, e sembrava sparito. Qui resta, muto, finche' non
+              torna libero o finche' non lo si toglie da "+ Aggiungi
+              preferito". */}
+          {favs.length === 0 ? (
+            <p className="px-1 text-xs" style={{ color:sub }}>{t.noFavs}</p>
+          ) : preferitiConStato.map((f) => {
             const sl = TIME_SLOTS[f.slot];
+            const libero = !f.passato && f.mid !== null;
             return (
               <div key={`fav-${f.day}-${f.slot}`}
                 className="flex items-center gap-3 px-4 py-2.5 mt-2 rounded-2xl"
-                style={{
-                  border:`1px dashed color-mix(in srgb, ${GREEN} 50%, transparent)`,
-                  background:`color-mix(in srgb, ${GREEN} 4%, transparent)`,
-                }}>
-                <Star size={15} className="shrink-0" style={{ color:ORANGE, fill:ORANGE }}/>
+                style={ libero
+                  ? { border:`1px dashed color-mix(in srgb, ${GREEN} 50%, transparent)`,
+                      background:`color-mix(in srgb, ${GREEN} 4%, transparent)` }
+                  : { border:`1px dashed ${div}`, background:"transparent" } }>
+                <Star size={15} className="shrink-0" style={{ color: libero ? ORANGE : sub, fill: libero ? ORANGE : "none" }}/>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold" style={{ color:fg }}>
+                  <p className="text-sm font-semibold" style={{ color: libero ? fg : sub }}>
                     {t.days[f.day]} {DAYS_DATE[f.day]} · {sl.start}–{sl.end}
                   </p>
-                  <p className="text-[11px]" style={{ color:sub }}>{t.favAvailable}</p>
+                  <p className="text-[11px]" style={{ color: libero ? sub : "color-mix(in srgb, var(--foreground) 40%, transparent)" }}>
+                    {f.passato ? t.favPast : libero ? t.favAvailable : t.favFull}
+                  </p>
                 </div>
-                <button onClick={()=>setQuickTarget({ day:f.day, slot:f.slot })}
-                  className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all active:scale-95 shrink-0"
-                  style={{ background:`color-mix(in srgb, ${GREEN} 16%, transparent)`, color:GREEN_T }}>
-                  <Plus size={12}/>{t.book}
-                </button>
+                {libero && (
+                  <button onClick={()=>setQuickTarget({ day:f.day, slot:f.slot })}
+                    className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all active:scale-95 shrink-0"
+                    style={{ background:`color-mix(in srgb, ${GREEN} 16%, transparent)`, color:GREEN_T }}>
+                    <Plus size={12}/>{t.book}
+                  </button>
+                )}
               </div>
             );
           })}
