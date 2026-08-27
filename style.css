@@ -116,7 +116,7 @@
      pannello (era ORANGE = "#f59e0b" scritto a mano in App.tsx): lo stesso
      hex, solo ora è una variabile invece di una costante JS. */
   --status-free: #22c55e;
-  --status-inuse: #eab308;
+  --status-inuse: #facc15;
   --status-oos: #ff4757;
   --status-prev: #f59e0b;
 
@@ -147,7 +147,8 @@
      ed e' per questo che non reggono il testo piccolo. */
   --gray-accessible-text: #5a5a6b;   /* 6,76:1 */
   --status-free-text:     #14672f;   /* 6,98:1 */
-  --status-inuse-text:    #8a5c07;   /* 5,81:1 */
+  --status-inuse-text:    #a16207;   /* 5,12:1 — prima #8a5c07: leggibile ma "sporco", tirava
+                                        sull'olivastro invece che sull'oro */
   --status-oos-text:      #d11a28;   /* 5,40:1 */
   --status-prev-text:     #b45309;   /* 5,02:1 */
   --destructive-text:     #d11a28;   /* 5,40:1 */
@@ -199,7 +200,7 @@
   --sidebar-ring: #ff3b30;
 
   --status-free: #22c55e;
-  --status-inuse: #eab308;
+  --status-inuse: #facc15;
   --status-oos: #ff4757;
   --status-prev: #f59e0b;
 
@@ -210,7 +211,7 @@
      del tema chiaro (#6b6b80) e li' valeva 3,8:1: sotto soglia. */
   --gray-accessible-text: #9a9ab0;   /* 7,09:1 — era #6b6b80 a 3,8:1 */
   --status-free-text:     var(--status-free);    /* 8,57:1 */
-  --status-inuse-text:    var(--status-inuse);   /* 10,18:1 */
+  --status-inuse-text:    var(--status-inuse);   /* 12,4:1 */
   --status-oos-text:      var(--status-oos);     /* 5,85:1 */
   --status-prev-text:     var(--status-prev);    /* margine ampio */
   --destructive-text:     var(--destructive);    /* 5,85:1 */
