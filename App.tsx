@@ -700,14 +700,15 @@ function FeedbackModal({ lang, room, onClose }: { lang: Lang; room: string | nul
 // Senza, bastava aprire Impostazioni o far comparire un pannello per
 // ridisegnare da capo anche la griglia settimanale, che sono 7x19 celle: lavoro
 // buttato, e su un telefono lento si sente.
-const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, onClear, onGoWeek }: {
+const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, onClear, onGoDay }: {
   theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
   favs: Fav[]; onToggleFav: (day:number, slot:number)=>void;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
   onClear: (day:number, slot:number, machine:string)=>Promise<void>;
-  // Porta alla griglia della settimana: e' li' che si sceglie un turno
-  // qualunque, con davanti quali sono liberi e quali no.
-  onGoWeek: ()=>void;
+  // Porta al giornaliero: e' la vista con le fasce di oggi gia' davanti,
+  // il posto piu' diretto per prenotare un turno adesso. Chi vuole guardare
+  // tutta la settimana passa dall'interruttore in cima a quella pagina.
+  onGoDay: ()=>void;
 }) {
   const t = T[lang];
   const [now, setNow]           = useState(new Date());
@@ -950,7 +951,7 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
                 stesso, tipo prenotare per un coinquilino o due turni nello
                 stesso giorno. La pastiglia rossa qui sopra ha gia' detto che
                 si e' sopra quota: il pulsante non ha bisogno di ripeterlo. */}
-            <button onClick={onGoWeek}
+            <button onClick={onGoDay}
               className="w-full flex items-center justify-center gap-2 py-3 border-t transition-colors"
               style={{
                 borderColor:div,
@@ -1091,14 +1092,12 @@ function TesseraMacchina({ machine, lang }: { machine: Machine; lang: Lang }) {
     ? (machine.room ? machine.room : t.oos)
     : isFree ? t.free : machine.room;
   const statusColor = isFree ? GREEN_T : isOOO ? OOS_T : "var(--foreground)";
-  const dotColor    = isOOO ? OOS_C : isFree ? GREEN : YELLOW;
-  const glifoColor  = isOOO ? OOS_T : isFree ? GREEN_T : YELLOW_T;
+  // Lo stato si legge dal colore dell'icona stessa — non da un pallino a
+  // parte accanto. Solo il guasto ha bisogno di dire di piu' di un colore:
+  // "rosso" da solo si confonde con "occupata" (che e' rosso anch'essa, per
+  // via della camera), quindi li' resta il triangolo con l'esclamativo.
+  const iconColor = isOOO ? OOS_T : isFree ? GREEN_T : YELLOW_T;
   const Icona = machine.type === "washer" ? WashingMachine : Wind;
-
-  // Il pallino di stato, con lo stesso glifo sostitutivo di prima per chi ha
-  // scelto le forme al posto dei colori nelle impostazioni di accessibilità.
-  const sk = isOOO ? "oos" : isFree ? "free" : "inuse";
-  const ci = accessibilityPrefs.icons[sk as "free" | "inuse" | "oos"];
 
   const nome = machine.type === "washer" ? t.washerLabel : t.dryerLabel;
   const etichetta = `${nome} ${machine.label} — ${statusText === machine.room ? `${t.room} ${machine.room}` : statusText}`
@@ -1107,10 +1106,10 @@ function TesseraMacchina({ machine, lang }: { machine: Machine; lang: Lang }) {
   return (
     <div className="flex flex-col items-center gap-1.5 w-full" aria-label={etichetta}>
       <div className="relative" aria-hidden="true">
-        <Icona size={28} style={{ color: isOOO ? OOS_T : "var(--gray-accessible-text)" }}/>
-        {ci !== "●"
-          ? <span className="absolute -top-1 -right-2.5 text-xs leading-none" style={{ color:glifoColor }}>{ci}</span>
-          : <span className="absolute -top-0.5 -right-1.5 size-2.5 rounded-full" style={{ background:dotColor }}/>}
+        <Icona size={28} style={{ color:iconColor }}/>
+        {isOOO && (
+          <AlertTriangle size={13} className="absolute -top-1.5 -right-2.5" style={{ color:OOS_T }}/>
+        )}
       </div>
       {/* Stato e "chi l'aveva prima" sulla stessa riga: si scrivono da soli
           fianco a fianco quando ci stanno (sono corti — un numero di camera,
@@ -2393,7 +2392,10 @@ export default function App() {
   const [screen, setScreen]   = useState(0);
   // La dashboard e' `memo`: un callback creato al volo nel JSX cambierebbe a
   // ogni render e la farebbe ridisegnare da capo.
-  const vaiAllaSettimana = useCallback(() => setScreen(2), []);
+  //
+  // Al giornaliero, non alla settimana: e' li' che si arriva con le fasce di
+  // oggi gia' davanti, il posto piu' diretto per prenotare un turno adesso.
+  const vaiAlGiorno = useCallback(() => setScreen(1), []);
   // 0 dashboard, 1 giornaliero, 2 settimana. Con useCallback perche' le tre
   // viste sono `memo`: un callback creato al volo dentro il JSX cambierebbe a
   // ogni render e le farebbe ridisegnare da capo — cioe' proprio il lavoro che
@@ -2664,7 +2666,7 @@ export default function App() {
     <LoginScreen lang={lang} onLogin={chooseRoom} onAdmin={() => setAdminLoginOpen(true)}/>
   ) : (
     <>
-      {screen===0 && <Dashboard   theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} onGoWeek={vaiAllaSettimana}/>}
+      {screen===0 && <Dashboard   theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} onGoDay={vaiAlGiorno}/>}
       {screen===1 && <DaySchedule theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} isAdmin={isAdmin} onScreen={setScreen}/>}
       {screen===2 && <WeekOverview theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} onBook={handleBook} onClear={handleClear} isAdmin={isAdmin} onScreen={setScreen}/>}
     </>
