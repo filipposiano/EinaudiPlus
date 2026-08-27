@@ -5,7 +5,7 @@ import {
   LayoutGrid, Delete, X, Wrench, Loader2, Star,
   History, Trash2, Film, Music, Menu,
   MessageSquare, Send, LogOut, Printer, Download,
-  Settings, Repeat, Eraser, Presentation, UserCog,
+  Settings, Repeat, Eraser, Presentation, UserCog, ChevronLeft,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -45,7 +45,10 @@ const AdminLoginSheet = lazy(() => import("./AdminPanel").then((m) => ({ default
 // Le sezioni amministrative sono destinazioni di navigazione come le altre,
 // non un pannello a parte: chi ha la sessione le trova nella stessa lista di
 // Lavanderia, Cinema e Musica.
-type Facility = "laundry" | "cinema" | "music" | "conferenze" | AdminTab;
+// Le tre pagine di utilita' (segnalazione guasti, impostazioni, feedback)
+// sono destinazioni come le altre: si raggiungono dallo stesso menu, con lo
+// stesso `onChange`, e non aprono piu' un foglio sopra la pagina.
+type Facility = "laundry" | "cinema" | "music" | "conferenze" | "guasto" | "impostazioni" | "feedback" | AdminTab;
 
 const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "account", "ricorrenti", "manutenzione"];
 const isAdminFacility = (f: Facility): f is AdminTab => (ADMIN_TABS as string[]).includes(f);
@@ -662,11 +665,11 @@ function FeedbackModal({ lang, room, onClose }: { lang: Lang; room: string | nul
     catch { setErr(true); setBusy(false); }
   }
 
+  // Pagina come "Lavanderia", non piu' un foglio dal basso: si raggiunge dal
+  // menu e si lascia allo stesso modo.
   return (
-    <div className="absolute inset-0 z-50 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
-      <div className="w-full rounded-t-3xl pt-5 pb-7 px-6 max-h-[92%] overflow-y-auto overscroll-contain" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
-        <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background:"color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
-        <div className="flex items-center gap-3 mb-2">
+    <div className="pt-4 pb-7 px-6">
+      <div className="flex items-center gap-3 mb-2">
           <div className="p-2.5 rounded-2xl" style={{ background:`color-mix(in srgb, var(--primary) 15%, transparent)`, color:RED }}><MessageSquare size={18}/></div>
           <p className="text-lg font-bold" style={{ color:fg }}>{t.feedback}</p>
         </div>
@@ -687,7 +690,6 @@ function FeedbackModal({ lang, room, onClose }: { lang: Lang; room: string | nul
           </>
         )}
       </div>
-    </div>
   );
 }
 
@@ -846,30 +848,23 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
           </span>
         </div>
 
-        {/* Macchine raggruppate per lettera: A (lavatrice + asciugatrice), B, C.
-            Il nome è scritto per esteso su ogni riga — "Lavatrice A" — invece di
-            avere la lettera in un'intestazione sopra e "Lavatrice" sotto. Erano
-            due pezzi da ricomporre con l'occhio, e nei messaggi ("Lavatrice B
-            segnalata non funzionante", "Lav. C · 22:00") la macchina si chiama
-            già così. */}
-        <div className="flex flex-col gap-3">
+        {/* Subito sotto il titolo della sezione, non piu' in fondo alla
+            griglia: si legge PRIMA di guardare le card, non dopo. */}
+        <p className="text-[11px] mb-2" style={{ color:sub }}>{t.machinesInfo}</p>
+
+        {/* Macchine raggruppate per lettera: una card per gruppo (A, B, C),
+            lavatrice e asciugatrice impilate dentro. Erano righe intere una
+            sotto l'altra — sei righe da scorrere per tre lettere. In card
+            affiancate si vede tutto il gruppo in un colpo, senza scorrere. */}
+        <div className="grid grid-cols-3 gap-2">
           {machinesFor(roomNumber).washers.map((id) => id[2]).map((L) => {
             const wm = washers.find((m) => m.label === L);
             const dm = dryers.find((m) => m.label === L);
             return (
-              <div key={L} className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
-                {wm && <MachineRow key={wm.id} machine={wm} lang={lang}
-                  groupLabel={`${t.washerLabel} ${L}`}
-                  isLast={false} divColor={div}/>}
-                {dm && <MachineRow key={dm.id} machine={dm} lang={lang}
-                  groupLabel={`${t.dryerLabel} ${L}`}
-                  isLast divColor={div}/>}
-              </div>
+              <SchedaGruppoMacchine key={L} lettera={L} washer={wm} dryer={dm} lang={lang}/>
             );
           })}
         </div>
-
-        <p className="text-[11px] mt-2" style={{ color:sub }}>{t.machinesInfo}</p>
       </section>
 
       <div className="mx-5 mb-4 border-t" style={{ borderColor:div }}/>
@@ -880,14 +875,11 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
         <section className="px-5 mb-4">
           <div className="flex items-center gap-2 mb-2">
             <p className="text-[11px] font-mono tracking-widest uppercase flex-1 min-w-0" style={{ color:sub }}>{t.yourBookings}</p>
-            {/* Quanti turni restano, e basta: 2, 1, 0. In rosso con il segno
-                meno quando si e' andati oltre — che e' l'unico caso in cui la
-                pastiglia deve farsi guardare.
-
-                Diceva "2 rimaste", e sotto l'elenco una riga ripeteva "Puoi
-                ancora prenotare 2 turni questa settimana (max 2 a camera)".
-                Tre modi di dire lo stesso numero nella stessa schermata. La
-                frase intera resta nel title, per chi la vuole. */}
+            {/* Il numero da solo ("2") non diceva di cosa: due cosa? Il testo
+                esplicito lo dice senza dover leggere il titolo della sezione
+                sopra. Resta terso solo il caso sopra quota (-1, -2): li' e'
+                un allarme, non un conteggio, e la parola in piu' non
+                aiuterebbe la lettura al volo. */}
             <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full tabular-nums"
               title={senzaQuota ? t.noQuota : t.remainingMsg(remaining)}
               style={{
@@ -896,7 +888,7 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
                           : `color-mix(in srgb, var(--destructive) 15%, transparent)`,
                 color: senzaQuota || remaining > 0 ? GREEN_T : remaining === 0 ? sub : OOS_T,
               }}>
-              {senzaQuota ? "∞" : remaining}
+              {senzaQuota ? t.noQuota : remaining >= 0 ? t.remainingChip(remaining) : remaining}
             </span>
           </div>
           <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
@@ -951,24 +943,25 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
               })
             )}
 
-            {(senzaQuota || remaining > 0) && (
-              // Verde, come il pulsante "Prenota" sulle righe dei preferiti
-              // liberi qui sotto: e' la stessa tinta per la stessa intenzione,
-              // "questo si puo' prendere". Il rosso leggeva come un avviso —
-              // la stessa tinta del cestino appena sopra.
-              <button onClick={onGoWeek}
-                className="w-full flex items-center justify-center gap-2 py-3 border-t transition-colors"
-                style={{
-                  borderColor:div,
-                  background:`color-mix(in srgb, ${GREEN} 10%, transparent)`,
-                  color:GREEN_T,
-                }}>
-                <Plus size={14}/>
-                <span className="text-sm font-bold">
-                  {activeBookings.length === 0 ? t.bookSlot : t.bookAnother}
-                </span>
-              </button>
-            )}
+            {/* Sempre visibile, anche sopra quota: la quota e' per camera,
+                ma il server non la applica (vedi commento su `senzaQuota`
+                piu' sopra) — e' un'indicazione, non un blocco. Nasconderla
+                qui impediva dal client una cosa che dal server passava lo
+                stesso, tipo prenotare per un coinquilino o due turni nello
+                stesso giorno. La pastiglia rossa qui sopra ha gia' detto che
+                si e' sopra quota: il pulsante non ha bisogno di ripeterlo. */}
+            <button onClick={onGoWeek}
+              className="w-full flex items-center justify-center gap-2 py-3 border-t transition-colors"
+              style={{
+                borderColor:div,
+                background:`color-mix(in srgb, ${GREEN} 10%, transparent)`,
+                color:GREEN_T,
+              }}>
+              <Plus size={14}/>
+              <span className="text-sm font-bold">
+                {activeBookings.length === 0 ? t.bookSlot : t.bookAnother}
+              </span>
+            </button>
           </div>
 
           {/* Un'intestazione tutta loro, con il pulsante in alto a destra come
@@ -1066,92 +1059,121 @@ function TortaTurno({ restaFrazione, colore, size = 15 }: {
   );
 }
 
-function MachineRow({ machine, lang, isLast, divColor, groupLabel }: {
-  machine: Machine; lang: Lang; isLast: boolean; divColor: string; groupLabel?: string;
+// Una card per gruppo (A, B, C): lavatrice e asciugatrice impilate dentro,
+// con la stessa informazione che avevano le righe — stato, chi la usa, chi
+// l'aveva prima, il triangolo se e' guasta — solo compressa perche' tre card
+// affiancate raccontano l'intero gruppo senza dover scorrere.
+function SchedaGruppoMacchine({ lettera, washer, dryer, lang }: {
+  lettera: string; washer?: Machine; dryer?: Machine; lang: Lang;
 }) {
+  return (
+    <div className="rounded-2xl border flex flex-col items-center gap-2 px-1.5 py-2.5 min-w-0"
+      style={{ background:"var(--card)", borderColor:"var(--border)" }}>
+      <p className="text-[11px] font-mono font-bold" style={{ color:"var(--foreground)" }}>{lettera}</p>
+      {washer && <TesseraMacchina machine={washer} lang={lang}/>}
+      {dryer  && <TesseraMacchina machine={dryer}  lang={lang}/>}
+    </div>
+  );
+}
+
+function TesseraMacchina({ machine, lang }: { machine: Machine; lang: Lang }) {
   const t = T[lang];
-  const fg  = "var(--foreground)";
+  const isFree = machine.status === "available";
+  const isOOO  = machine.status === "out-of-order";
 
-  const isFree  = machine.status === "available";
-  const isOOO   = machine.status === "out-of-order";
-
-  // Il pallino dice lo stato con lo stesso colore della legenda qui sotto
-  // (verde libera, giallo in uso, rosso fuori servizio). Era stato tolto
-  // perche' l'etichetta lo ripete a parole, ma cosi' la riga "in uso" non
-  // aveva piu' niente in comune con la voce corrispondente della legenda.
-  const dotColor   = isOOO ? OOS_C : isFree ? GREEN   : YELLOW;
-  const glifoColor = isOOO ? OOS_T : isFree ? GREEN_T : YELLOW_T;
-  // 6% dipingeva mezzo elenco di verde — con sei macchine quasi tutte libere
-  // era lo sfondo normale, non un'eccezione. Il verde resta dove significa
-  // qualcosa: sulla parola "Libera".
-  const rowBg = isFree ? `color-mix(in srgb, ${GREEN} 3%, transparent)` : "transparent";
-
-  // Fuori servizio e occupata sono due fatti indipendenti, e prima il primo
-  // nascondeva il secondo: una macchina guasta ma gia' prenotata risultava
-  // solo "Fuori servizio", senza pulsante, e sembrava libera con un comando
-  // mancante. Ora si dicono entrambi.
+  // Stessa logica di prima: fuori servizio e occupata sono due fatti
+  // indipendenti, e si dicono entrambi.
   const statusText = isOOO
-    ? (machine.room ? `${t.oos} · ${t.room} ${machine.room}` : t.oos)
-    : isFree ? t.free : `${t.room} ${machine.room}`;
-  // Finisce su testo (l'etichetta di stato della riga), quindi variante scura.
-  const statusColor = isFree ? GREEN_T : isOOO ? OOS_T : fg;
+    ? (machine.room ? machine.room : t.oos)
+    : isFree ? t.free : machine.room;
+  const statusColor = isFree ? GREEN_T : isOOO ? OOS_T : "var(--foreground)";
+  const dotColor    = isOOO ? OOS_C : isFree ? GREEN : YELLOW;
+  const glifoColor  = isOOO ? OOS_T : isFree ? GREEN_T : YELLOW_T;
+  const Icona = machine.type === "washer" ? WashingMachine : Wind;
+
+  // Il pallino di stato, con lo stesso glifo sostitutivo di prima per chi ha
+  // scelto le forme al posto dei colori nelle impostazioni di accessibilità.
+  const sk = isOOO ? "oos" : isFree ? "free" : "inuse";
+  const ci = accessibilityPrefs.icons[sk as "free" | "inuse" | "oos"];
+
+  const nome = machine.type === "washer" ? t.washerLabel : t.dryerLabel;
+  const etichetta = `${nome} ${machine.label} — ${statusText === machine.room ? `${t.room} ${machine.room}` : statusText}`
+    + (machine.prevRoom ? `. ${t.lgPrev}: ${machine.prevRoom}` : "");
 
   return (
-    <div style={{ borderBottom:isLast?"none":`1px solid ${divColor}`, background:rowBg }}>
-      <div className="flex items-center gap-3 px-4 py-2.5">
-        {/* Pallino di stato + icona macchina. Chi ha scelto le forme al posto
-            dei colori nelle impostazioni di accessibilità vede il simbolo al
-            posto del pallino. */}
-        <div className="flex items-center gap-2.5 shrink-0" style={{ color:fg }}>
-          {(() => {
-            const sk = isOOO ? "oos" : isFree ? "free" : "inuse";
-            const ci = accessibilityPrefs.icons[sk as "free"|"inuse"|"oos"];
-            // Il simbolo e' testo (a 11px, per giunta), il pallino e' una
-            // superficie: due livelli di colore diversi. Vedi la legenda.
-            return ci !== "●"
-              ? <span className="shrink-0 text-[11px] leading-none" style={{ color:glifoColor }}>{ci}</span>
-              : <span className="size-2 rounded-full shrink-0" style={{ background:dotColor }}/>;
-          })()}
-          {machine.type==="washer" ? <WashingMachine size={18}/> : <Wind size={17}/>}
-        </div>
+    <div className="flex flex-col items-center gap-1 w-full" aria-label={etichetta}>
+      <div className="relative" aria-hidden="true">
+        <Icona size={17} style={{ color: isOOO ? OOS_T : "var(--gray-accessible-text)" }}/>
+        {ci !== "●"
+          ? <span className="absolute -top-1 -right-2 text-[8px] leading-none" style={{ color:glifoColor }}>{ci}</span>
+          : <span className="absolute -top-0.5 -right-1 size-[7px] rounded-full" style={{ background:dotColor }}/>}
+      </div>
+      <p className="text-[9px] font-bold leading-tight text-center truncate w-full" style={{ color:statusColor }} aria-hidden="true">
+        {statusText}
+      </p>
+      {/* Chi aveva il turno prima: la stessa pastiglia di prima, in scala. */}
+      {machine.prevRoom && (
+        <span className="flex items-center gap-0.5" aria-hidden="true">
+          <History size={9} className="shrink-0" style={{ color:ORANGE_T }}/>
+          <span className="text-[8px] font-mono font-bold" style={{ color:ORANGE_T }}>{machine.prevRoom}</span>
+        </span>
+      )}
+      {isOOO && <AlertTriangle size={11} style={{ color:OOS_T }} aria-hidden="true"/>}
+    </div>
+  );
+}
 
-        {/* Etichetta + stato, impilati (così non si accavallano su mobile) */}
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold leading-tight truncate" style={{ color:fg }}>
-            {groupLabel ?? `${machine.type === "washer" ? t.washerLabel : t.dryerLabel} ${machine.label}`}
-          </p>
-          <p className="text-xs font-medium leading-tight truncate" style={{ color:statusColor }}>{statusText}</p>
-        </div>
 
-        {/* Azioni */}
-        <div className="flex items-center gap-2 shrink-0">
-          {machine.prevRoom && (
-            <span className="flex items-center gap-1 rounded-xl px-2 py-1.5"
-              style={{ background:`color-mix(in srgb, ${ORANGE} 12%, transparent)`, color:ORANGE_T }}
-              title={`${t.lgPrev}: ${machine.prevRoom}`}>
-              <History size={13} className="shrink-0"/>
-              <span className="text-[11px] font-mono font-semibold">{machine.prevRoom}</span>
-            </span>
-          )}
-          {/* Il triangolo resta: e' l'unico segnale che il guasto e' stato
-              verificato dall'amministrazione, e vale per tutte le macchine
-              ora che non c'e' piu' un pulsante a distinguerle. */}
-          {isOOO && <AlertTriangle size={15} style={{ color:OOS_T }}/>}
+// ─── Torna alla dashboard + Giornaliero/Settimana ──────────────────────────────
+//
+// La barra in fondo (Dashboard/Giornaliero/Settimana) e' sparita: le sue tre
+// destinazioni valevano solo dentro la lavanderia, e riservarle un banner
+// fisso in ogni schermata sembrava importante solo perche' c'era. Le due
+// schermate che restano — questa e la settimanale — ora si scambiano fra
+// loro con un interruttore qui in cima, e tornano alla dashboard con lo
+// stesso pulsante: due gesti, non tre destinazioni sempre in vista.
+function IntestazioneVista({ lang, screen, onScreen, titolo, azione }: {
+  lang: Lang; screen: 1 | 2; onScreen: (i: number) => void;
+  titolo: string; azione?: React.ReactNode;
+}) {
+  const t   = T[lang];
+  const sub = "var(--gray-accessible-text)";
+
+  return (
+    <div className="px-5 pt-3 pb-2 shrink-0">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <button onClick={()=>onScreen(0)}
+          className="flex items-center gap-1 -ml-1.5 px-1.5 py-1 rounded-lg text-xs font-semibold transition-colors"
+          style={{ color:sub }}>
+          <ChevronLeft size={15} className="shrink-0"/>{t.backToDashboard}
+        </button>
+        {azione}
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="text-base font-bold" style={{ color:"var(--foreground)" }}>{titolo}</h2>
+        <div className="flex items-center gap-0.5 p-0.5 rounded-xl shrink-0" style={{ background:"var(--secondary)" }}>
+          {([[1, t.daily], [2, t.weekly]] as [1 | 2, string][]).map(([i, label]) => (
+            <button key={i} onClick={()=>onScreen(i)}
+              className="px-3 py-1.5 rounded-[10px] text-xs font-semibold transition-colors"
+              style={screen===i ? { background:RED, color:RED_FG } : { color:sub }}>
+              {label}
+            </button>
+          ))}
         </div>
       </div>
     </div>
   );
 }
 
-
 // ─── Day Schedule ──────────────────────────────────────────────────────────────
 
-const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: sessionRoom, favs, onToggleFav, onBook, onClear, isAdmin }: {
+const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: sessionRoom, favs, onToggleFav, onBook, onClear, isAdmin, onScreen }: {
   theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
   favs: Fav[]; onToggleFav: (day:number, slot:number)=>void;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
   onClear: (day:number, slot:number, machine:string)=>Promise<void>;
   isAdmin: boolean;
+  onScreen: (i: number) => void;
 }) {
   const t = T[lang];
   const [selDay, setSelDay]       = useState(TODAY_DOW);
@@ -1159,7 +1181,6 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
   const [modTarget, setModTarget] = useState<ModifyTarget | null>(null);
   const [toast, setToast]         = useState<string | null>(null);
 
-  const fg  = "var(--foreground)";
   const sub = "var(--gray-accessible-text)";
   const hdr = "var(--muted)";
   const div = "var(--border)";
@@ -1201,8 +1222,9 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
         />
       )}
 
-      <div className="px-5 pt-3 pb-2 shrink-0">
-        <h2 className="text-base font-bold mb-2" style={{ color:fg }}>{t.daily}</h2>
+      <IntestazioneVista lang={lang} screen={1} onScreen={onScreen} titolo={t.daily}/>
+
+      <div className="px-5 pb-2 shrink-0">
         <div className="grid grid-cols-7 gap-1">
           {t.days.map((d, i) => {
             const isActive = i===selDay;
@@ -1382,11 +1404,12 @@ function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify,
 
 // ─── Week Overview ─────────────────────────────────────────────────────────────
 
-const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber: sessionRoom, onBook, onClear, isAdmin }: {
+const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber: sessionRoom, onBook, onClear, isAdmin, onScreen }: {
   theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
   onClear: (day:number, slot:number, machine:string)=>Promise<void>;
   isAdmin: boolean;
+  onScreen: (i: number) => void;
 }) {
   const t = T[lang];
   const [target, setTarget]           = useState<BookTarget | null>(null);
@@ -1483,20 +1506,19 @@ const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber
         <FoglioSettimana lang={lang} week={week} onClose={() => setStampaAperta(false)} />
       )}
 
-      <div className="px-5 pt-3 pb-2 shrink-0 flex items-center justify-between gap-3">
-        <h2 className="text-base font-bold" style={{ color:fg }}>{t.overview}</h2>
-        {/* Il foglio da appendere, per chi amministra — come quello della sala
-            polivalente, e per lo stesso motivo: se l'app non risponde, in
-            portineria la settimana deve esistere anche su carta. Non e' aperto
-            a tutti perche' e' quello il caso d'uso; i dati sono gli stessi che
-            la griglia qui sotto mostra gia' a chiunque. */}
-        {isAdmin && (
+      {/* Il foglio da appendere, per chi amministra — come quello della sala
+          polivalente, e per lo stesso motivo: se l'app non risponde, in
+          portineria la settimana deve esistere anche su carta. Non e' aperto
+          a tutti perche' e' quello il caso d'uso; i dati sono gli stessi che
+          la griglia qui sotto mostra gia' a chiunque. Vive nell'azione della
+          nuova intestazione, accanto al "torna alla dashboard". */}
+      <IntestazioneVista lang={lang} screen={2} onScreen={onScreen} titolo={t.overview}
+        azione={isAdmin && (
           <button onClick={() => setStampaAperta(true)} aria-label="Stampa o esporta la settimana"
             className="p-2 rounded-xl shrink-0" style={{ background:"var(--secondary)", color:sub }}>
             <Printer size={16}/>
           </button>
-        )}
-      </div>
+        )}/>
 
       <div className="flex-1 overflow-auto">
         <div style={{ width: "100%" }}>
@@ -1722,7 +1744,6 @@ function SegnalaGuastoSheet({ lang, status, onStatus, onClose, roomNumber }: {
   const [toast, setToast] = useState<string | null>(null);
   // La macchina per cui si sta scrivendo la nota, se si sta scrivendo.
   const [nota, setNota] = useState<{ m: Machine; testo: string } | null>(null);
-  const bg   = "var(--background)";
   const fg   = "var(--foreground)";
   const sub  = "var(--gray-accessible-text)";
   const surf = "var(--card)";
@@ -1764,11 +1785,10 @@ function SegnalaGuastoSheet({ lang, status, onStatus, onClose, roomNumber }: {
   if (nota) {
     const etichetta = `${nota.m.type === "washer" ? t.washerLabel : t.dryerLabel} ${nota.m.label}`;
     return (
-      <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
+      <>
         {toast && <Toast msg={toast} onClose={() => setToast(null)} />}
-        <div className="w-full rounded-t-3xl pb-8 max-h-[92%] overflow-y-auto overscroll-contain" style={{ background:bg }} onClick={(e)=>e.stopPropagation()}>
-          <div className="px-6 pt-5 pb-4">
-            <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
+        <div className="pb-8">
+          <div className="px-6 pt-4 pb-4">
             <div className="flex items-center justify-between mb-1">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="p-2 rounded-xl shrink-0"
@@ -1806,16 +1826,17 @@ function SegnalaGuastoSheet({ lang, status, onStatus, onClose, roomNumber }: {
               style={{ background:"transparent", color:sub }}>{t.back}</button>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
+  // Pagina come "Lavanderia": si raggiunge dal menu e si lascia allo stesso
+  // modo — riaprendo il menu. La X resta come scorciatoia.
   return (
-    <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
+    <>
       {toast && <Toast msg={toast} onClose={() => setToast(null)} />}
-      <div className="w-full rounded-t-3xl pb-8 overflow-y-auto" style={{ background:bg, maxHeight:"80%" }} onClick={(e)=>e.stopPropagation()}>
-        <div className="px-6 pt-5 pb-4">
-          <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
+      <div className="pb-8">
+        <div className="px-6 pt-4 pb-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[11px] font-mono tracking-widest uppercase mb-0.5" style={{ color:sub }}>{t.machineMgmt}</p>
@@ -1847,7 +1868,7 @@ function SegnalaGuastoSheet({ lang, status, onStatus, onClose, roomNumber }: {
         </div>
 
       </div>
-    </div>
+    </>
   );
 }
 
@@ -2037,43 +2058,13 @@ function LoginScreen({ lang, onLogin, onAdmin }: {
   );
 }
 
-// ─── Barra in fondo (telefono, solo lavanderia) ───────────────────────────────
-//
-// C'era, e' stata tolta, ed e' tornata — ma non uguale.
-//
-// La prima versione stava sotto OGNI schermata, comprese cinema, musica e
-// polivalente, dove le sue tre voci non volevano dire niente. E si chiamavano
-// "Dashboard / Giornaliero / Settimana": nessuna diceva "prenota", che era la
-// cosa che la gente cercava — e non trovandola li' finiva sul "+ Prenota"
-// accanto alla macchina, che prendeva il turno in corso senza chiedere.
-//
-// Adesso si prenota dal "+" accanto alle proprie prenotazioni, e queste tre
-// voci sono per quello che sono: tre modi di GUARDARE la lavanderia. Percio'
-// la barra compare solo dentro la lavanderia, e solo sul telefono — su desktop
-// le stesse tre stanno gia' nella sidebar, rientrate sotto la loro struttura.
-function BottomNav({ active, onChange, lang }: { active:number; onChange:(i:number)=>void; lang:Lang }) {
-  return (
-    // paddingBottom con la safe-area: su iPhone l'ultima riga di pulsanti
-    // finiva sotto la barra dell'indicatore home, che la copre a meta'. Su
-    // tutto il resto env() vale 0 e non cambia niente.
-    <div className="flex shrink-0 border-t"
-      style={{
-        background:"var(--background)", borderColor:"var(--border)",
-        paddingBottom:"env(safe-area-inset-bottom, 0px)",
-      }}>
-      {schermateLavanderia(lang).map((sc, i) => {
-        const Icona = sc.icon;
-        return (
-          <button key={sc.label} onClick={()=>onChange(i)}
-            className="flex-1 flex flex-col items-center gap-1 py-3 transition-colors"
-            style={{ color: active===i ? RED : "var(--gray-accessible-text)" }}>
-            <Icona size={19}/><span className="text-[9px] font-medium tracking-wide">{sc.label}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+// La barra fissa in fondo — Dashboard/Giornaliero/Settimana — non c'e' piu'.
+// Le sue tre voci valevano solo dentro la lavanderia, e un banner sempre
+// visibile per tre destinazioni non giustificava piu' lo spazio che
+// occupava: si prenota dal "+" accanto alle proprie prenotazioni, e le due
+// schermate che restano — Giornaliero e Settimana — si scambiano fra loro
+// con l'interruttore in cima a ciascuna (vedi IntestazioneVista) invece che
+// da un banner sempre in vista. Su desktop restano nella sidebar.
 
 
 // ─── Sidebar desktop ──────────────────────────────────────────────────────────
@@ -2092,12 +2083,12 @@ function useMediaQuery(query: string) {
   return matches;
 }
 
-function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility, onFacility, adminRole, onChangeRoom, onOpenSettings, onFeedback, onGuasto }: {
+function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility, onFacility, adminRole, onChangeRoom }: {
   active: number; onChange: (i: number) => void; lang: Lang;
   roomNumber: string | null; showNav: boolean;
   facility: Facility; onFacility: (f: Facility) => void;
   adminRole: AdminRole | null;
-  onChangeRoom: () => void; onOpenSettings: () => void; onFeedback: () => void; onGuasto: () => void;
+  onChangeRoom: () => void;
 }) {
   const t   = T[lang];
   const fg  = "var(--foreground)";
@@ -2192,24 +2183,22 @@ function DesktopSidebar({ active, onChange, lang, roomNumber, showNav, facility,
         )}
         {/* Lingua, notifiche, installazione, accessibilità stanno tutte dentro
             Impostazioni. Il refresh manuale è sparito (tornare sull'app ricarica
-            già i dati) e il tema segue sempre quello del sistema. */}
-        <button onClick={onGuasto}
-          className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors desk-nav"
-          style={{ color:fg }}>
-          <Wrench size={16} style={{ color:sub }}/>{T[lang].reportOos}
-        </button>
-        <button onClick={onOpenSettings}
-          className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors desk-nav"
-          style={{ color:fg }}>
-          <Settings size={16} style={{ color:sub }}/>{T[lang].impostazioni}
-        </button>
-        {/* Come nel menu del telefono: il feedback sull'app sta fra i
-            controlli, non fra le destinazioni. */}
-        <button onClick={onFeedback}
-          className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors desk-nav"
-          style={{ color:fg }}>
-          <MessageSquare size={16} style={{ color:sub }}/>{T[lang].feedbackApp}
-        </button>
+            già i dati) e il tema segue sempre quello del sistema.
+
+            Queste tre sono pagine come le altre — stesso `onFacility` delle
+            strutture qui sopra — solo raggruppate qui perche' non sono
+            strutture. */}
+        {PAGINE_UTILITA.map(({ id, chiave }) => {
+          const Icona = id === "guasto" ? Wrench : id === "impostazioni" ? Settings : MessageSquare;
+          const attiva = facility === id;
+          return (
+            <button key={id} onClick={()=>onFacility(id)}
+              className={`flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm font-semibold transition-colors ${attiva ? "" : "desk-nav"}`}
+              style={attiva ? { background:RED, color:RED_FG } : { color:fg }}>
+              <Icona size={16} style={attiva ? undefined : { color:sub }}/>{T[lang][chiave]}
+            </button>
+          );
+        })}
         <p className="text-center text-[10px] font-mono pt-1" style={{ color:sub }}>v. {APP_VERSION} (beta)</p>
       </div>
     </aside>
@@ -2272,6 +2261,15 @@ const adminSectionsFor = (role: AdminRole | null) =>
     (!s.sistemistaOnly || role === "sistemista") && (!s.staffEsclusa || role !== "staff")
   );
 
+// Le tre pagine di utilita', raggiunte dal fondo del menu: non sono
+// strutture ne' sezioni amministrative, ma il titolo in cima serve anche a
+// loro — vedi l'header mobile.
+const PAGINE_UTILITA: { id: "guasto" | "impostazioni" | "feedback"; chiave: "reportOos" | "impostazioni" | "feedbackApp" }[] = [
+  { id: "guasto",        chiave: "reportOos" },
+  { id: "impostazioni",  chiave: "impostazioni" },
+  { id: "feedback",      chiave: "feedbackApp" },
+];
+
 // Le tre schermate della lavanderia. Stanno qui perche' le nominano sia il
 // menu del telefono sia la sidebar del desktop, e due elenchi che devono
 // restare uguali sono un elenco solo.
@@ -2294,11 +2292,10 @@ const schermateLavanderia = (lang: Lang) => [
 // regole su chi vede cosa. Manca solo l'annidamento delle schede della
 // lavanderia: quelle non ci sono piu' da nessuna parte, si arriva al
 // giornaliero e alla settimana dai due pulsanti della dashboard.
-function MenuStrutture({ aperto, onClose, facility, onChange, lang, adminRole, onFeedback, onImpostazioni, onGuasto }: {
+function MenuStrutture({ aperto, onClose, facility, onChange, lang, adminRole }: {
   aperto: boolean; onClose: ()=>void;
   facility: Facility; onChange: (f: Facility)=>void;
   lang: Lang; adminRole: AdminRole | null;
-  onFeedback: ()=>void; onImpostazioni: ()=>void; onGuasto: ()=>void;
 }) {
   const sub      = "var(--gray-accessible-text)";
   const div      = "var(--border)";
@@ -2306,11 +2303,15 @@ function MenuStrutture({ aperto, onClose, facility, onChange, lang, adminRole, o
 
   if (!aperto) return null;
 
+  // py-2 e non py-3: con le sezioni admin al completo (sistemista) l'elenco
+  // arrivava a superare l'altezza dello schermo e obbligava a scorrere il
+  // pannello — qui basta stringere le righe perche' tutte le voci restino
+  // visibili senza scorrere, sui telefoni normali.
   const Voce = ({ id, icon: Icon, label }: { id: Facility; icon: any; label: string }) => {
     const attiva = facility === id;
     return (
       <button onClick={()=>{ onChange(id); onClose(); }}
-        className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-semibold transition-colors text-left"
+        className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold transition-colors text-left"
         style={attiva ? { background:RED, color:RED_FG } : { color:sub }}>
         <Icon size={18} className="shrink-0"/>{label}
       </button>
@@ -2328,7 +2329,7 @@ function MenuStrutture({ aperto, onClose, facility, onChange, lang, adminRole, o
       <nav className="absolute inset-y-0 left-0 z-50 w-[80%] max-w-[300px] flex flex-col border-r menu-pannello"
         style={{ background:"var(--background)", borderColor:div }}
         aria-label={T[lang].navStrutture}>
-        <div className="flex items-center justify-between px-4 pt-5 pb-3 shrink-0" style={{ borderBottom:`1px solid ${div}` }}>
+        <div className="flex items-center justify-between px-4 pt-4 pb-2.5 shrink-0" style={{ borderBottom:`1px solid ${div}` }}>
           <span className="text-base font-bold" style={{ color:"var(--foreground)" }}>Sez. Valentino</span>
           <button onClick={onClose} aria-label={T[lang].cancel}
             className="p-1.5 rounded-lg" style={{ color:sub }}>
@@ -2336,7 +2337,7 @@ function MenuStrutture({ aperto, onClose, facility, onChange, lang, adminRole, o
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 flex flex-col gap-1">
+        <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 flex flex-col gap-0.5">
           {FACILITIES.map(({ id, icon, chiave }) => (
             <Voce key={id} id={id} icon={icon} label={T[lang][chiave]}/>
           ))}
@@ -2354,29 +2355,24 @@ function MenuStrutture({ aperto, onClose, facility, onChange, lang, adminRole, o
           )}
         </div>
 
-        {/* In fondo, dopo una riga: non e' un posto dell'app, e' un modo di
-            scrivere a chi l'app la fa. Stava fra i pulsanti della dashboard,
-            dove sembrava una funzione della lavanderia come le altre — e si
-            chiamava solo "Feedback", che non diceva su cosa. */}
-        <div className="shrink-0 px-3 py-3 flex flex-col gap-1" style={{ borderTop:`1px solid ${div}` }}>
-          {/* L'ingranaggio stava in alto a destra, accanto alla camera: due
-              icone per due cose diverse, di cui una si usa una volta all'anno.
-              Qui sta con le altre cose che non sono destinazioni. */}
-          <button onClick={()=>{ onGuasto(); onClose(); }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-left"
-            style={{ color:sub }}>
-            <Wrench size={18} className="shrink-0"/>{T[lang].reportOos}
-          </button>
-          <button onClick={()=>{ onImpostazioni(); onClose(); }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-left"
-            style={{ color:sub }}>
-            <Settings size={18} className="shrink-0"/>{T[lang].impostazioni}
-          </button>
-          <button onClick={()=>{ onFeedback(); onClose(); }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-left"
-            style={{ color:sub }}>
-            <MessageSquare size={18} className="shrink-0"/>{T[lang].feedbackApp}
-          </button>
+        {/* In fondo, dopo una riga: non sono strutture come le altre, ma
+            destinazioni allo stesso modo — stesso `onChange`, stessa pagina
+            a corpo intero. L'ingranaggio stava in alto a destra, accanto
+            alla camera: due icone per due cose diverse, di cui una si usa
+            una volta all'anno. Qui sta con le altre cose che non sono
+            strutture. */}
+        <div className="shrink-0 px-3 py-2 flex flex-col gap-0.5" style={{ borderTop:`1px solid ${div}` }}>
+          {PAGINE_UTILITA.map(({ id, chiave }) => {
+            const Icona = id === "guasto" ? Wrench : id === "impostazioni" ? Settings : MessageSquare;
+            const attiva = facility === id;
+            return (
+              <button key={id} onClick={()=>{ onChange(id); onClose(); }}
+                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-semibold text-left"
+                style={attiva ? { background:RED, color:RED_FG } : { color:sub }}>
+                <Icona size={18} className="shrink-0"/>{T[lang][chiave]}
+              </button>
+            );
+          })}
           <p className="text-center text-[10px] font-mono pt-1" style={{ color:sub }}>v. {APP_VERSION} (beta)</p>
         </div>
       </nav>
@@ -2397,13 +2393,7 @@ export default function App() {
   // quel memo evita (la griglia settimanale sono 7x19 celle).
   const [facility, setFacility] = useState<Facility>("laundry");
   const [accessibilityOpen, setAccessibilityOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [menuAperto, setMenuAperto] = useState(false);   // il menu laterale, solo su telefono
-  // Il feedback sull'app: sta fra i controlli (menu laterale e sidebar), non
-  // piu' fra i pulsanti in fondo alla dashboard. Lo stato vive qui perche' da
-  // li' lo aprono tutti e due i layout.
-  const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const [guastoOpen, setGuastoOpen]     = useState(false);
   const [_aPrefs, _setAPrefs] = useState<AccessibilityPrefs>(loadPrefs);
   // Il tema segue sempre quello del telefono: niente più selettore manuale né
   // preferenza salvata. Un secondo interruttore che duplica un'impostazione
@@ -2668,8 +2658,8 @@ export default function App() {
   ) : (
     <>
       {screen===0 && <Dashboard   theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} onGoWeek={vaiAllaSettimana}/>}
-      {screen===1 && <DaySchedule theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} isAdmin={isAdmin}/>}
-      {screen===2 && <WeekOverview theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} onBook={handleBook} onClear={handleClear} isAdmin={isAdmin}/>}
+      {screen===1 && <DaySchedule theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} isAdmin={isAdmin} onScreen={setScreen}/>}
+      {screen===2 && <WeekOverview theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} onBook={handleBook} onClear={handleClear} isAdmin={isAdmin} onScreen={setScreen}/>}
     </>
   );
 
@@ -2694,6 +2684,20 @@ export default function App() {
     bodyContent = <Conferenze lang={lang} adminRole={adminRole}/>;
   } else if (facility === "cinema" || facility === "music") {
     bodyContent = <RoomView room={facility} lang={lang} roomNumber={roomNumber}/>;
+  } else if (facility === "guasto") {
+    bodyContent = (
+      <SegnalaGuastoSheet lang={lang} status={status} onStatus={handleStatus}
+        roomNumber={roomNumber} onClose={() => setFacility("laundry")}/>
+    );
+  } else if (facility === "impostazioni") {
+    bodyContent = (
+      <SettingsSheet lang={lang} room={roomNumber} adminRole={adminRole}
+        onLang={(l)=>{ setLang(l); salvaLingua(l); }}
+        onAccessibility={() => setAccessibilityOpen(true)}
+        onClose={() => setFacility("laundry")}/>
+    );
+  } else if (facility === "feedback") {
+    bodyContent = <FeedbackModal lang={lang} room={roomNumber} onClose={() => setFacility("laundry")}/>;
   } else {
     bodyContent = mainContent;
   }
@@ -2708,32 +2712,10 @@ export default function App() {
     />
   );
 
-  // Menu e schermate amministrative: identici nei due layout, definiti una
-  // volta sola invece che copiati in entrambi i rami.
-  const settingsSheet = settingsOpen && (
-    <SettingsSheet lang={lang} room={roomNumber}
-      adminRole={adminRole}
-      onLang={(l)=>{ setLang(l); salvaLingua(l); }}
-      onAccessibility={() => setAccessibilityOpen(true)}
-      onClose={() => setSettingsOpen(false)} />
-  );
-
   // Login amministratore: si apre digitando 1935 al posto della camera.
   // Chi amministra non ha una camera propria: la sua identità è DIREZIONE, e
   // con quella prenota — turni di lavanderia e sale — senza dover scegliere
   // ogni volta per conto di chi sta agendo.
-  // Un guasto capita due volte l'anno: la chiave inglese su ognuna delle sei
-  // righe era un comando permanente per un caso raro. Sta con le altre cose
-  // che si fanno di rado — impostazioni, feedback — dietro il menu.
-  const guastoSheet = guastoOpen && (
-    <SegnalaGuastoSheet lang={lang} status={status} onStatus={handleStatus}
-      roomNumber={roomNumber} onClose={() => setGuastoOpen(false)}/>
-  );
-
-  const feedbackModal = feedbackOpen && (
-    <FeedbackModal lang={lang} room={roomNumber} onClose={() => setFeedbackOpen(false)}/>
-  );
-
   const adminLoginSheet = adminLoginOpen && (
     <Suspense fallback={null}>
       <AdminLoginSheet
@@ -2752,19 +2734,13 @@ export default function App() {
         {globalStyle}
         {showChrome && <InstallPrompt lang={lang}/>}
         {accessibilityModal}
-        {settingsSheet}
         {adminLoginSheet}
-        {feedbackModal}
-        {guastoSheet}
         <DesktopSidebar
           active={screen} onChange={setScreen} lang={lang}
           roomNumber={roomNumber} showNav={showChrome}
           facility={facility} onFacility={setFacility}
           adminRole={adminRole}
           onChangeRoom={changeRoom}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onFeedback={() => setFeedbackOpen(true)}
-          onGuasto={() => setGuastoOpen(true)}
         />
         <main className="flex-1 h-dvh min-h-0 flex flex-col overflow-y-auto overscroll-contain">
           {/* Era max-w-6xl (1152px): su uno schermo grande restavano centinaia
@@ -2788,10 +2764,7 @@ export default function App() {
         style={{ background:"var(--background)", borderColor:"var(--border)" }}>
         {showChrome && <InstallPrompt lang={lang}/>}
         {accessibilityModal}
-        {settingsSheet}
         {adminLoginSheet}
-        {feedbackModal}
-        {guastoSheet}
 
         <div className="flex items-center justify-between px-7 pt-3 pb-0 shrink-0 mt-2 md:mt-0">
           {/* Prima di scegliere una camera qui c'era un orologio finto (9:41,
@@ -2812,7 +2785,9 @@ export default function App() {
               <span className="text-sm font-bold truncate" style={{ color:"var(--foreground)" }}>
                 {isAdminFacility(facility)
                   ? T[lang][ADMIN_SECTIONS.find((x) => x.id === facility)!.chiave]
-                  : T[lang][FACILITIES.find((x) => x.id === facility)!.chiave]}
+                  : PAGINE_UTILITA.some((x) => x.id === facility)
+                    ? T[lang][PAGINE_UTILITA.find((x) => x.id === facility)!.chiave]
+                    : T[lang][FACILITIES.find((x) => x.id === facility)!.chiave]}
               </span>
             )}
           </div>
@@ -2827,32 +2802,35 @@ export default function App() {
             {/* Il saluto vive qui adesso, non piu' in una riga sua sopra la
                 dashboard: "Buonasera, Camera 318" invece di due pezzi
                 separati che dicevano in fondo la stessa cosa — chi sei e che
-                ora e' — gia' scritta nella barra di stato del telefono. */}
+                ora e' — gia' scritta nella barra di stato del telefono.
+
+                La camera pesa piu' del saluto: e' l'informazione che conta
+                (a chi sto guardando la lavanderia?), il saluto e' solo
+                educazione. Prima erano la stessa riga grigia, stesso peso —
+                qui la camera ha il suo badge rosso e si legge per prima. */}
             {roomNumber !== null && (
               <button onClick={changeRoom}
-                className="text-[11px] font-mono px-2 py-1 rounded-lg transition-colors"
-                style={{ background:"var(--secondary)", color:"var(--gray-accessible-text)" }}>
-                {T[lang].greeting(new Date().getHours())}, {roomNumber === api.DIREZIONE ? T[lang].direzioneNome : `${T[lang].camera} ${roomNumber}`}
+                className="flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-lg transition-colors"
+                style={{ background:"var(--secondary)" }}>
+                <span className="text-[11px] font-mono" style={{ color:"var(--gray-accessible-text)" }}>
+                  {T[lang].greeting(new Date().getHours())}
+                </span>
+                <span className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded-md"
+                  style={{ background:`color-mix(in srgb, var(--primary) 16%, transparent)`, color:RED }}>
+                  {roomNumber === api.DIREZIONE ? T[lang].direzioneNome : `${T[lang].camera} ${roomNumber}`}
+                </span>
               </button>
             )}
           </div>
         </div>
 
         <MenuStrutture aperto={menuAperto} onClose={() => setMenuAperto(false)}
-          facility={facility} onChange={setFacility} lang={lang} adminRole={adminRole}
-          onFeedback={() => setFeedbackOpen(true)}
-          onImpostazioni={() => setSettingsOpen(true)}
-          onGuasto={() => setGuastoOpen(true)}/>
+          facility={facility} onChange={setFacility} lang={lang} adminRole={adminRole}/>
 
         <div className="flex-1 overflow-y-auto overscroll-contain min-h-0 flex flex-col mt-2">
           {bodyContent}
         </div>
 
-        {/* Solo dentro la lavanderia: altrove quelle tre voci non vogliono dire
-            niente, ed era il difetto della versione precedente. */}
-        {showChrome && facility === "laundry" && (
-          <BottomNav active={screen} onChange={setScreen} lang={lang}/>
-        )}
 
         <div className="pb-2 hidden md:flex justify-center shrink-0">
           <div className="w-28 h-1 rounded-full" style={{ background: "color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>

@@ -93,9 +93,12 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
     </button>
   );
 
+  // Non e' piu' un foglio che sale dal basso: e' una pagina come "Lavanderia",
+  // raggiunta dallo stesso menu e lasciata allo stesso modo — riaprendo il
+  // menu e scegliendo altro. La X in alto resta come scorciatoia rapida.
   return (
-    <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
-      <div className="w-full rounded-t-3xl pb-6 max-h-[92%] overflow-y-auto overscroll-contain" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
+    <>
+      <div className="pb-6">
         <div className="px-6 pt-4 pb-3 flex items-center justify-between">
           <p className="text-lg font-bold" style={{ color:fg }}>{T[lang].impostazioni}</p>
           <button onClick={onClose} className="p-2 rounded-xl" style={{ color:sub, background:"var(--secondary)" }}>
@@ -174,7 +177,7 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
           err={pushErr}
           onToggle={toggleReminders} onClose={() => setRemindersOpen(false)} />
       )}
-    </div>
+    </>
   );
 }
 

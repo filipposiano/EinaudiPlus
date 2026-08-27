@@ -70,7 +70,7 @@ const it = {
   bookAnother: "Prenota un altro turno",
   favAvailable: "Il tuo turno preferito è libero",
   favFree: "Libero", favFull: "Pieno", favPast: "Passato",
-  remainingChip: (n: number): string => n >= 0 ? `${n} rimast${n === 1 ? "a" : "e"}` : `${-n} in più`,
+  remainingChip: (n: number): string => n >= 0 ? `${n} rimanent${n === 1 ? "e" : "i"}` : `${-n} in più`,
   // "18:15" da solo non diceva se fosse l'inizio o la fine: la torta
   // accanto misura la fine, quindi questo deve dire l'inizio, a parole.
   slotFrom: (ora: string): string => `Turno delle ${ora}`,
