@@ -710,7 +710,6 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
   const t = T[lang];
   const [now, setNow]           = useState(new Date());
   const [toast, setToast]       = useState<string | null>(null);
-  const [prenotaAperto, setPrenotaAperto] = useState(false);
   const [favPicker, setFavPicker] = useState(false);
   const [quickTarget, setQuickTarget] = useState<{ day:number; slot:number } | null>(null);
 
@@ -804,13 +803,6 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
   return (
     <div className="flex flex-col pb-6 md:pt-8 md:max-w-3xl md:mx-auto md:w-full">
       {toast     && <Toast msg={toast} onClose={()=>setToast(null)}/>}
-      {prenotaAperto && roomNumber && (
-        <SheetPrenota lang={lang} onClose={()=>setPrenotaAperto(false)}
-          favs={favs} liberaIn={firstFreeWasherAt}
-          onQuick={(d, sl)=>setQuickTarget({ day:d, slot:sl })}
-          onAddFav={()=>setFavPicker(true)}
-          onDelFav={onToggleFav}/>
-      )}
       {/* Aggiungere non chiude piu' il pannello: da quando l'elenco sta li'
           dentro, quello e' il posto dove si sistemano i preferiti — se ne
           mette uno, lo si vede comparire nella lista, se ne mette un altro.
@@ -826,23 +818,10 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
           onClose={()=>setQuickTarget(null)}/>
       )}
 
-      {/* Il saluto, e nient'altro.
-      
-          Qui c'erano anche la data per esteso, l'ora in cifre grandi e un
-          riquadro col turno corrente e un conto alla rovescia al secondo: la
-          data e l'ora il telefono le ha gia' nella barra di stato, due
-          centimetri piu' su, e del turno e' rimasto quel che serviva —
-          l'ora di inizio e quanto manca, nella riga di "Lavatrici". */}
-      <div className="px-5 pt-5 pb-3">
-        <p className="text-sm" style={{ color:sub }}>
-          {/* "camera DIREZIONE" non vuol dire niente: la direzione non è una
-              camera, è chi prenota per conto della struttura. */}
-          {t.greeting(now.getHours())}
-          {roomNumber === api.DIREZIONE
-            ? <>, <span style={{ color:fg, fontWeight:600 }}>{t.direzioneNome}</span></>
-            : roomNumber ? <>, {t.camera} <span style={{ color:fg, fontWeight:600 }}>{roomNumber}</span></> : ""}
-        </p>
-      </div>
+      {/* Il saluto non e' piu' una riga sua: e' integrato nella pastiglia
+          "Camera 318" in cima allo schermo (vedi App, il chip mobile). Stava
+          qui da solo sopra un vuoto che il telefono riempie gia' con la sua
+          barra di stato — la stessa informazione, un centimetro piu' sotto. */}
 
       {/* Lavatrici */}
       <section className="px-5 mb-4">
@@ -917,15 +896,6 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
               }}>
               {senzaQuota ? "∞" : remaining}
             </span>
-            {/* Una stella, non un "+": quello che si apre non e' un modulo di
-                prenotazione ma i propri turni, da cui si prende quello ancora
-                libero. La stella e' la stessa che segna le righe li' dentro e
-                quella che si tocca nel Giornaliero per metterli da parte. */}
-            <button onClick={()=>setPrenotaAperto(true)} aria-label={t.favorites}
-              className="p-1.5 rounded-lg transition-all active:scale-90 shrink-0"
-              style={{ background:`color-mix(in srgb, var(--primary) 12%, transparent)`, color:RED }}>
-              <Star size={14}/>
-            </button>
           </div>
           <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
             {activeBookings.length === 0 ? (
@@ -980,20 +950,14 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
             )}
 
             {(senzaQuota || remaining > 0) && (
+              // Rosso, qui, leggeva come un avviso — la stessa tinta del
+              // cestino appena sopra. Grigio neutro come le altre azioni
+              // dell'app (Segnala guasto, Feedback): e' un invito, non un
+              // pericolo.
               <button onClick={onGoWeek}
                 className="w-full flex items-center justify-center gap-2 py-3 border-t transition-colors"
-                // Rosso su fondo chiaro, non una barra rossa piena: e' l'azione
-                // principale della scheda, non un avviso. Quando qualche turno
-                // c'e' gia' si fa ancora piu' discreta — allora e' un "ne vuoi
-                // un altro?", non la sola cosa da fare.
-                style={{
-                  borderColor:div,
-                  background: activeBookings.length === 0
-                    ? `color-mix(in srgb, var(--primary) 12%, transparent)`
-                    : "transparent",
-                  color:RED,
-                }}>
-                <Plus size={14}/>
+                style={{ borderColor:div, background:"transparent", color:fg }}>
+                <Plus size={14} style={{ color:sub }}/>
                 <span className="text-sm font-bold">
                   {activeBookings.length === 0 ? t.bookSlot : t.bookAnother}
                 </span>
@@ -1067,117 +1031,6 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
   );
 });
 
-// ─── I turni preferiti ───────────────────────────────────────────────────────
-//
-// Da qui non si sceglie un turno qualunque: si tengono i PROPRI, e quando uno
-// e' ancora libero lo si prende.
-//
-// C'era anche la scelta libera, tre ruote (giorno, lavatrice, ora) dentro
-// questo stesso pannello. Faceva la stessa cosa che fanno gia' la griglia
-// giornaliera e quella settimanale, che mostrano pero' anche il contorno —
-// chi c'e' prima, chi dopo, quanto e' pieno quel giorno. Due strade per la
-// stessa cosa, e questa era la piu' cieca: sceglieva senza far vedere niente.
-//
-// Quel che resta e' l'unica cosa che le griglie NON fanno: ricordarsi che il
-// tuo turno e' il lunedi' alle 09:30, e dirti se e' libero. Chi vuole un turno
-// diverso passa dalle griglie, dove c'e' di che decidere.
-function SheetPrenota({ lang, onClose, favs, liberaIn, onQuick, onAddFav, onDelFav }: {
-  lang: Lang;
-  onClose: ()=>void;
-  favs: Fav[];
-  liberaIn: (day: number, slot: number) => string | null;   // sigla della prima lavatrice libera
-  onQuick: (day: number, slot: number) => void;
-  onAddFav: () => void;
-  onDelFav: (day: number, slot: number) => void;
-}) {
-  const t = T[lang];
-  const sub = "var(--gray-accessible-text)";
-
-  return (
-    <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
-      <div className="w-full rounded-t-3xl pb-8 max-h-[92%] overflow-y-auto overscroll-contain"
-        style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
-        <div className="px-5 pt-4 pb-4">
-          <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background:"color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-lg font-bold" style={{ color:"var(--foreground)" }}>{t.favorites}</p>
-            <button onClick={onClose} className="p-2 rounded-xl shrink-0" style={{ color:sub, background:"var(--secondary)" }}>
-              <X size={16}/>
-            </button>
-          </div>
-
-        {/* Chi ha segnato "lunedi' alle 09:30" quel turno lo rivuole: la
-            domanda e' solo se e' ancora libero. */}
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-[11px]" style={{ color:sub }}>{t.favsIntro}</p>
-          <button onClick={onAddFav}
-            className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-all active:scale-95"
-            style={{ background:`color-mix(in srgb, var(--primary) 12%, transparent)`, color:RED }}>
-            <Plus size={12}/>{t.addFav}
-          </button>
-        </div>
-
-        <div className="rounded-2xl overflow-hidden border mb-5" style={{ background:"var(--card)", borderColor:"var(--border)" }}>
-          {favs.length === 0 ? (
-            <div className="flex items-start gap-3 px-4 py-3">
-              <Star size={14} style={{ color:ORANGE_T, marginTop:1, flexShrink:0 }}/>
-              <p className="text-xs" style={{ color:sub }}>{t.noFavs}</p>
-            </div>
-          ) : favs.map((f, i) => {
-            const sl      = TIME_SLOTS[f.slot];
-            const passato = isPastBooking({ day: f.day, slot: f.slot, mid: "W-A" });
-            const libera  = passato ? null : liberaIn(f.day, f.slot);
-            return (
-              <div key={`${f.day}-${f.slot}`} className="flex items-center gap-3 px-4 py-2.5"
-                style={{
-                  borderBottom: i < favs.length - 1 ? "1px solid var(--border)" : "none",
-                  background: libera ? `color-mix(in srgb, ${GREEN} 9%, transparent)` : "transparent",
-                }}>
-                <Star size={14} style={{ color:ORANGE, fill:ORANGE, flexShrink:0 }}/>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-mono font-semibold" style={{ color:"var(--foreground)" }}>
-                    {t.days[f.day]} · {sl.start}–{sl.end}
-                  </p>
-                  <p className="text-[11px] font-semibold" style={{ color: passato ? sub : libera ? GREEN_T : sub }}>
-                    {passato ? t.favPast : libera ? `${t.favFree} · ${t.lavBreve} ${libera[2]}` : t.favFull}
-                  </p>
-                </div>
-                {/* Il pulsante solo se c'e' davvero una lavatrice da prendere:
-                    quando il turno e' pieno c'era lo stesso, grigio, e apriva
-                    un modale che diceva "nessuna lavatrice libera". */}
-                {libera && (
-                  <button onClick={()=>onQuick(f.day, f.slot)}
-                    className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-bold transition-all active:scale-95 shrink-0"
-                    style={{ background:GREEN, color:"var(--primary-foreground)" }}>
-                    <Plus size={12}/>{t.book}
-                  </button>
-                )}
-                <button onClick={()=>onDelFav(f.day, f.slot)} className="p-1.5 rounded-lg shrink-0" style={{ color:sub }}
-                  aria-label={`${t.removeFav}: ${t.days[f.day]} ${sl.start}`}>
-                  <X size={13}/>
-                </button>
-              </div>
-            );
-          })}
-        </div>
-
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Quanto manca alla fine del turno, a torta.
- *
- * Al posto del riquadro con l'orario di inizio, quello di fine e un conto alla
- * rovescia al secondo. Di quelle quattro cifre ne serviva una sola — quanto
- * manca — e nemmeno al secondo: chi guarda vuole sapere se fa in tempo a
- * mettere un carico, non se mancano 43 minuti e 12 secondi.
- *
- * Lo spicchio si svuota man mano che il turno passa. E' l'unica parte che si
- * legge senza leggere: il numero accanto e' per chi vuole la cifra.
- */
 function TortaTurno({ restaFrazione, colore, size = 15 }: {
   restaFrazione: number; colore: string; size?: number;
 }) {
@@ -2957,11 +2810,15 @@ export default function App() {
               notifiche, installazione e accessibilità stanno tutte dentro
               Impostazioni, invece di quattro-cinque icone separate. */}
           <div className="flex items-center gap-1.5 shrink-0">
+            {/* Il saluto vive qui adesso, non piu' in una riga sua sopra la
+                dashboard: "Buonasera, Camera 318" invece di due pezzi
+                separati che dicevano in fondo la stessa cosa — chi sei e che
+                ora e' — gia' scritta nella barra di stato del telefono. */}
             {roomNumber !== null && (
               <button onClick={changeRoom}
                 className="text-[11px] font-mono px-2 py-1 rounded-lg transition-colors"
                 style={{ background:"var(--secondary)", color:"var(--gray-accessible-text)" }}>
-                {roomLabel(roomNumber, t)}
+                {T[lang].greeting(new Date().getHours())}, {roomNumber === api.DIREZIONE ? T[lang].direzioneNome : `${T[lang].camera} ${roomNumber}`}
               </button>
             )}
           </div>
