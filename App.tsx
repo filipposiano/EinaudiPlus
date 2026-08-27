@@ -876,11 +876,10 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
         <section className="px-5 mb-4">
           <div className="flex items-center gap-2 mb-2">
             <p className="text-[11px] font-mono tracking-widest uppercase flex-1 min-w-0" style={{ color:sub }}>{t.yourBookings}</p>
-            {/* Il numero da solo ("2") non diceva di cosa: due cosa? Il testo
-                esplicito lo dice senza dover leggere il titolo della sezione
-                sopra. Resta terso solo il caso sopra quota (-1, -2): li' e'
-                un allarme, non un conteggio, e la parola in piu' non
-                aiuterebbe la lettura al volo. */}
+            {/* Il numero da solo ("2", o peggio "-1") non diceva di cosa: due
+                cosa, uno in meno o in piu' di cosa? Il testo esplicito lo
+                dice sempre, anche sopra quota — "1 in piu'" e non un "-1"
+                che si legge come un errore di calcolo. */}
             <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-full tabular-nums"
               title={senzaQuota ? t.noQuota : t.remainingMsg(remaining)}
               style={{
@@ -889,7 +888,7 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
                           : `color-mix(in srgb, var(--destructive) 15%, transparent)`,
                 color: senzaQuota || remaining > 0 ? GREEN_T : remaining === 0 ? sub : OOS_T,
               }}>
-              {senzaQuota ? t.noQuota : remaining >= 0 ? t.remainingChip(remaining) : remaining}
+              {senzaQuota ? t.noQuota : t.remainingChip(remaining)}
             </span>
           </div>
           <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
