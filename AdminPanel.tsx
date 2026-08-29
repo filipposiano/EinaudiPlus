@@ -668,10 +668,12 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
 
 // ─── Regole ricorrenti (sistemista) ──────────────────────────────────────────
 //
-// Una regola non è una prenotazione: è la ricetta con cui, ogni notte, le
-// prenotazioni della settimana corrente vengono create. Cancellare la regola
-// non cancella le prenotazioni già scritte — quelle restano fino a fine
-// settimana e si tolgono dalla scheda Prenotazioni.
+// Una regola non è una prenotazione: è la ricetta con cui, una volta alla
+// settimana (la notte fra domenica e lunedì), le prenotazioni della settimana
+// che sta per iniziare vengono create. Una regola creata a metà settimana non
+// tocca quella in corso: vale dal lunedì successivo. Cancellare la regola non
+// cancella le prenotazioni già scritte — quelle restano fino a fine settimana
+// e si tolgono dalla scheda Prenotazioni.
 
 function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
   const [items, setItems] = useState<Recurring[]>([]);
@@ -713,7 +715,7 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
       const r = await call("recurringAddLaundry", {
         laundry_id: lid, day, slot, machine, room: room.trim(),
       });
-      setMsg(r.ok ? "Regola creata e applicata a questa settimana." : r.error);
+      setMsg(r.ok ? "Regola creata. Vale dal lunedì prossimo." : r.error);
       setRoom(""); load();
     } catch (e: any) { setMsg(e.message); }
     finally { setBusy(false); }
@@ -727,7 +729,7 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
         space_id: space === "cinema" ? 1 : 2, day: sDay,
         start: toMin(sStart), end: toMin(sEnd), name: sName.trim(),
       });
-      setMsg("Regola creata e applicata a questa settimana.");
+      setMsg("Regola creata. Vale dal lunedì prossimo.");
       setSName(""); load();
     } catch (e: any) { setMsg(e.message); }
     finally { setBusy(false); }
@@ -766,8 +768,9 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
   return (
     <>
       <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
-        Le regole vengono applicate ogni notte alla settimana corrente. Una regola creata adesso
-        vale già da subito. Cancellare una regola <strong>non</strong> cancella le prenotazioni
+        Le regole vengono applicate una volta alla settimana, la notte fra domenica e lunedì,
+        alla settimana che inizia. Una regola creata adesso non tocca quella in corso: vale dal
+        lunedì successivo. Cancellare una regola <strong>non</strong> cancella le prenotazioni
         già create: quelle restano fino a fine settimana.
       </p>
 

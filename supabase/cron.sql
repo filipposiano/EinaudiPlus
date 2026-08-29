@@ -44,14 +44,18 @@ select cron.schedule(
   $job$
 );
 
--- Prenotazioni ricorrenti: scrive nella settimana corrente le prenotazioni
--- previste dalle regole del sistemista.
+-- Prenotazioni ricorrenti: scrive nella settimana che sta per iniziare le
+-- prenotazioni previste dalle regole del sistemista.
 --
--- Ogni giorno e non solo il lunedi': la funzione e' idempotente (ON CONFLICT
--- DO NOTHING), quindi rieseguirla non fa danni, e cosi' si auto-ripara se una
--- notte il job salta. Alle 02:00 UTC, che e' dopo la mezzanotte di Roma sia
--- con l'ora solare sia con quella legale.
-select cron.schedule('ricorrenti', '0 2 * * *', $job$ select apply_recurring(0); $job$);
+-- Solo il lunedi', non ogni giorno: e' voluto. Se un'occorrenza viene tolta a
+-- mano durante la settimana (per liberare quel turno), deve restare tolta
+-- fino alla settimana dopo — un job notturno che la ricreasse ogni notte
+-- vanificherebbe la cancellazione. Il rovescio della medaglia: se questa
+-- esecuzione salta (Vercel giu', per esempio), quella settimana la regola non
+-- si materializza affatto, non c'e' un auto-ripararsi il giorno dopo. Alle
+-- 02:00 UTC, che e' dopo la mezzanotte di Roma sia con l'ora solare sia con
+-- quella legale, cosi' "settimana corrente" a quell'ora e' gia' quella nuova.
+select cron.schedule('ricorrenti', '0 2 * * 1', $job$ select apply_recurring(0); $job$);
 
 -- Potatura: si tiene la settimana corrente piu' la precedente, il resto va via.
 -- Il CASCADE porta via anche reminder_log.

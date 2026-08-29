@@ -541,9 +541,20 @@ section("Sistemista");
     });
     check("due regole sullo stesso turno respinte", dup.body?.ok === false, JSON.stringify(dup.body));
 
-    // La regola dev'essere già diventata una prenotazione vera.
+    // Una regola creata adesso NON tocca la settimana in corso: vale dal
+    // lunedì successivo, quando gira il job. Niente occupazioni a sorpresa.
+    const beforeApply = await call(laundry, { method: "GET", query: { token: TOKEN, room: ROOM } });
+    check("la regola non è ancora una prenotazione",
+      beforeApply.body?.week?.["2"]?.[String(slotLibero)]?.["W-B"] !== ROOM,
+      JSON.stringify(beforeApply.body?.week?.["2"]?.[String(slotLibero)]));
+
+    // "Applica ora" è l'unico modo di materializzarla prima del lunedì —
+    // qui serve per poterla verificare senza aspettare una settimana.
+    const applied = await call(adminData, { body: { action: "applyRecurring", offset: 0 }, cookie: sysCookie });
+    check("applica ora riesce", applied.body?.ok === true, JSON.stringify(applied.body));
+
     const snap = await call(laundry, { method: "GET", query: { token: TOKEN, room: ROOM } });
-    check("la regola è già una prenotazione in griglia",
+    check("dopo applica ora la regola è una prenotazione in griglia",
       snap.body?.week?.["2"]?.[String(slotLibero)]?.["W-B"] === ROOM,
       JSON.stringify(snap.body?.week?.["2"]?.[String(slotLibero)]));
 
@@ -577,8 +588,14 @@ section("Sistemista");
     });
     check("regola ricorrente per la sala", sp.body?.ok === true, JSON.stringify(sp.body));
 
+    const spacesBefore = await call(adminData, { body: { action: "spaces" }, cookie: sysCookie });
+    check("la regola sala non è ancora prenotata",
+      !(spacesBefore.body?.items || []).some((x) => x.name === "Prova ricorrente"));
+
+    await call(adminData, { body: { action: "applyRecurring", offset: 0 }, cookie: sysCookie });
+
     const spaces = await call(adminData, { body: { action: "spaces" }, cookie: sysCookie });
-    check("la regola sala è già prenotata",
+    check("dopo applica ora la regola sala è prenotata",
       (spaces.body?.items || []).some((x) => x.name === "Prova ricorrente"));
 
     const spList = await call(adminData, { body: { action: "recurringList" }, cookie: sysCookie });

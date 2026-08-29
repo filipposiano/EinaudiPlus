@@ -363,6 +363,10 @@ export default async function handler(req, res) {
         break;
 
       case "recurringAddLaundry":
+        // Non si applica subito: resta inerte fino alla notte fra domenica e
+        // lunedì, quando il cron la materializza per la settimana che sta per
+        // iniziare. Vale anche per il resto della settimana in corso: niente
+        // occupazioni a sorpresa a metà settimana.
         result = await rpc("recurring_add_laundry", {
           p_laundry_id: Number(body.laundry_id),
           p_day: Number(body.day),
@@ -371,9 +375,6 @@ export default async function handler(req, res) {
           p_room: String(body.room || ""),
           p_note: body.note ? String(body.note) : null,
         });
-        // Una regola creata a metà settimana si applica subito, altrimenti
-        // resterebbe inerte fino al lunedì successivo.
-        if (result?.ok) await rpc("apply_recurring", { p_offset: 0 });
         break;
 
       case "recurringAddSpace":
@@ -386,7 +387,6 @@ export default async function handler(req, res) {
           p_type: body.type ? String(body.type) : null,
           p_note: body.note ? String(body.note) : null,
         });
-        if (result?.ok) await rpc("apply_recurring", { p_offset: 0 });
         break;
 
       case "recurringSetActive":

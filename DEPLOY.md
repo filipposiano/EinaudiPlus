@@ -303,19 +303,24 @@ Agosto 2026, saltando la finestra di osservazione su decisione esplicita:
 Dal pannello, scheda **Ricorrenti** (solo sistemista): «ogni lunedì alle 09:30
 la lavatrice B è della camera 101», lo stesso per cinema e musica.
 
-Una regola non è una prenotazione: è la ricetta con cui, **ogni notte alle 02:00
-UTC**, le prenotazioni della settimana corrente vengono create. Sono
-materializzate e non calcolate al volo, così compaiono nella griglia come tutte
-le altre, i promemoria partono senza casi speciali, e in una settimana
-particolare si può cancellare la singola occorrenza senza toccare la regola.
+Una regola non è una prenotazione: è la ricetta con cui, **una volta alla
+settimana, la notte fra domenica e lunedì (02:00 UTC)**, le prenotazioni della
+settimana che sta per iniziare vengono create. Sono materializzate e non
+calcolate al volo, così compaiono nella griglia come tutte le altre, i
+promemoria partono senza casi speciali, e in una settimana particolare si può
+cancellare la singola occorrenza senza toccare la regola.
 
-Tre comportamenti da conoscere:
+Quattro comportamenti da conoscere:
 
-- **Una regola creata adesso vale già da adesso**, non dal lunedì successivo.
+- **Una regola creata adesso vale dal lunedì successivo**, non da subito: non
+  tocca la settimana in corso.
 - **Se il turno è già prenotato da qualcuno, la regola cede.** Non gli si toglie
   il turno alle spalle. Il conteggio "saltate" dice quando succede.
 - **Cancellare una regola non cancella le prenotazioni già create.** Restano
   fino a fine settimana e si tolgono dalla scheda Prenotazioni.
-
-Il job gira ogni giorno e non solo il lunedì: la funzione è idempotente, quindi
-rieseguirla non fa danni, e così si auto-ripara se una notte salta.
+- **Cancellare a mano un'occorrenza creata da una regola la toglie per quella
+  settimana e basta.** Il job gira solo una volta a settimana (non ogni notte),
+  quindi non la ricrea: se un amministratore libera un turno, resta libero.
+  Il rovescio: se l'esecuzione del lunedì salta, quella settimana le regole non
+  si materializzano da sole — c'è il pulsante "Applica ora" nel pannello per
+  rimediare a mano.
