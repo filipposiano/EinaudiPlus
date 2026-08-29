@@ -257,10 +257,12 @@ Agosto 2026, saltando la finestra di osservazione su decisione esplicita:
 - ✅ cartella `apps-script/` rimossa
 - ✅ `api/push.js` rimosso — `RELAY_SECRET` si può togliere da Vercel
 - ✅ interruttore `VITE_API_BASE=legacy` rimosso da `api.ts` e `roomsApi.ts`
-- ⬜ **Revoca il Personal Access Token Supabase** usato per le migrazioni
-  (`SUPABASE_ACCESS_TOKEN` in `.env.local`, si revoca da
-  https://supabase.com/dashboard/account/tokens). È l'unica voce rimasta, e
-  vale la pena farla: quel token può tutto sul progetto.
+- ✅ **Revoca il Personal Access Token Supabase** usato per le migrazioni
+  (`SUPABASE_ACCESS_TOKEN` in `.env.local`, revocato da
+  https://supabase.com/dashboard/account/tokens). Quel token poteva tutto sul
+  progetto — revocato, `node scripts/db.cjs apply|query` (vedi README.md) non
+  funziona più finché non se ne genera uno nuovo e non si aggiorna
+  `.env.local`.
 
 ---
 
