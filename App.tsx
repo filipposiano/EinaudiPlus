@@ -85,17 +85,28 @@ function WashingMachine({ size = 16, style, className }: { size?: number; style?
 
 // ─── Toast ────────────────────────────────────────────────────────────────────
 
-function Toast({ msg, onClose }: { msg: string; onClose: () => void }) {
+function Toast({ msg, onClose, undo }: { msg: string; onClose: () => void; undo?: { label: string; onUndo: () => void } }) {
   useEffect(() => { const t = setTimeout(onClose, 3000); return () => clearTimeout(t); }, [onClose]);
   return (
+    // In basso, non in cima: e' li' che si guarda dopo aver toccato uno slot
+    // in fondo alla griglia, e non copre l'intestazione su schermi bassi.
     // Largo al massimo quanto lo schermo meno i margini, e il testo va a capo:
     // con "whitespace-nowrap" un messaggio lungo (per esempio quello che spiega
     // che il turno e' della Direzione) usciva dai due lati del telefono.
-    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-toast-in pointer-events-none px-4 w-full max-w-[26rem]">
-      <div className="flex items-start gap-2.5 rounded-2xl px-4 py-3 shadow-2xl pointer-events-auto border"
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 animate-toast-in pointer-events-none px-4 w-full max-w-[26rem]">
+      <div className="flex items-center gap-2.5 rounded-2xl px-4 py-3 shadow-2xl pointer-events-auto border"
             style={{ background: "var(--card)", borderColor: "var(--border)" }}>
-        <CheckCircle2 size={14} className="shrink-0 mt-0.5" style={{ color: RED }}/>
-        <span className="text-sm font-medium leading-snug min-w-0" style={{ color: "var(--foreground)", overflowWrap:"anywhere" }}>{msg}</span>
+        <CheckCircle2 size={14} className="shrink-0" style={{ color: RED }}/>
+        <span className="text-sm font-medium leading-snug min-w-0 flex-1" style={{ color: "var(--foreground)", overflowWrap:"anywhere" }}>{msg}</span>
+        {undo && (
+          <button
+            onClick={() => { undo.onUndo(); onClose(); }}
+            className="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-lg"
+            style={{ color: RED }}
+          >
+            {undo.label}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -713,6 +724,7 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
   const t = T[lang];
   const [now, setNow]           = useState(new Date());
   const [toast, setToast]       = useState<string | null>(null);
+  const [toastUndo, setToastUndo] = useState<(() => void) | null>(null);
   const [favPicker, setFavPicker] = useState(false);
   const [quickTarget, setQuickTarget] = useState<{ day:number; slot:number } | null>(null);
 
@@ -770,6 +782,7 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
     if (!roomNumber) return;
     await onBook(day, s, mid, roomNumber);
     setToast(t.booked(mid[2]));
+    setToastUndo(() => () => { onClear(day, s, mid).catch((e) => setToast(errMsg(e, lang))); });
   }
 
   // I turni preferiti ancora liberi, dal piu' vicino nel tempo.
@@ -795,8 +808,8 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
     .sort((a, b) => a.day - b.day || a.slot - b.slot);
 
   async function cancelBooking(b: MyBooking) {
-    try { await onClear(b.day, b.slot, b.mid); setToast(t.slotDeleted); }
-    catch (e) { setToast(errMsg(e, lang)); }
+    try { await onClear(b.day, b.slot, b.mid); setToast(t.slotDeleted); setToastUndo(null); }
+    catch (e) { setToast(errMsg(e, lang)); setToastUndo(null); }
   }
 
   // Mostriamo lavatrici e asciugatrici in due gruppi separati (A/B/C ciascuno):
@@ -807,7 +820,7 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
 
   return (
     <div className="flex flex-col pb-6 md:pt-8 md:max-w-3xl md:mx-auto md:w-full">
-      {toast     && <Toast msg={toast} onClose={()=>setToast(null)}/>}
+      {toast     && <Toast msg={toast} onClose={()=>{setToast(null); setToastUndo(null);}} undo={toastUndo ? { label: t.cancel, onUndo: toastUndo } : undefined}/>}
       {/* Aggiungere non chiude piu' il pannello: da quando l'elenco sta li'
           dentro, quello e' il posto dove si sistemano i preferiti — se ne
           mette uno, lo si vede comparire nella lista, se ne mette un altro.
@@ -1185,6 +1198,7 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
   const [target, setTarget]       = useState<BookTarget | null>(null);
   const [modTarget, setModTarget] = useState<ModifyTarget | null>(null);
   const [toast, setToast]         = useState<string | null>(null);
+  const [toastUndo, setToastUndo] = useState<(() => void) | null>(null);
 
   const sub = "var(--gray-accessible-text)";
   const hdr = "var(--muted)";
@@ -1201,22 +1215,23 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
       if (week[selDay]?.[ti.slotIdx]?.[ti.machineId]) await onClear(selDay, ti.slotIdx, ti.machineId);
       await onBook(selDay, ti.slotIdx, ti.machineId, room);
       setToast(`${t.slotConfirmed} · ${TIME_SLOTS[ti.slotIdx].start}`);
-    } catch (e) { setToast(errMsg(e, lang)); }
+      setToastUndo(() => () => { onClear(selDay, ti.slotIdx, ti.machineId).catch((e) => setToast(errMsg(e, lang))); });
+    } catch (e) { setToast(errMsg(e, lang)); setToastUndo(null); }
   }
 
   async function deleteBooking() {
     if (!modTarget) return;
     const mt = modTarget;
     setModTarget(null);
-    try { await onClear(mt.dayIdx, mt.slotIdx, mt.machineId); setToast(t.slotDeleted); }
-    catch (e) { setToast(errMsg(e, lang)); }
+    try { await onClear(mt.dayIdx, mt.slotIdx, mt.machineId); setToast(t.slotDeleted); setToastUndo(null); }
+    catch (e) { setToast(errMsg(e, lang)); setToastUndo(null); }
   }
 
   // Piu' largo di prima (era 3xl, 768px) ma non a tutta pagina: qui le colonne
   // sono solo le lavatrici, e oltre un certo punto diventano bande vuote.
   return (
     <div className="flex flex-col h-full lg:max-w-5xl lg:mx-auto lg:w-full">
-      {toast     && <Toast msg={toast} onClose={()=>setToast(null)}/>}
+      {toast     && <Toast msg={toast} onClose={()=>{setToast(null); setToastUndo(null);}} undo={toastUndo ? { label: t.cancel, onUndo: toastUndo } : undefined}/>}
       {target    && <BookModal target={{...target,dayIdx:selDay}} bookings={week} status={status} isDark={false} lang={lang} myRoom={sessionRoom} isAdmin={isAdmin} onConfirm={confirmBooking} onClose={()=>setTarget(null)}/>}
       {modTarget && (
         <ModifyModal
@@ -1421,6 +1436,7 @@ const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber
   const [modTarget, setModTarget]     = useState<ModifyTarget | null>(null);
   const [slotDetail, setSlotDetail]   = useState<SlotDetailTarget | null>(null);
   const [toast, setToast]             = useState<string | null>(null);
+  const [toastUndo, setToastUndo]     = useState<(() => void) | null>(null);
   const [stampaAperta, setStampaAperta] = useState(false);
 
   const fg  = "var(--foreground)";
@@ -1461,21 +1477,22 @@ const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber
       if (week[d]?.[ti.slotIdx]?.[ti.machineId]) await onClear(d, ti.slotIdx, ti.machineId);
       await onBook(d, ti.slotIdx, ti.machineId, room);
       setToast(`${t.slotConfirmed} · ${TIME_SLOTS[ti.slotIdx].start}`);
-    } catch (e) { setToast(errMsg(e, lang)); }
+      setToastUndo(() => () => { onClear(d, ti.slotIdx, ti.machineId).catch((e) => setToast(errMsg(e, lang))); });
+    } catch (e) { setToast(errMsg(e, lang)); setToastUndo(null); }
   }
 
   async function deleteBooking() {
     if (!modTarget) return;
     const mt = modTarget;
     setModTarget(null);
-    try { await onClear(mt.dayIdx, mt.slotIdx, mt.machineId); setToast(t.slotDeleted); }
-    catch (e) { setToast(errMsg(e, lang)); }
+    try { await onClear(mt.dayIdx, mt.slotIdx, mt.machineId); setToast(t.slotDeleted); setToastUndo(null); }
+    catch (e) { setToast(errMsg(e, lang)); setToastUndo(null); }
   }
 
   async function deleteFromDetail(dayIdx: number, slotIdx: number, mid: string) {
     setSlotDetail(null);
-    try { await onClear(dayIdx, slotIdx, mid); setToast(t.slotDeleted); }
-    catch (e) { setToast(errMsg(e, lang)); }
+    try { await onClear(dayIdx, slotIdx, mid); setToast(t.slotDeleted); setToastUndo(null); }
+    catch (e) { setToast(errMsg(e, lang)); setToastUndo(null); }
   }
 
   // Nessun tetto di larghezza: la griglia ha sette colonne e piu' spazio ha,
@@ -1483,7 +1500,7 @@ const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber
   // vuoto ai lati — che era esattamente il problema.
   return (
     <div className="flex flex-col h-full w-full">
-      {toast      && <Toast msg={toast} onClose={()=>setToast(null)}/>}
+      {toast      && <Toast msg={toast} onClose={()=>{setToast(null); setToastUndo(null);}} undo={toastUndo ? { label: t.cancel, onUndo: toastUndo } : undefined}/>}
       {target     && <BookModal target={target} bookings={week} status={status} isDark={false} lang={lang} myRoom={sessionRoom} isAdmin={isAdmin} onConfirm={confirmBooking} onClose={()=>setTarget(null)}/>}
       {modTarget  && (
         <ModifyModal
@@ -2595,7 +2612,7 @@ export default function App() {
 
   const globalStyle = (
     <style>{`
-      @keyframes toast-in{from{opacity:0;transform:translateX(-50%) translateY(-10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+      @keyframes toast-in{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
       .animate-toast-in{animation:toast-in .22s ease}
       @keyframes spin{to{transform:rotate(360deg)}}
       .animate-spin-slow{animation:spin 1s linear infinite}

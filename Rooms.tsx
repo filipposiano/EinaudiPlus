@@ -536,6 +536,7 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   const [name, setName]         = useState("");
   const [ctype, setCtype]       = useState<CinemaType>("private");
   const [toast, setToast]       = useState<string | null>(null);
+  const [toastUndo, setToastUndo] = useState<(() => void) | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [busy, setBusy]         = useState(false);
   // Per la Direzione si parte vuoto, cosi' il segnaposto suggerisce cosa
@@ -574,7 +575,7 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
     setStart(room === "music" ? 16 * 60 : 18 * 60);
     setEnd(room === "music" ? 18 * 60 : 20 * 60);
   }, [room]);
-  useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 2500); return () => clearTimeout(id); }, [toast]);
+  useEffect(() => { if (!toast) return; const id = setTimeout(() => { setToast(null); setToastUndo(null); }, 2500); return () => clearTimeout(id); }, [toast]);
 
   const dayBookings = bookings.filter((b) => b.day === selDay).sort((a, b) => a.start - b.start);
 
@@ -629,24 +630,31 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
       (codaControllabile && roomsApi.hasOverlap(bookings, selDay + 1, 0, sforo));
     if (collide) { setToast(t.overlap); return; }
     setBusy(true);
+    const prevIds = new Set(bookings.map((b) => b.id));
     try {
       const payload: Omit<RoomBooking, "id"> = room === "cinema"
         ? { day: selDay, start, end, name: who, type: ctype }
         : { day: selDay, start, end, name: who };
-      setBookings(await roomsApi.bookRoom(room, payload));
+      const updated = await roomsApi.bookRoom(room, payload);
+      setBookings(updated);
       if (direzione) setBookingRoom("");
       else if (myRoom) setBookingRoom(myRoom);
       else setName("");
       setToast(t.booked);
+      // Una fascia che scavalca la mezzanotte crea due righe con lo stesso
+      // group_id: basta l'id di una, remove() segue gia' il gruppo.
+      const newId = updated.find((b) => !prevIds.has(b.id))?.id;
+      setToastUndo(newId ? () => () => remove(newId) : null);
     } catch (e: any) {
       const msg = String(e?.message);
       setToast(msg === "overlap" ? t.overlap : msg === "full" ? t.full : t.errorGeneric);
+      setToastUndo(null);
     } finally { setBusy(false); }
   }
 
   async function remove(id: string) {
-    try { setBookings(await roomsApi.clearRoomBooking(room, id)); setToast(t.deleted); }
-    catch { setToast(t.errorGeneric); }
+    try { setBookings(await roomsApi.clearRoomBooking(room, id)); setToast(t.deleted); setToastUndo(null); }
+    catch { setToast(t.errorGeneric); setToastUndo(null); }
   }
 
   const Icon = room === "cinema" ? Film : Music;
@@ -667,8 +675,19 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
     <div className="flex flex-col h-full md:max-w-4xl md:mx-auto md:w-full">
       {rulesOpen && <RulesModal room={room} lang={lang} onClose={() => setRulesOpen(false)} />}
       {toast && (
-        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-toast-in">
-          <div className="rounded-2xl px-4 py-3 shadow-2xl border text-sm font-medium" style={{ background: surf, borderColor: div, color: fg }}>{toast}</div>
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 animate-toast-in">
+          <div className="flex items-center gap-2.5 rounded-2xl px-4 py-3 shadow-2xl border text-sm font-medium" style={{ background: surf, borderColor: div, color: fg }}>
+            <span>{toast}</span>
+            {toastUndo && (
+              <button
+                onClick={() => { toastUndo(); setToast(null); }}
+                className="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-lg"
+                style={{ color: RED }}
+              >
+                {t.cancel}
+              </button>
+            )}
+          </div>
         </div>
       )}
 
