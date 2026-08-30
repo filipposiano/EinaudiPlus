@@ -15,6 +15,7 @@ import {
 import * as roomsApi from "./roomsApi";
 import type { RoomKind, RoomBooking, CinemaType } from "./roomsApi";
 import RuotaPicker from "./RuotaPicker";
+import { Toast } from "./pannelli";
 
 // Le stesse sei lingue dell'app: il tipo arriva da i18n, cosi' non si puo'
 // aggiungere una lingua di la' e dimenticarla di qua.
@@ -107,6 +108,22 @@ const fmtEnd = (m: number, lang: Lang = "it") =>
   : m === 24 * 60 ? "24:00"
   : fmtMin(m);
 
+/**
+ * Ricostruisce il blocco originale di una prenotazione appena cancellata, per
+ * "Annulla". Per una fascia normale e' la riga stessa; per una che scavalcava
+ * la mezzanotte sono due righe con lo stesso `group` — si ricompongono in un
+ * solo intervallo (l'`end` della seconda meta' spostato oltre le 24:00), la
+ * stessa forma che `submit()` manda quando la crea la prima volta.
+ */
+function payloadForUndo(b: RoomBooking, all: RoomBooking[]): Omit<RoomBooking, "id"> {
+  if (!b.group) return { day: b.day, start: b.start, end: b.end, name: b.name, type: b.type };
+  const pair = all.filter((x) => x.group === b.group);
+  const first = pair.find((x) => x.start > 0) ?? b;
+  const second = pair.find((x) => x.id !== first.id);
+  const end = second ? 24 * 60 + second.end : first.end;
+  return { day: first.day, start: first.start, end, name: first.name, type: first.type };
+}
+
 // ─── i18n ─────────────────────────────────────────────────────────────────────
 const T = {
   it: {
@@ -133,6 +150,7 @@ const T = {
     aNomeDi: "A nome di",
     aNomeDiPlaceholder: "Es. Formazione PFP",
     formatoCamera: "Formato camera non valido!",
+    confirmDeleteOther: (n: string) => `Prenotazione di ${n}: confermi l'eliminazione?`,
   },
   en: {
     cinema: "Cinema Room", music: "Music Room",
@@ -158,6 +176,7 @@ const T = {
     aNomeDi: "On behalf of",
     aNomeDiPlaceholder: "e.g. PFP Training",
     formatoCamera: "Invalid room format!",
+    confirmDeleteOther: (n: string) => `Booking by ${n}: confirm deletion?`,
   },
   fr: {
     cinema: "Salle Cinéma", music: "Salle Musique",
@@ -183,6 +202,7 @@ const T = {
     aNomeDi: "Au nom de",
     aNomeDiPlaceholder: "Ex. Formation PFP",
     formatoCamera: "Format de chambre invalide !",
+    confirmDeleteOther: (n: string) => `Réservation de ${n} : confirmer la suppression ?`,
   },
   de: {
     cinema: "Kinoraum", music: "Musikraum",
@@ -208,6 +228,7 @@ const T = {
     aNomeDi: "Im Namen von",
     aNomeDiPlaceholder: "z. B. PFP-Schulung",
     formatoCamera: "Ungültiges Zimmerformat!",
+    confirmDeleteOther: (n: string) => `Buchung von ${n}: Löschen bestätigen?`,
   },
   es: {
     cinema: "Sala de Cine", music: "Sala de Música",
@@ -233,6 +254,7 @@ const T = {
     aNomeDi: "En nombre de",
     aNomeDiPlaceholder: "P. ej. Formación PFP",
     formatoCamera: "¡Formato de habitación no válido!",
+    confirmDeleteOther: (n: string) => `Reserva de ${n}: ¿confirmas la eliminación?`,
   },
   nap: {
     cinema: "Sala Cinema", music: "Sala Musica",
@@ -258,6 +280,7 @@ const T = {
     aNomeDi: "A nomme 'e",
     aNomeDiPlaceholder: "Es. Formazione PFP",
     formatoCamera: "'O formato d''a cammera nun va buono!",
+    confirmDeleteOther: (n: string) => `Prenotazione 'e ${n}: sicuro ca vuo' cancellà?`,
   },
 } as const;
 
@@ -545,6 +568,9 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   const [toastUndo, setToastUndo] = useState<(() => void) | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [busy, setBusy]         = useState(false);
+  // Prenotazione per cui e' stata chiesta conferma prima di cancellarla,
+  // perche' non e' la propria (vedi needsConfirm piu' sotto).
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   // Per la Direzione si parte vuoto, cosi' il segnaposto suggerisce cosa
   // scrivere; lasciandolo vuoto la prenotazione risulta comunque "DIREZIONE".
   const [bookingRoom, setBookingRoom] = useState(direzione ? "" : (myRoom || ""));
@@ -581,7 +607,9 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
     setStart(room === "music" ? 16 * 60 : 18 * 60);
     setEnd(room === "music" ? 18 * 60 : 20 * 60);
   }, [room]);
-  useEffect(() => { if (!toast) return; const id = setTimeout(() => { setToast(null); setToastUndo(null); }, 2500); return () => clearTimeout(id); }, [toast]);
+  // Cambiando giorno una conferma rimasta a mezz'aria non ha piu' senso: la
+  // riga a cui si riferiva non e' nemmeno piu' in vista.
+  useEffect(() => { setConfirmDelete(null); }, [selDay, room]);
 
   const dayBookings = bookings.filter((b) => b.day === selDay).sort((a, b) => a.start - b.start);
 
@@ -658,10 +686,27 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
     } finally { setBusy(false); }
   }
 
+  // Cancellare, come prenotare, si puo' disfare: si tiene da parte il blocco
+  // (i due mezzi, se scavalcava la mezzanotte) prima di toglierlo, cosi'
+  // "Annulla" puo' ricrearlo esattamente com'era.
   async function remove(id: string) {
-    try { setBookings(await roomsApi.clearRoomBooking(room, id)); setToast(gt.slotDeleted); setToastUndo(null); }
-    catch { setToast(t.errorGeneric); setToastUndo(null); }
+    const target = bookings.find((b) => b.id === id);
+    try {
+      setBookings(await roomsApi.clearRoomBooking(room, id));
+      setToast(gt.slotDeleted);
+      setToastUndo(target ? () => () => {
+        roomsApi.bookRoom(room, payloadForUndo(target, bookings)).then(setBookings)
+          .catch(() => setToast(t.errorGeneric));
+      } : null);
+    } catch { setToast(t.errorGeneric); setToastUndo(null); }
   }
+
+  // Vero solo quando chi cancella ha una camera propria (non la Direzione, che
+  // non ne ha una da confrontare) e la prenotazione e' di qualcun altro: e'
+  // il caso in cui vale la pena fermarsi un istante in piu' prima di togliere
+  // qualcosa che non si e' prenotato da soli.
+  const needsConfirm = (b: RoomBooking) =>
+    !!myRoom && !direzione && b.name.trim().toUpperCase() !== myRoom.trim().toUpperCase();
 
   const Icon = room === "cinema" ? Film : Music;
 
@@ -680,38 +725,17 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   return (
     <div className="flex flex-col h-full md:max-w-4xl md:mx-auto md:w-full">
       {rulesOpen && <RulesModal room={room} lang={lang} onClose={() => setRulesOpen(false)} />}
-      {toast && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 animate-toast-in">
-          <div className="flex items-center gap-2.5 rounded-2xl px-4 py-3 shadow-2xl border text-sm font-medium" style={{ background: surf, borderColor: div, color: fg }}>
-            <span>{toast}</span>
-            {toastUndo && (
-              <button
-                onClick={() => { toastUndo(); setToast(null); }}
-                className="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-lg"
-                style={{ color: RED }}
-              >
-                {t.cancel}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      {toast && <Toast msg={toast} onClose={() => { setToast(null); setToastUndo(null); }}
+        undo={toastUndo ? { label: t.cancel, onUndo: toastUndo } : undefined} />}
 
       <div className="flex-1 overflow-y-auto px-5 pt-3 pb-6">
         {/* Intestazione sala: nome e icona solo sul desktop, dove non c'e' una
             topbar che li mostra gia'. Su telefono il nome della sala sta nella
             topbar (vedi App.tsx), e ripeterlo qui era la stessa informazione
             due volte nello stesso schermo. */}
-        <div className="flex items-center justify-end md:justify-between mb-3">
-          <div className="hidden md:flex items-center gap-2.5">
-            <div className="p-2 rounded-xl" style={{ background: `color-mix(in srgb, var(--primary) 15%, transparent)`, color: RED }}><Icon size={18} /></div>
-            <h2 className="text-base font-bold" style={{ color: fg }}>{room === "cinema" ? t.cinema : t.music}</h2>
-          </div>
-          <button onClick={() => setRulesOpen(true)}
-            className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border transition-all active:scale-95"
-            style={{ background: chip, borderColor: div, color: fg }}>
-            <Info size={14} />{t.rules}
-          </button>
+        <div className="hidden md:flex items-center gap-2.5 mb-3">
+          <div className="p-2 rounded-xl" style={{ background: `color-mix(in srgb, var(--primary) 15%, transparent)`, color: RED }}><Icon size={18} /></div>
+          <h2 className="text-base font-bold" style={{ color: fg }}>{room === "cinema" ? t.cinema : t.music}</h2>
         </div>
 
         {/* Selettore giorni */}
@@ -732,7 +756,14 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
 
         {/* Form nuova prenotazione */}
         <div className="rounded-2xl border p-4 mb-4" style={{ background: surf, borderColor: div }}>
-          <p className="text-[11px] font-mono tracking-widest uppercase mb-3" style={{ color: sub }}>{t.newBooking}</p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[11px] font-mono tracking-widest uppercase" style={{ color: sub }}>{t.newBooking}</p>
+            <button onClick={() => setRulesOpen(true)}
+              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border transition-all active:scale-95"
+              style={{ background: chip, borderColor: div, color: fg }}>
+              <Info size={14} />{t.rules}
+            </button>
+          </div>
 
           {/* Le stesse ruote del turno preferito, al posto di due tendine.
               Una tendina nativa, su parecchi telefoni, si apre come pannello di
@@ -862,26 +893,52 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
           {dayBookings.length === 0 ? (
             <div className="px-4 py-4 text-center"><p className="text-xs" style={{ color: sub }}>{t.none}</p></div>
           ) : (
-            dayBookings.map((b, i) => (
-              <div key={b.id} className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: i < dayBookings.length - 1 ? `1px solid ${div}` : "none" }}>
-                <div className="w-px h-8 rounded-full shrink-0" style={{ background: b.type === "open" ? RED : (room === "cinema" ? OOS : RED) }} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-mono font-bold" style={{ color: fg }}>{fmtMin(b.start)} – {fmtEnd(b.end, lang)}</p>
-                  <p className="text-[11px] truncate" style={{ color: sub }}>
-                    {b.name}{b.type ? ` · ${b.type === "open" ? t.open : t.priv}` : ""}
-                    {/* Metà di una serata che scavalca la mezzanotte: senza
-                        dirlo sembrerebbero due prenotazioni scollegate, e il
-                        cestino su una cancella comunque tutte e due. */}
-                    {b.group ? ` · ${t.overnightPart}` : ""}
-                  </p>
+            dayBookings.map((b, i) => {
+              const pending = confirmDelete === b.id;
+              return (
+                <div key={b.id} className="flex items-center gap-3 px-4 py-3" style={{ borderBottom: i < dayBookings.length - 1 ? `1px solid ${div}` : "none" }}>
+                  <div className="w-px h-8 rounded-full shrink-0" style={{ background: b.type === "open" ? RED : (room === "cinema" ? OOS : RED) }} />
+                  {pending ? (
+                    // Non e' la propria prenotazione: prima di cancellarla
+                    // per davvero si chiede un secondo tocco, cosi' chi lo da'
+                    // sa che sta togliendo qualcosa che ha prenotato un altro.
+                    <div className="flex-1 min-w-0 flex items-center gap-1.5">
+                      <AlertTriangle size={13} className="shrink-0" style={{ color: OOS }} />
+                      <p className="text-[11px] leading-snug" style={{ color: fg }}>{t.confirmDeleteOther(b.name)}</p>
+                    </div>
+                  ) : (
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-mono font-bold" style={{ color: fg }}>{fmtMin(b.start)} – {fmtEnd(b.end, lang)}</p>
+                      <p className="text-[11px] truncate" style={{ color: sub }}>
+                        {b.name}{b.type ? ` · ${b.type === "open" ? t.open : t.priv}` : ""}
+                        {/* Metà di una serata che scavalca la mezzanotte: senza
+                            dirlo sembrerebbero due prenotazioni scollegate, e il
+                            cestino su una cancella comunque tutte e due. */}
+                        {b.group ? ` · ${t.overnightPart}` : ""}
+                      </p>
+                    </div>
+                  )}
+                  {pending ? (
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button onClick={() => setConfirmDelete(null)} aria-label={t.close}
+                        className="p-2 rounded-lg transition-all active:scale-90" style={{ background: chip, color: sub }}>
+                        <X size={14} />
+                      </button>
+                      <button onClick={() => { setConfirmDelete(null); remove(b.id); }} aria-label={t.cancel}
+                        className="p-2 rounded-lg transition-all active:scale-90" style={{ background: OOS, color: "#fff" }}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <button onClick={() => needsConfirm(b) ? setConfirmDelete(b.id) : remove(b.id)} aria-label={t.cancel}
+                      className="p-2 rounded-lg shrink-0 transition-all active:scale-90"
+                      style={{ background: `color-mix(in srgb, var(--destructive) 10%, transparent)`, color: OOS }}>
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                 </div>
-                <button onClick={() => remove(b.id)} aria-label={t.cancel}
-                  className="p-2 rounded-lg shrink-0 transition-all active:scale-90"
-                  style={{ background: `color-mix(in srgb, var(--destructive) 10%, transparent)`, color: OOS }}>
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
