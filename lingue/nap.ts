@@ -185,7 +185,6 @@ const nap: Partial<Testi> = {
   reportAction: "Signala",
   alreadyOos: "Già signalata",
 
-  booked: (lbl: string): string => `Lavatrice ${lbl} prenotata!`,
   backModify: "← Cagna",
   genericError: "Errore, prova n'ata vota.",
 

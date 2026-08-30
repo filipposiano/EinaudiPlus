@@ -97,7 +97,6 @@ const de: Testi = {
   dryerLabel:     "Trockner",
   notaDesc:       "Was ist kaputt? Optional, hilft aber zu wissen, wen man rufen muss.",
   notaPlaceholder: "z. B. schleudert nicht, verliert Wasser…",
-  booked:         (lbl: string) => `Waschmaschine ${lbl} gebucht!`,
   prevHad:        (r: string) => `Zimmer ${r} hatte dieses Zeitfenster vor dir — ist die Wäsche schon abgeholt?`,
   legendFree:     "Grün — Frei", legendFreeDesc: "Du kannst sie sofort buchen.",
   legendInUse:    (t: string) => `Gelb — Belegt — Läuft gerade, Ende um ${t}.`,

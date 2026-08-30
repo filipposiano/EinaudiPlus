@@ -781,7 +781,7 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
   async function quickBook(day: number, s: number, mid: string) {
     if (!roomNumber) return;
     await onBook(day, s, mid, roomNumber);
-    setToast(t.booked(mid[2]));
+    setToast(t.slotConfirmed);
     setToastUndo(() => () => { onClear(day, s, mid).catch((e) => setToast(errMsg(e, lang))); });
   }
 
@@ -1214,7 +1214,7 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
     try {
       if (week[selDay]?.[ti.slotIdx]?.[ti.machineId]) await onClear(selDay, ti.slotIdx, ti.machineId);
       await onBook(selDay, ti.slotIdx, ti.machineId, room);
-      setToast(`${t.slotConfirmed} · ${TIME_SLOTS[ti.slotIdx].start}`);
+      setToast(t.slotConfirmed);
       setToastUndo(() => () => { onClear(selDay, ti.slotIdx, ti.machineId).catch((e) => setToast(errMsg(e, lang))); });
     } catch (e) { setToast(errMsg(e, lang)); setToastUndo(null); }
   }
@@ -1476,7 +1476,7 @@ const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber
     try {
       if (week[d]?.[ti.slotIdx]?.[ti.machineId]) await onClear(d, ti.slotIdx, ti.machineId);
       await onBook(d, ti.slotIdx, ti.machineId, room);
-      setToast(`${t.slotConfirmed} · ${TIME_SLOTS[ti.slotIdx].start}`);
+      setToast(t.slotConfirmed);
       setToastUndo(() => () => { onClear(d, ti.slotIdx, ti.machineId).catch((e) => setToast(errMsg(e, lang))); });
     } catch (e) { setToast(errMsg(e, lang)); setToastUndo(null); }
   }
@@ -2740,6 +2740,16 @@ export default function App() {
     );
   }
 
+  // Icona della struttura/pagina corrente, per l'intestazione mobile.
+  // Stessa fonte di FACILITIES/ADMIN_SECTIONS/PAGINE_UTILITA usata poco sotto
+  // per il nome: cosi' icona e testo non possono mai disallinearsi.
+  const TopbarIcon = isAdminFacility(facility)
+    ? ADMIN_SECTIONS.find((x) => x.id === facility)!.icon
+    : facility === "guasto" ? Wrench
+    : facility === "impostazioni" ? Settings
+    : facility === "feedback" ? MessageSquare
+    : FACILITIES.find((x) => x.id === facility)!.icon;
+
   return (
     <div className="min-h-dvh w-full flex items-center justify-center md:py-8"
       style={{ fontFamily:"'DM Sans', sans-serif", background:"var(--muted)" }}>
@@ -2766,13 +2776,16 @@ export default function App() {
               </button>
             )}
             {showChrome && (
-              <span className="text-sm font-bold truncate" style={{ color:"var(--foreground)" }}>
-                {isAdminFacility(facility)
-                  ? T[lang][ADMIN_SECTIONS.find((x) => x.id === facility)!.chiave]
-                  : PAGINE_UTILITA.some((x) => x.id === facility)
-                    ? T[lang][PAGINE_UTILITA.find((x) => x.id === facility)!.chiave]
-                    : T[lang][FACILITIES.find((x) => x.id === facility)!.chiave]}
-              </span>
+              <>
+                <TopbarIcon size={16} className="shrink-0" style={{ color:"var(--foreground)" }}/>
+                <span className="text-sm font-bold truncate" style={{ color:"var(--foreground)" }}>
+                  {isAdminFacility(facility)
+                    ? T[lang][ADMIN_SECTIONS.find((x) => x.id === facility)!.chiave]
+                    : PAGINE_UTILITA.some((x) => x.id === facility)
+                      ? T[lang][PAGINE_UTILITA.find((x) => x.id === facility)!.chiave]
+                      : T[lang][FACILITIES.find((x) => x.id === facility)!.chiave]}
+                </span>
+              </>
             )}
           </div>
           <div className="w-24 h-6 rounded-full hidden md:flex items-center justify-center" style={{ background:"var(--secondary)" }}>

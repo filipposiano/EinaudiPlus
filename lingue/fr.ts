@@ -97,7 +97,6 @@ const fr: Testi = {
   dryerLabel:     "Sèche-linge",
   notaDesc:       "Qu'est-ce qui ne va pas ? Facultatif, mais ça aide à savoir qui appeler.",
   notaPlaceholder: "Ex. n'essore pas, fuite d'eau…",
-  booked:         (lbl: string) => `Lave-linge ${lbl} réservé !`,
   prevHad:        (r: string) => `La chambre ${r} avait ce créneau avant toi — a-t-elle récupéré son linge ?`,
   legendFree:     "Vert — Libre", legendFreeDesc: "Tu peux la réserver tout de suite.",
   legendInUse:    (t: string) => `Jaune — Occupé — Créneau en cours, fin à ${t}.`,

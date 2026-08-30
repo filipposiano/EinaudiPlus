@@ -97,7 +97,6 @@ const es: Testi = {
   dryerLabel:     "Secadora",
   notaDesc:       "¿Qué le pasa? Es opcional, pero ayuda a saber a quién llamar.",
   notaPlaceholder: "Ej. no centrifuga, pierde agua…",
-  booked:         (lbl: string) => `¡Lavadora ${lbl} reservada!`,
   prevHad:        (r: string) => `La habitación ${r} tenía este turno antes que tú — ¿ya ha recogido la ropa?`,
   legendFree:     "Verde — Libre", legendFreeDesc: "Puedes reservarla ahora mismo.",
   legendInUse:    (t: string) => `Amarillo — En uso — Turno en curso, termina a las ${t}.`,

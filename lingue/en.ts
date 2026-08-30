@@ -97,7 +97,6 @@ const en: Testi = {
   reminderSent:   (r: string) => `Reminder sent · Room ${r}`,
   oosSet:         (lbl: string) => `${lbl} marked out of order`,
   oosCleared:     (lbl: string) => `${lbl} restored`,
-  booked:         (lbl: string) => `Washer ${lbl} booked!`,
   prevHad:        (r: string) => `Room ${r} had this slot before you — have they collected their laundry?`,
   legendFree:     "Green — Free", legendFreeDesc: "Book it now.",
   legendInUse:    (t: string) => `Yellow — In use — Slot ends at ${t}.`,

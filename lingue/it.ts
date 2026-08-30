@@ -114,7 +114,6 @@ const it = {
   dryerLabel:     "Asciugatrice",
   notaDesc:       "Cosa non va? Facoltativo, ma aiuta a capire chi chiamare.",
   notaPlaceholder: "Es. non centrifuga, perde acqua…",
-  booked:         (lbl: string): string => `Lavatrice ${lbl} prenotata!`,
   prevHad:        (r: string): string => `La stanza ${r} aveva questo turno prima di te — ha già ritirato il bucato?`,
   legendFree:     "Verde — Libera", legendFreeDesc: "Puoi prenotarla subito.",
   legendInUse:    (t: string): string => `Giallo — In uso — Turno in corso, fine alle ${t}.`,

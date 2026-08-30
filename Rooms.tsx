@@ -18,7 +18,12 @@ import RuotaPicker from "./RuotaPicker";
 
 // Le stesse sei lingue dell'app: il tipo arriva da i18n, cosi' non si puo'
 // aggiungere una lingua di la' e dimenticarla di qua.
-import type { Lang } from "./i18n";
+//
+// `T as T_APP`: il messaggio di conferma/cancellazione prenotazione non e'
+// piu' un testo suo, tradotto qui una seconda volta — arriva dallo stesso
+// dizionario che usa la lavanderia, cosi' il testo e' letteralmente lo
+// stesso in ogni sala, non solo tradotto allo stesso modo per coincidenza.
+import { T as T_APP, type Lang } from "./i18n";
 
 const RED = "var(--primary)", RED_FG = "var(--primary-foreground)";
 const OOS = "var(--destructive)";
@@ -116,9 +121,9 @@ const T = {
     book: "Prenota blocco", cancel: "Annulla",
     bookings: "Prenotazioni del giorno", none: "Nessuna prenotazione",
     needName: "Inserisci un nome", badRange: "L'orario di fine deve essere dopo l'inizio",
-    overlap: "Si sovrappone a una prenotazione esistente", booked: "Prenotato ✓",
+    overlap: "Si sovrappone a una prenotazione esistente",
     full: "Giorno pieno: massimo 6 prenotazioni.",
-    deleted: "Prenotazione eliminata", errorGeneric: "Errore, riprova.",
+    errorGeneric: "Errore, riprova.",
     loading: "Carico…", retry: "Riprova", netError: "Impossibile contattare il server.",
     rulesTitle: "Regolamento", tipsTitle: "Problemi di connessione",
     musicNote: "Strumenti non in cuffia: consentiti solo 16:00–20:00.",
@@ -141,9 +146,9 @@ const T = {
     book: "Book block", cancel: "Cancel",
     bookings: "Bookings for the day", none: "No bookings",
     needName: "Enter a name", badRange: "End time must be after start",
-    overlap: "Overlaps an existing booking", booked: "Booked ✓",
+    overlap: "Overlaps an existing booking",
     full: "Day is full: max 6 bookings.",
-    deleted: "Booking deleted", errorGeneric: "Error, try again.",
+    errorGeneric: "Error, try again.",
     loading: "Loading…", retry: "Retry", netError: "Couldn't reach the server.",
     rulesTitle: "Rules", tipsTitle: "Connection tips",
     musicNote: "Instruments without headphones: allowed only 16:00–20:00.",
@@ -166,9 +171,9 @@ const T = {
     book: "Réserver le créneau", cancel: "Annuler",
     bookings: "Réservations du jour", none: "Aucune réservation",
     needName: "Saisis un nom", badRange: "L'heure de fin doit être après le début",
-    overlap: "Chevauche une réservation existante", booked: "Réservé ✓",
+    overlap: "Chevauche une réservation existante",
     full: "Journée complète : 6 réservations maximum.",
-    deleted: "Réservation supprimée", errorGeneric: "Erreur, réessaie.",
+    errorGeneric: "Erreur, réessaie.",
     loading: "Chargement…", retry: "Réessayer", netError: "Impossible de joindre le serveur.",
     rulesTitle: "Règlement", tipsTitle: "Problèmes de connexion",
     musicNote: "Instruments sans casque : autorisés seulement de 16h00 à 20h00.",
@@ -191,9 +196,9 @@ const T = {
     book: "Zeitblock buchen", cancel: "Abbrechen",
     bookings: "Buchungen des Tages", none: "Keine Buchungen",
     needName: "Gib einen Namen ein", badRange: "Das Ende muss nach dem Beginn liegen",
-    overlap: "Überschneidet sich mit einer bestehenden Buchung", booked: "Gebucht ✓",
+    overlap: "Überschneidet sich mit einer bestehenden Buchung",
     full: "Tag ausgebucht: maximal 6 Buchungen.",
-    deleted: "Buchung gelöscht", errorGeneric: "Fehler, versuch es nochmal.",
+    errorGeneric: "Fehler, versuch es nochmal.",
     loading: "Wird geladen…", retry: "Nochmal versuchen", netError: "Server nicht erreichbar.",
     rulesTitle: "Hausordnung", tipsTitle: "Verbindungsprobleme",
     musicNote: "Instrumente ohne Kopfhörer: nur von 16:00 bis 20:00 erlaubt.",
@@ -216,9 +221,9 @@ const T = {
     book: "Reservar bloque", cancel: "Cancelar",
     bookings: "Reservas del día", none: "Ninguna reserva",
     needName: "Escribe un nombre", badRange: "La hora de fin debe ser posterior al inicio",
-    overlap: "Se solapa con una reserva existente", booked: "Reservado ✓",
+    overlap: "Se solapa con una reserva existente",
     full: "Día completo: máximo 6 reservas.",
-    deleted: "Reserva eliminada", errorGeneric: "Error, inténtalo otra vez.",
+    errorGeneric: "Error, inténtalo otra vez.",
     loading: "Cargando…", retry: "Reintentar", netError: "No se puede contactar con el servidor.",
     rulesTitle: "Reglamento", tipsTitle: "Problemas de conexión",
     musicNote: "Instrumentos sin auriculares: permitidos solo de 16:00 a 20:00.",
@@ -241,9 +246,9 @@ const T = {
     book: "Prenòta", cancel: "Lassa sta'",
     bookings: "Prenotazioni d''a jurnata", none: "Nisciuna prenotazione",
     needName: "Miette nu nomme", badRange: "L'ora 'e fine adda sta' doppo chella 'e accummenciamento",
-    overlap: "Se 'ntoppa cu n'ata prenotazione", booked: "Prenotato ✓",
+    overlap: "Se 'ntoppa cu n'ata prenotazione",
     full: "Juorno chino: massimo 6 prenotazioni.",
-    deleted: "Prenotazione levata", errorGeneric: "Errore, prova n'ata vota.",
+    errorGeneric: "Errore, prova n'ata vota.",
     loading: "Sto' carrecanno…", retry: "Prova n'ata vota", netError: "Nun riesco a parla' cu 'o server.",
     rulesTitle: "Regulamento", tipsTitle: "Guaje 'e connessione",
     musicNote: "Strumenti senza cuffie: se ponno sunà sulo 'a 16:00 ê 20:00.",
@@ -507,6 +512,7 @@ function Timeline({ room, bookings }: { room: RoomKind; bookings: RoomBooking[] 
 // ─── Vista sala ────────────────────────────────────────────────────────────────
 export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; lang: Lang; roomNumber?: string | null }) {
   const t = T[lang];
+  const gt = T_APP[lang];   // testi condivisi con la lavanderia: conferma/cancellazione
   const cfg = ROOM_CFG[room];
   const opts = timeOptions(cfg.winStart, cfg.winEnd, cfg.step);
 
@@ -640,7 +646,7 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
       if (direzione) setBookingRoom("");
       else if (myRoom) setBookingRoom(myRoom);
       else setName("");
-      setToast(t.booked);
+      setToast(gt.slotConfirmed);
       // Una fascia che scavalca la mezzanotte crea due righe con lo stesso
       // group_id: basta l'id di una, remove() segue gia' il gruppo.
       const newId = updated.find((b) => !prevIds.has(b.id))?.id;
@@ -653,7 +659,7 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   }
 
   async function remove(id: string) {
-    try { setBookings(await roomsApi.clearRoomBooking(room, id)); setToast(t.deleted); setToastUndo(null); }
+    try { setBookings(await roomsApi.clearRoomBooking(room, id)); setToast(gt.slotDeleted); setToastUndo(null); }
     catch { setToast(t.errorGeneric); setToastUndo(null); }
   }
 
@@ -692,9 +698,12 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
       )}
 
       <div className="flex-1 overflow-y-auto px-5 pt-3 pb-6">
-        {/* Intestazione sala */}
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2.5">
+        {/* Intestazione sala: nome e icona solo sul desktop, dove non c'e' una
+            topbar che li mostra gia'. Su telefono il nome della sala sta nella
+            topbar (vedi App.tsx), e ripeterlo qui era la stessa informazione
+            due volte nello stesso schermo. */}
+        <div className="flex items-center justify-end md:justify-between mb-3">
+          <div className="hidden md:flex items-center gap-2.5">
             <div className="p-2 rounded-xl" style={{ background: `color-mix(in srgb, var(--primary) 15%, transparent)`, color: RED }}><Icon size={18} /></div>
             <h2 className="text-base font-bold" style={{ color: fg }}>{room === "cinema" ? t.cinema : t.music}</h2>
           </div>
