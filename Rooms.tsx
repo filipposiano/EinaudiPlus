@@ -36,6 +36,23 @@ const pad = (n: number) => String(n).padStart(2, "0");
 const fmtMin = (m: number) => `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
 const TODAY = (new Date().getDay() + 6) % 7; // 0 = Lunedì
 
+// Il numero del giorno accanto alla sigla ("LUN 31"), come in lavanderia.
+//
+// Non si riusa il DAYS_DATE di modello.ts: lì il giorno cambia alle 07:00 (chi
+// prenota un turno all'una di notte sta ancora "nel" giorno prima), qui a
+// mezzanotte come sul calendario — sono due settimane calcolate diversamente,
+// che quasi sempre coincidono e non devono essere confuse per l'unica sera in
+// cui non coincidono.
+//
+// Serve soprattutto la domenica sera dopo mezzanotte: senza il numero, "LUN"
+// da solo non diceva se la settimana appena caricata fosse quella nuova o si
+// fosse fermata alla vecchia — il numero toglie il dubbio a colpo d'occhio.
+const OGGI = new Date();
+const LUNEDI = new Date(OGGI.getFullYear(), OGGI.getMonth(), OGGI.getDate() - TODAY);
+const DAYS_DATE = Array.from({ length: 7 }, (_, i) =>
+  new Date(LUNEDI.getFullYear(), LUNEDI.getMonth(), LUNEDI.getDate() + i).getDate()
+);
+
 // Finestra oraria e tipo per ciascuna sala
 // `overnight`: se la sala si può tenere oltre la mezzanotte. Vero per
 // entrambe: una prova che finisce all'una capita quanto una proiezione.
@@ -742,10 +759,12 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
         <div className="grid grid-cols-7 gap-1 mb-3">
           {t.days.map((d, i) => {
             const active = i === selDay;
+            const isPast = i < TODAY;
             return (
               <button key={d} onClick={() => setSelDay(i)} className="flex flex-col items-center py-1.5 rounded-xl transition-colors"
-                style={{ background: active ? RED : "transparent", color: active ? RED_FG : sub }}>
-                <span className="text-[9px] font-mono uppercase">{d}</span>
+                style={{ background: active ? RED : "transparent", color: active ? RED_FG : isPast ? "color-mix(in srgb, var(--muted-foreground) 40%, transparent)" : sub }}>
+                <span className="text-[9px] font-mono uppercase leading-none mb-0.5">{d}</span>
+                <span className="text-sm font-bold leading-none">{DAYS_DATE[i]}</span>
               </button>
             );
           })}
