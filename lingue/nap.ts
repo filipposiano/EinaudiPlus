@@ -202,7 +202,7 @@ const nap: Partial<Testi> = {
   // Bozza, stesso avviso di sopra: nun so' madrelingua, va riletta.
   privacy: "Privacy", privacySub: "Comme tratamme 'e dati toie",
   privacyDatiTitolo: "Che dati raccoglimmo",
-  privacyDatiBody: "'O nummero d''a cammera che miette pe' trasí; si attive 'e promemoria, l'identificativo d''o dispositivo tuoio (pe' 'e notifiche push) o d''a chat (pe' Telegram); 'o testo d''e segnalazioni che mmanne. Nun te chiedimmo nomme, cognomme o at dati personale — ma 'o nummero 'e cammera resta sempe nu dato ca 'o Collegio pò collegà a te tramite 'o registro d''e alloggi.",
+  privacyDatiBody: "'O nummero d''a cammera che miette pe' trasí; si attive 'e promemoria, l'identificativo d''o dispositivo tuoio (pe' 'e notifiche push) o d''a chat (pe' Telegram); 'o testo d''e segnalazioni che mmanne. Nun te chiedimmo nomme, cognomme o at dati personale — ma 'o nummero 'e cammera resta sempe nu dato ca pò purtà a te, pe' chi sape chi sta dint' a chella cammera.",
   privacyPercheTitolo: "Pecché 'e usammo",
   privacyPercheBody: "Pe' te fa' prenotà 'e turne 'e lavanderia e d''e sale, evità doppie prenotazioni e sovrapposizioni, e — sulo si 'o attive tu — te mannà nu promemoria poco primma ca accummencia 'o turno tuoio.",
   privacyConservazioneTitolo: "Pe' quanto tiempo 'e tenimmo",
@@ -210,7 +210,7 @@ const nap: Partial<Testi> = {
   privacyCondivisioneTitolo: "Cu' chi condividimmo 'e dati",
   privacyCondivisioneBody: "L'app va 'ncoppa Vercel e 'o database 'ncoppa Supabase, che 'e ospitano pe' cunto nuosto. Si attive 'e promemoria, 'o dispositivo o account tuoio riceve 'e messaggi tramite 'o servizio push d''o browser tuoio (Google, Apple o Mozilla, a seconda d''o dispositivo) o tramite Telegram. Nun venimmo e nun condividimmo 'e dati toie pe' at motive.",
   privacyDirittiTitolo: "'E diritte tuoie",
-  privacyDirittiBody: "Può disattivà 'e promemoria quanno vuò dint' 'e Impostazioni: accussì se cancella subbeto l'iscrizione push o Telegram collegata a 'o dispositivo tuoio. Pe' accedere, correggere o cancellà at dati che te riguardano (es. na segnalazione mandata), contatta l'amministrazione d''o Collegio.",
+  privacyDirittiBody: "Può disattivà 'e promemoria quanno vuò dint' 'e Impostazioni: accussì se cancella subbeto l'iscrizione push o Telegram collegata a 'o dispositivo tuoio. Pe' accedere, correggere o cancellà at dati che te riguardano (es. na segnalazione mandata), contatta a chi gestisce l'app.",
   promemoriaTurni: "Promemoria turne",
   bloccateBrowser: "Bluccate dint' e impostazioni d''o browser",
   disattiva: "Disattiva",
