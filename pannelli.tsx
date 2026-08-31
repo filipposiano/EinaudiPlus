@@ -223,14 +223,10 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
 //
 // Manca ancora il titolare del trattamento e un contatto per le richieste
 // privacy (rimossi su richiesta, da aggiungere prima di andare in
-// produzione). Il testo resta solo in italiano, come pushErr qui sopra:
-// tradurre un'informativa legale in sei lingue prima di sapere se cambierà
-// ancora avrebbe un costo che non vale la candela, e mostrarla solo in
-// italiano è meglio che non mostrarla affatto.
-//
-// Elenca solo cosa il codice fa DAVVERO oggi (vedi schema.sql e
+// produzione). Elenca solo cosa il codice fa DAVVERO oggi (vedi schema.sql e
 // reminders.sql): niente promesse che poi il database non mantiene.
 function PrivacySheet({ lang, onClose }: { lang: Lang; onClose: () => void }) {
+  const t = T[lang];
   const fg  = "var(--foreground)";
   const sub = "var(--gray-accessible-text)";
   const Sezione = ({ titolo, children }: { titolo: string; children: React.ReactNode }) => (
@@ -245,7 +241,7 @@ function PrivacySheet({ lang, onClose }: { lang: Lang; onClose: () => void }) {
         <div className="px-6 pt-5 pb-4">
           <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background:"color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
           <div className="flex items-center justify-between mb-1">
-            <p className="text-lg font-bold" style={{ color: fg }}>{T[lang].privacy}</p>
+            <p className="text-lg font-bold" style={{ color: fg }}>{t.privacy}</p>
             <button onClick={onClose} className="p-2 rounded-xl" style={{ color: sub, background:"var(--secondary)" }}>
               <X size={16}/>
             </button>
@@ -253,38 +249,11 @@ function PrivacySheet({ lang, onClose }: { lang: Lang; onClose: () => void }) {
         </div>
 
         <div className="px-6">
-          <Sezione titolo="Che dati raccogliamo">
-            Il numero di camera che inserisci per accedere; se attivi i promemoria, l'identificativo del
-            dispositivo (per le notifiche push) o della chat (per Telegram); il testo delle segnalazioni
-            che invii. Non ti chiediamo nome, cognome o altri dati anagrafici: il numero di camera resta
-            comunque un dato che il Collegio può ricondurre a te tramite il registro alloggi.
-          </Sezione>
-
-          <Sezione titolo="Perché li usiamo">
-            Per farti prenotare i turni di lavanderia e le sale, evitare doppie prenotazioni e sovrapposizioni,
-            e — solo se lo attivi tu — inviarti un promemoria poco prima del tuo turno.
-          </Sezione>
-
-          <Sezione titolo="Per quanto tempo li conserviamo">
-            Le prenotazioni restano visibili per la settimana corrente e la precedente, poi vengono
-            cancellate automaticamente. Le segnalazioni e i registri tecnici vengono cancellati dopo 180
-            giorni. L'iscrizione ai promemoria (push o Telegram) resta finché non la disattivi tu stesso
-            dalle Impostazioni, o scrivendo /stop al bot Telegram.
-          </Sezione>
-
-          <Sezione titolo="Con chi condividiamo i dati">
-            L'app gira su Vercel e il database su Supabase, che li ospitano per nostro conto. Se attivi i
-            promemoria, il tuo dispositivo o account riceve i messaggi tramite il servizio push del tuo
-            browser (Google, Apple o Mozilla, a seconda del dispositivo) o tramite Telegram. Non vendiamo
-            né condividiamo i tuoi dati per altri scopi.
-          </Sezione>
-
-          <Sezione titolo="I tuoi diritti">
-            Puoi disattivare i promemoria in qualsiasi momento dalle Impostazioni: cancella subito
-            l'iscrizione push o Telegram collegata al tuo dispositivo. Per accedere, correggere o cancellare
-            gli altri dati che ti riguardano (es. una segnalazione inviata), contatta l'amministrazione del
-            Collegio.
-          </Sezione>
+          <Sezione titolo={t.privacyDatiTitolo}>{t.privacyDatiBody}</Sezione>
+          <Sezione titolo={t.privacyPercheTitolo}>{t.privacyPercheBody}</Sezione>
+          <Sezione titolo={t.privacyConservazioneTitolo}>{t.privacyConservazioneBody}</Sezione>
+          <Sezione titolo={t.privacyCondivisioneTitolo}>{t.privacyCondivisioneBody}</Sezione>
+          <Sezione titolo={t.privacyDirittiTitolo}>{t.privacyDirittiBody}</Sezione>
         </div>
       </div>
     </div>
