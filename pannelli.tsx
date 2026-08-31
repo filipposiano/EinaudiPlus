@@ -221,11 +221,12 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
 
 // ─── Informativa privacy ────────────────────────────────────────────────────
 //
-// BOZZA: titolare e contatto sono segnaposto (cercali con "COMPLETARE" prima
-// di andare in produzione). Il testo resta solo in italiano, come pushErr
-// qui sopra: tradurre un'informativa legale in sei lingue prima di sapere se
-// cambierà ancora avrebbe un costo che non vale la candela, e mostrarla solo
-// in italiano è meglio che non mostrarla affatto.
+// Manca ancora il titolare del trattamento e un contatto per le richieste
+// privacy (rimossi su richiesta, da aggiungere prima di andare in
+// produzione). Il testo resta solo in italiano, come pushErr qui sopra:
+// tradurre un'informativa legale in sei lingue prima di sapere se cambierà
+// ancora avrebbe un costo che non vale la candela, e mostrarla solo in
+// italiano è meglio che non mostrarla affatto.
 //
 // Elenca solo cosa il codice fa DAVVERO oggi (vedi schema.sql e
 // reminders.sql): niente promesse che poi il database non mantiene.
@@ -238,10 +239,6 @@ function PrivacySheet({ lang, onClose }: { lang: Lang; onClose: () => void }) {
       <p className="text-xs leading-relaxed" style={{ color: sub }}>{children}</p>
     </div>
   );
-  const Segnaposto = ({ children }: { children: React.ReactNode }) => (
-    <span style={{ color: RED, fontWeight: 600 }}>{children}</span>
-  );
-
   return (
     <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
       <div className="w-full rounded-t-3xl pb-8 max-h-[92%] overflow-y-auto overscroll-contain" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
@@ -256,12 +253,6 @@ function PrivacySheet({ lang, onClose }: { lang: Lang; onClose: () => void }) {
         </div>
 
         <div className="px-6">
-          <Sezione titolo="Titolare del trattamento">
-            <Segnaposto>[COMPLETARE: ragione sociale del titolare, es. "Collegio Universitario Einaudi"]</Segnaposto>.
-            Per qualsiasi richiesta relativa ai tuoi dati scrivi a{" "}
-            <Segnaposto>[COMPLETARE: indirizzo email privacy]</Segnaposto>.
-          </Sezione>
-
           <Sezione titolo="Che dati raccogliamo">
             Il numero di camera che inserisci per accedere; se attivi i promemoria, l'identificativo del
             dispositivo (per le notifiche push) o della chat (per Telegram); il testo delle segnalazioni
@@ -291,8 +282,8 @@ function PrivacySheet({ lang, onClose }: { lang: Lang; onClose: () => void }) {
           <Sezione titolo="I tuoi diritti">
             Puoi disattivare i promemoria in qualsiasi momento dalle Impostazioni: cancella subito
             l'iscrizione push o Telegram collegata al tuo dispositivo. Per accedere, correggere o cancellare
-            gli altri dati che ti riguardano (es. una segnalazione inviata), scrivi all'indirizzo indicato
-            sopra.
+            gli altri dati che ti riguardano (es. una segnalazione inviata), contatta l'amministrazione del
+            Collegio.
           </Sezione>
         </div>
       </div>
