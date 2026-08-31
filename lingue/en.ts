@@ -133,6 +133,7 @@ const en: Testi = {
   nonAttive: "Off",
   installaApp: "Install the app",
   accessibilita: "Accessibility",
+  privacy: "Privacy", privacySub: "How we handle your data",
   promemoriaTurni: "Shift reminders",
   promemoriaDesc: "We'll ping you shortly before your shift starts.",
   notifichePhone: "Phone notifications",

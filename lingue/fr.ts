@@ -133,6 +133,7 @@ const fr: Testi = {
   nonAttive: "Désactivés",
   installaApp: "Installer l'application",
   accessibilita: "Accessibilité",
+  privacy: "Confidentialité", privacySub: "Comment nous traitons tes données",
   promemoriaTurni: "Rappels de créneaux",
   promemoriaDesc: "On te prévient juste avant le début de ton créneau.",
   notifichePhone: "Notifications du téléphone",

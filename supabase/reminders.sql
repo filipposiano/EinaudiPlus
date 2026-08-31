@@ -234,6 +234,11 @@ begin
   delete from rate_limit where window_start < now() - interval '2 days';
   delete from audit_log  where at < now() - interval '180 days';
 
+  -- Le segnalazioni non avevano scadenza: a differenza di prenotazioni e
+  -- audit_log restavano per sempre, anche dopo essere state gestite. Stessa
+  -- finestra dell'audit_log, per coerenza e minimizzazione dei dati.
+  delete from feedback where created_at < now() - interval '180 days';
+
   -- Codici Telegram generati e mai usati: non devono restare validi per sempre.
   perform telegram_prune_pending(24);
 

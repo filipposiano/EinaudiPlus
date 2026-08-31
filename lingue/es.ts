@@ -133,6 +133,7 @@ const es: Testi = {
   nonAttive: "Desactivados",
   installaApp: "Instalar la aplicación",
   accessibilita: "Accesibilidad",
+  privacy: "Privacidad", privacySub: "Cómo tratamos tus datos",
   promemoriaTurni: "Recordatorios de turnos",
   promemoriaDesc: "Te avisamos poco antes de que empiece tu turno.",
   notifichePhone: "Notificaciones del teléfono",

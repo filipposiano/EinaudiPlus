@@ -133,6 +133,7 @@ const de: Testi = {
   nonAttive: "Aus",
   installaApp: "App installieren",
   accessibilita: "Barrierefreiheit",
+  privacy: "Datenschutz", privacySub: "Wie wir deine Daten verwenden",
   promemoriaTurni: "Schicht-Erinnerungen",
   promemoriaDesc: "Wir melden uns kurz bevor dein Zeitfenster beginnt.",
   notifichePhone: "Handy-Benachrichtigungen",

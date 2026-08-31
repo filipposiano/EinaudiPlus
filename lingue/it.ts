@@ -151,6 +151,7 @@ const it = {
   nonAttive: "Non attive",
   installaApp: "Installa l'app",
   accessibilita: "Accessibilità",
+  privacy: "Privacy", privacySub: "Come trattiamo i tuoi dati",
   promemoriaTurni: "Promemoria turni",
   promemoriaDesc: "Ti avvisiamo poco prima che inizi il tuo turno.",
   notifichePhone: "Notifiche del telefono",
