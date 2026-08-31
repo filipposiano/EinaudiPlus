@@ -19,20 +19,24 @@
 -- si genera dentro l'app, dura poco, e si usa una volta sola.
 
 -- Genera (o rigenera) il codice di collegamento per una camera.
+--
+-- 'DIREZIONE' e' accettata insieme al formato numerico: non e' una camera
+-- vera (niente cifre), ma prenota per davvero — vedi App.tsx, dove chi ha una
+-- sessione amministrativa diventa DIREZIONE nell'app principale — e i suoi
+-- turni scadono come quelli di chiunque altro. Senza laundry_for_room() a cui
+-- appoggiarsi (torna null: non ci sono cifre da estrarre), si ricade sul
+-- Valentino, come fa gia' upsert_push_sub() per lo stesso caso.
 create or replace function telegram_create_code(p_room text)
 returns jsonb language plpgsql as $$
 declare
   v_lid  smallint;
   v_code text;
 begin
-  if p_room is null or p_room !~ '^[0-9]{1,4}(-?[abAB])?$' then
+  if p_room is null or (p_room <> 'DIREZIONE' and p_room !~ '^[0-9]{1,4}(-?[abAB])?$') then
     return jsonb_build_object('ok', false, 'error', 'camera non valida');
   end if;
 
-  v_lid := laundry_for_room(p_room);
-  if v_lid is null then
-    return jsonb_build_object('ok', false, 'error', 'camera non valida');
-  end if;
+  v_lid := coalesce(laundry_for_room(p_room), (select id from laundry where slug = 'valentino'));
 
   -- 8 caratteri senza vocali: niente parole leggibili per caso, e nessuna
   -- ambiguità fra 0/O e 1/I quando qualcuno lo ricopia a mano.

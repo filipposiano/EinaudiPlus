@@ -14,6 +14,7 @@ const MUTATIONS = new Set([
   "markFeedback", "deleteSpaceBooking",
   "recurringAddLaundry", "recurringAddSpace", "recurringSetActive",
   "recurringDelete", "applyRecurring", "purge",
+  "deletePushSub", "deleteTelegramSub",
   "bookDirezione", "bookSpaceDirezione", "clearDirezione",
   "conferenzaAdd", "conferenzaUpdate", "conferenzaDelete",
   "conferenzaSkip", "conferenzaMove", "conferenzaResetOccorrenza",
@@ -26,7 +27,7 @@ const MUTATIONS = new Set([
 const SOLO_SISTEMISTA = new Set([
   "recurringList", "recurringAddLaundry", "recurringAddSpace",
   "recurringSetActive", "recurringDelete", "applyRecurring", "purge", "counts",
-  "pushSubs",
+  "pushSubs", "deletePushSub", "telegramSubs", "deleteTelegramSub",
   "accountList", "accountCreate", "accountSetPassword",
   "accountSetActive", "accountDelete",
 ]);
@@ -424,11 +425,23 @@ export default async function handler(req, res) {
         result = await rpc("sysadmin_conteggi");
         break;
 
-      // Quante camere hanno le notifiche push attive, e quante ne ha
-      // ciascuna. Il pannello lo rilegge insieme ai conteggi delle
-      // prenotazioni: e' un'altra fotografia dello stato attuale.
+      // Quali camere hanno le notifiche attive, canale per canale: push (web
+      // app) e Telegram sono liste separate, ciascuna con l'id di ogni riga
+      // per poterla cancellare singolarmente.
       case "pushSubs":
         result = await rpc("sysadmin_push_subs");
+        break;
+
+      case "deletePushSub":
+        result = await rpc("sysadmin_delete_push_sub", { p_id: Number(body.id) });
+        break;
+
+      case "telegramSubs":
+        result = await rpc("sysadmin_telegram_subs");
+        break;
+
+      case "deleteTelegramSub":
+        result = await rpc("sysadmin_delete_telegram_sub", { p_id: Number(body.id) });
         break;
 
       default:

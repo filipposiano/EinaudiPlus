@@ -106,7 +106,14 @@ export default async function handler(req, res) {
         if (!endpointAllowed(endpoint)) {
           return fail(res, "endpoint di notifica non riconosciuto");
         }
-        if (!camera(room)) return fail(res, "camera non valida");
+        // La DIREZIONE non e' una camera vera (niente cifre: camera() la
+        // respinge), ma prenota per davvero e i suoi turni finiscono per
+        // scadere come tutti gli altri — chi la usa da portineria deve poter
+        // ricevere i promemoria esattamente come un residente. Iscriversi ai
+        // suoi promemoria non da' nessun potere in piu': la griglia e' gia'
+        // pubblica, e creare o cancellare un turno suo passa comunque solo
+        // dall'endpoint amministrativo.
+        if (!camera(room) && room !== "DIREZIONE") return fail(res, "camera non valida");
 
         return json(res, 200, await rpc("upsert_push_sub", {
           p_room: room,

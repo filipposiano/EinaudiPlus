@@ -469,32 +469,75 @@ end;
 $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- 4. Iscrizioni push, per camera
+-- 4. Iscrizioni alle notifiche, una riga per dispositivo/chat
 --
 -- Prima si guardava solo interrogando il database a mano — la query di
--- verifica lasciata in commento nella migrazione 017. Qui diventa una RPC,
--- cosi' il pannello mostra quante camere hanno le notifiche attive e quante
--- ne ha ciascuna senza uscire dall'app. Sola lettura.
+-- verifica lasciata in commento nella migrazione 017. Qui diventano RPC, cosi'
+-- il pannello mostra push e Telegram separati, quali camere e quante ne ha
+-- ciascuna, senza uscire dall'app — e con l'id di ogni riga, cosi' se ne puo'
+-- togliere una sola invece che tutte insieme (vedi sysadmin_delete_*).
 create or replace function sysadmin_push_subs()
 returns jsonb language sql stable as $$
   select jsonb_build_object(
     'ok', true,
     'camere_totali', (select count(distinct room) from push_sub),
     'dispositivi_totali', (select count(*) from push_sub),
-    'camere', coalesce(
-      jsonb_agg(x order by (x->>'dispositivi')::int desc, x->>'room') filter (where x is not null),
+    'iscrizioni', coalesce(
+      jsonb_agg(x order by x->>'room', x->>'ultimo_avvio' desc) filter (where x is not null),
       '[]'::jsonb
     )
   )
   from (
     select jsonb_build_object(
+      'id', s.id,
       'laundry', l.name,
       'room', s.room,
-      'dispositivi', count(*),
-      'ultimo_avvio', max(s.last_seen)
+      'creato_il', s.created_at,
+      'ultimo_avvio', s.last_seen
     ) as x
     from push_sub s
     join laundry l on l.id = s.laundry_id
-    group by l.name, s.room
   ) t;
+$$;
+
+create or replace function sysadmin_delete_push_sub(p_id bigint)
+returns jsonb language plpgsql as $$
+begin
+  delete from push_sub where id = p_id;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- Solo le chat verificate: un codice generato e mai incollato al bot non e'
+-- un'iscrizione, e' un tentativo scaduto (le pota telegram_prune_pending).
+create or replace function sysadmin_telegram_subs()
+returns jsonb language sql stable as $$
+  select jsonb_build_object(
+    'ok', true,
+    'camere_totali', (select count(distinct room) from telegram_sub where verified_at is not null),
+    'chat_totali', (select count(*) from telegram_sub where verified_at is not null),
+    'iscrizioni', coalesce(
+      jsonb_agg(x order by x->>'room', x->>'collegato_il' desc) filter (where x is not null),
+      '[]'::jsonb
+    )
+  )
+  from (
+    select jsonb_build_object(
+      'id', t.id,
+      'laundry', l.name,
+      'room', t.room,
+      'collegato_il', t.verified_at
+    ) as x
+    from telegram_sub t
+    join laundry l on l.id = t.laundry_id
+    where t.verified_at is not null
+  ) tt;
+$$;
+
+create or replace function sysadmin_delete_telegram_sub(p_id bigint)
+returns jsonb language plpgsql as $$
+begin
+  delete from telegram_sub where id = p_id;
+  return jsonb_build_object('ok', true);
+end;
 $$;

@@ -1516,11 +1516,11 @@ type Conteggi = {
   settimana: Record<SalaId, number>;
 };
 
-// Una camera con le notifiche push attive: quanti dispositivi ha collegato
-// (fino a sei, vedi upsert_push_sub) e quando uno di quelli si e' visto
-// l'ultima volta.
-type CameraPush = { laundry: string; room: string; dispositivi: number; ultimo_avvio: string };
-type PushSubs = { camere_totali: number; dispositivi_totali: number; camere: CameraPush[] };
+// Una riga per dispositivo (push) o per chat (Telegram) collegati: l'id
+// serve a poterla togliere singolarmente, non solo a contarla.
+type IscrizioneRiga = { id: number; laundry: string; room: string };
+type PushSubs = { camere_totali: number; dispositivi_totali: number; iscrizioni: IscrizioneRiga[] };
+type TelegramSubs = { camere_totali: number; chat_totali: number; iscrizioni: IscrizioneRiga[] };
 
 const AMBITI: [string, string, string][] = [
   ["settimana",    "Svuota la settimana corrente",  "Toglie le prenotazioni di questa settimana — lavanderia, cinema, musica e polivalente. Lo storico resta."],
@@ -1585,37 +1585,44 @@ function Contatore({ dati, scaduto }: { dati: Conteggi | null; scaduto: boolean 
   );
 }
 
-/** Quali camere hanno le notifiche push attive, e quante ne ha ciascuna.
+/** Quali camere hanno le notifiche attive su un canale, con un modo di
+ *  togliere una riga sola.
  *
- *  Non e' un contatore che deve tornare a zero come quello sopra: e' solo una
- *  fotografia, per sapere quanto e' diffusa la funzione senza doverlo
- *  chiedere in giro. */
-function IscrizioniPush({ dati }: { dati: PushSubs | null }) {
+ *  Non e' un contatore che deve tornare a zero come quello delle
+ *  prenotazioni: e' solo una fotografia, per sapere quanto e' diffusa la
+ *  funzione senza doverlo chiedere in giro — e per poter chiudere l'unica
+ *  iscrizione di chi ha lasciato la residenza, senza azzerarle tutte con la
+ *  pulizia qui sotto. Condivisa fra push e Telegram: sono la stessa lista,
+ *  solo con le colonne di riepilogo diverse. */
+function ListaIscrizioni({ titolo, riepilogo, righe, vuoto, onDelete }: {
+  titolo: string; riepilogo: string | null; righe: IscrizioneRiga[] | null;
+  vuoto: string; onDelete: (id: number) => void;
+}) {
   return (
     <div style={{ ...S.card, padding: 14, marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
         <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", ...S.sub }}>
-          Notifiche push
+          {titolo}
         </p>
         <span style={{ fontSize: 12, ...S.sub, fontVariantNumeric: "tabular-nums" }}>
-          {dati ? `${dati.camere_totali} camere · ${dati.dispositivi_totali} dispositivi` : "—"}
+          {riepilogo ?? "—"}
         </span>
       </div>
 
-      {dati && dati.camere.length === 0 && (
-        <p style={{ fontSize: 13, ...S.sub }}>Nessuna camera ha le notifiche attive.</p>
+      {righe && righe.length === 0 && (
+        <p style={{ fontSize: 13, ...S.sub }}>{vuoto}</p>
       )}
 
-      {dati && dati.camere.length > 0 && (
+      {righe && righe.length > 0 && (
         <div style={{ display: "grid", gap: 6, maxHeight: 220, overflowY: "auto" }}>
-          {dati.camere.map((c) => (
-            <div key={`${c.laundry}-${c.room}`}
+          {righe.map((r) => (
+            <div key={r.id}
               style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 10, background: "var(--secondary)" }}>
-              <span style={{ fontSize: 13, fontWeight: 600, flex: 1, minWidth: 0 }}>{c.room}</span>
-              <span style={{ fontSize: 11, ...S.sub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.laundry}</span>
-              <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                {c.dispositivi}
-              </span>
+              <span style={{ fontSize: 13, fontWeight: 600, flex: 1, minWidth: 0 }}>{r.room}</span>
+              <span style={{ fontSize: 11, ...S.sub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.laundry}</span>
+              <button onClick={() => onDelete(r.id)} style={{ ...S.danger, padding: "4px 10px", fontSize: 11, flexShrink: 0 }}>
+                Elimina
+              </button>
             </div>
           ))}
         </div>
@@ -1633,12 +1640,26 @@ function Manutenzione() {
   const [conteggi, setConteggi] = useState<Conteggi | null>(null);
   const [scaduto, setScaduto] = useState(false);
   const [pushSubs, setPushSubs] = useState<PushSubs | null>(null);
+  const [telegramSubs, setTelegramSubs] = useState<TelegramSubs | null>(null);
 
   const aggiorna = useCallback(async () => {
     try { setConteggi(await call<Conteggi>("counts")); setScaduto(false); }
     catch { setScaduto(true); }   // il contatore non e' l'operazione: non blocca niente
     try { setPushSubs(await call<PushSubs>("pushSubs")); } catch { /* stessa logica: solo una fotografia */ }
+    try { setTelegramSubs(await call<TelegramSubs>("telegramSubs")); } catch { /* idem */ }
   }, []);
+
+  async function eliminaPush(id: number) {
+    if (!confirm("Togliere questa iscrizione alle notifiche push?\n\nIl dispositivo smetterà di ricevere promemoria finché non le riattiva da solo.")) return;
+    try { await call("deletePushSub", { id }); aggiorna(); }
+    catch (e: any) { setMsg(e.message); }
+  }
+
+  async function eliminaTelegram(id: number) {
+    if (!confirm("Scollegare questa chat Telegram?\n\nChi la usa smetterà di ricevere promemoria finché non la ricollega da solo.")) return;
+    try { await call("deleteTelegramSub", { id }); aggiorna(); }
+    catch (e: any) { setMsg(e.message); }
+  }
 
   // Si rilegge da solo ogni dieci secondi, cosi' resta vero anche mentre
   // qualcun altro prenota. Se la scheda e' nascosta non si chiede niente: in
@@ -1686,7 +1707,20 @@ function Manutenzione() {
       </p>
 
       <Contatore dati={conteggi} scaduto={scaduto} />
-      <IscrizioniPush dati={pushSubs} />
+      <ListaIscrizioni
+        titolo="Notifiche push (web app)"
+        riepilogo={pushSubs ? `${pushSubs.camere_totali} camere · ${pushSubs.dispositivi_totali} dispositivi` : null}
+        righe={pushSubs?.iscrizioni ?? null}
+        vuoto="Nessun dispositivo ha le notifiche push attive."
+        onDelete={eliminaPush}
+      />
+      <ListaIscrizioni
+        titolo="Notifiche Telegram"
+        riepilogo={telegramSubs ? `${telegramSubs.camere_totali} camere · ${telegramSubs.chat_totali} chat` : null}
+        righe={telegramSubs?.iscrizioni ?? null}
+        vuoto="Nessuna chat Telegram collegata."
+        onDelete={eliminaTelegram}
+      />
 
       {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
 
