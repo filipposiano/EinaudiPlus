@@ -1516,6 +1516,12 @@ type Conteggi = {
   settimana: Record<SalaId, number>;
 };
 
+// Una camera con le notifiche push attive: quanti dispositivi ha collegato
+// (fino a sei, vedi upsert_push_sub) e quando uno di quelli si e' visto
+// l'ultima volta.
+type CameraPush = { laundry: string; room: string; dispositivi: number; ultimo_avvio: string };
+type PushSubs = { camere_totali: number; dispositivi_totali: number; camere: CameraPush[] };
+
 const AMBITI: [string, string, string][] = [
   ["settimana",    "Svuota la settimana corrente",  "Toglie le prenotazioni di questa settimana — lavanderia, cinema, musica e polivalente. Lo storico resta."],
   ["prenotazioni", "Tutte le prenotazioni",          "Cancella anche lo storico delle settimane passate."],
@@ -1579,6 +1585,45 @@ function Contatore({ dati, scaduto }: { dati: Conteggi | null; scaduto: boolean 
   );
 }
 
+/** Quali camere hanno le notifiche push attive, e quante ne ha ciascuna.
+ *
+ *  Non e' un contatore che deve tornare a zero come quello sopra: e' solo una
+ *  fotografia, per sapere quanto e' diffusa la funzione senza doverlo
+ *  chiedere in giro. */
+function IscrizioniPush({ dati }: { dati: PushSubs | null }) {
+  return (
+    <div style={{ ...S.card, padding: 14, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 12 }}>
+        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", ...S.sub }}>
+          Notifiche push
+        </p>
+        <span style={{ fontSize: 12, ...S.sub, fontVariantNumeric: "tabular-nums" }}>
+          {dati ? `${dati.camere_totali} camere · ${dati.dispositivi_totali} dispositivi` : "—"}
+        </span>
+      </div>
+
+      {dati && dati.camere.length === 0 && (
+        <p style={{ fontSize: 13, ...S.sub }}>Nessuna camera ha le notifiche attive.</p>
+      )}
+
+      {dati && dati.camere.length > 0 && (
+        <div style={{ display: "grid", gap: 6, maxHeight: 220, overflowY: "auto" }}>
+          {dati.camere.map((c) => (
+            <div key={`${c.laundry}-${c.room}`}
+              style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 10, background: "var(--secondary)" }}>
+              <span style={{ fontSize: 13, fontWeight: 600, flex: 1, minWidth: 0 }}>{c.room}</span>
+              <span style={{ fontSize: 11, ...S.sub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{c.laundry}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                {c.dispositivi}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Manutenzione() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -1587,10 +1632,12 @@ function Manutenzione() {
   const [sala, setSala] = useState<SalaId | null>(null);         // null = tutte le sale
   const [conteggi, setConteggi] = useState<Conteggi | null>(null);
   const [scaduto, setScaduto] = useState(false);
+  const [pushSubs, setPushSubs] = useState<PushSubs | null>(null);
 
   const aggiorna = useCallback(async () => {
     try { setConteggi(await call<Conteggi>("counts")); setScaduto(false); }
     catch { setScaduto(true); }   // il contatore non e' l'operazione: non blocca niente
+    try { setPushSubs(await call<PushSubs>("pushSubs")); } catch { /* stessa logica: solo una fotografia */ }
   }, []);
 
   // Si rilegge da solo ogni dieci secondi, cosi' resta vero anche mentre
@@ -1639,6 +1686,7 @@ function Manutenzione() {
       </p>
 
       <Contatore dati={conteggi} scaduto={scaduto} />
+      <IscrizioniPush dati={pushSubs} />
 
       {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
 

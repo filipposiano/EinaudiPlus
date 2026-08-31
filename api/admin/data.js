@@ -26,6 +26,7 @@ const MUTATIONS = new Set([
 const SOLO_SISTEMISTA = new Set([
   "recurringList", "recurringAddLaundry", "recurringAddSpace",
   "recurringSetActive", "recurringDelete", "applyRecurring", "purge", "counts",
+  "pushSubs",
   "accountList", "accountCreate", "accountSetPassword",
   "accountSetActive", "accountDelete",
 ]);
@@ -421,6 +422,13 @@ export default async function handler(req, res) {
       // solo: e' quello che va a zero quando la pulizia ha funzionato davvero.
       case "counts":
         result = await rpc("sysadmin_conteggi");
+        break;
+
+      // Quante camere hanno le notifiche push attive, e quante ne ha
+      // ciascuna. Il pannello lo rilegge insieme ai conteggi delle
+      // prenotazioni: e' un'altra fotografia dello stato attuale.
+      case "pushSubs":
+        result = await rpc("sysadmin_push_subs");
         break;
 
       default:

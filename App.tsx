@@ -439,9 +439,6 @@ function ModifyModal({ target, lang, onEdit, onDelete, onClose }: {
           <button onClick={onDelete} className="w-full py-3.5 rounded-2xl text-sm font-semibold" style={{ background: "color-mix(in srgb, var(--destructive) 10%, transparent)", color: OOS_T }}>
             {t.delete}
           </button>
-          <button onClick={onClose} className="w-full py-3 rounded-2xl text-sm" style={{ color:sub }}>
-            {t.cancel}
-          </button>
         </div>
       </div>
     </div>
@@ -778,7 +775,11 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
     .sort((a, b) => a.day - b.day || a.slot - b.slot);
 
   async function cancelBooking(b: MyBooking) {
-    try { await onClear(b.day, b.slot, b.mid); setToast(t.slotDeleted); setToastUndo(null); }
+    try {
+      await onClear(b.day, b.slot, b.mid);
+      setToast(t.slotDeleted);
+      setToastUndo(() => () => { onBook(b.day, b.slot, b.mid, roomNumber).catch((e) => setToast(errMsg(e, lang))); });
+    }
     catch (e) { setToast(errMsg(e, lang)); setToastUndo(null); }
   }
 
@@ -1193,7 +1194,11 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
     if (!modTarget) return;
     const mt = modTarget;
     setModTarget(null);
-    try { await onClear(mt.dayIdx, mt.slotIdx, mt.machineId); setToast(t.slotDeleted); setToastUndo(null); }
+    try {
+      await onClear(mt.dayIdx, mt.slotIdx, mt.machineId);
+      setToast(t.slotDeleted);
+      setToastUndo(() => () => { onBook(mt.dayIdx, mt.slotIdx, mt.machineId, mt.currentRoom).catch((e) => setToast(errMsg(e, lang))); });
+    }
     catch (e) { setToast(errMsg(e, lang)); setToastUndo(null); }
   }
 
@@ -1455,13 +1460,22 @@ const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber
     if (!modTarget) return;
     const mt = modTarget;
     setModTarget(null);
-    try { await onClear(mt.dayIdx, mt.slotIdx, mt.machineId); setToast(t.slotDeleted); setToastUndo(null); }
+    try {
+      await onClear(mt.dayIdx, mt.slotIdx, mt.machineId);
+      setToast(t.slotDeleted);
+      setToastUndo(() => () => { onBook(mt.dayIdx, mt.slotIdx, mt.machineId, mt.currentRoom).catch((e) => setToast(errMsg(e, lang))); });
+    }
     catch (e) { setToast(errMsg(e, lang)); setToastUndo(null); }
   }
 
   async function deleteFromDetail(dayIdx: number, slotIdx: number, mid: string) {
+    const room = week[dayIdx]?.[slotIdx]?.[mid];
     setSlotDetail(null);
-    try { await onClear(dayIdx, slotIdx, mid); setToast(t.slotDeleted); setToastUndo(null); }
+    try {
+      await onClear(dayIdx, slotIdx, mid);
+      setToast(t.slotDeleted);
+      setToastUndo(room ? () => () => { onBook(dayIdx, slotIdx, mid, room).catch((e) => setToast(errMsg(e, lang))); } : null);
+    }
     catch (e) { setToast(errMsg(e, lang)); setToastUndo(null); }
   }
 
