@@ -140,6 +140,7 @@ const de: Testi = {
   bloccateBrowser: "In den Browser-Einstellungen blockiert",
   disattiva: "Ausschalten",
   attiva: "Einschalten",
+  nonOra: "Jetzt nicht",
   telegramDesc: "Praktisch auf dem iPhone, wo Push unzuverlässig ist",
   riapri: "Erneut öffnen",
   collega: "Verknüpfen",

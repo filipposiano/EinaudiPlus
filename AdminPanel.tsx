@@ -10,6 +10,7 @@
 // Caricato in lazy da App.tsx: non pesa sul bundle dei residenti.
 
 import { useCallback, useEffect, useState } from "react";
+import { Trash2 } from "lucide-react";
 import type { Occorrenza } from "./conferenzeApi";
 import { RuotaOrario } from "./RuotaPicker";
 
@@ -1547,9 +1548,15 @@ const totaleDi = (c: Record<SalaId, number> | undefined) =>
  *  succedeva alla polivalente. Un conteggio di cosa e' rimasto, letto dal
  *  database, e' l'unica risposta che non si puo' fraintendere: dopo uno
  *  svuotamento va a zero da solo. */
-function Contatore({ dati, scaduto }: { dati: Conteggi | null; scaduto: boolean }) {
+function Contatore({ dati, scaduto, onPulisci }: {
+  dati: Conteggi | null; scaduto: boolean; onPulisci: (id: SalaId) => void;
+}) {
   const tot = totaleDi(dati?.totale);
   const set = totaleDi(dati?.settimana);
+  const righe: [SalaId | null, string, number, number][] =
+    ([[null, "Tutte", tot, set]] as [SalaId | null, string, number, number][]).concat(
+      SALE.map(([id, nome]) => [id, nome, dati?.totale?.[id] ?? 0, dati?.settimana?.[id] ?? 0])
+    );
 
   return (
     <div style={{ ...S.card, padding: 14, marginBottom: 16 }}>
@@ -1561,14 +1568,28 @@ function Contatore({ dati, scaduto }: { dati: Conteggi | null; scaduto: boolean 
       </div>
 
       <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(104px, 1fr))" }}>
-        {([["Tutte", tot, set] as [string, number, number]]).concat(
-          SALE.map(([id, nome]) => [nome, dati?.totale?.[id] ?? 0, dati?.settimana?.[id] ?? 0] as [string, number, number])
-        ).map(([nome, n, nSett], i) => (
+        {righe.map(([id, nome, n, nSett], i) => (
           <div key={nome} style={{
-            padding: "10px 12px", borderRadius: 12,
+            position: "relative", padding: "10px 12px", borderRadius: 12,
             background: i === 0 ? "color-mix(in srgb, var(--primary) 10%, transparent)" : "var(--secondary)",
           }}>
-            <p style={{ fontSize: 11, fontWeight: 600, ...S.sub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {/* Svuotare una sala sola da qui salta dritto alla conferma della
+                scheda "Svuota la settimana corrente" qui sotto, gia' con
+                questa sala scelta — quella scheda chiede gia' conferma, non
+                serve chiederla due volte. "Tutte" non ha il cestino: e' la
+                stessa cosa dell'ambito "Azzera tutto", che ha gia' il suo. */}
+            {id && (
+              <button onClick={() => onPulisci(id)} title={`Svuota la settimana di ${nome}`}
+                style={{
+                  position: "absolute", top: 8, right: 8, display: "flex",
+                  alignItems: "center", justifyContent: "center", width: 22, height: 22,
+                  borderRadius: 7, border: "none", cursor: "pointer",
+                  background: "transparent", color: "var(--destructive-text)", opacity: 0.6,
+                }}>
+                <Trash2 size={13} />
+              </button>
+            )}
+            <p style={{ fontSize: 11, fontWeight: 600, ...S.sub, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingRight: id ? 20 : 0 }}>
               {nome}
             </p>
             {/* tabular-nums: senza, il numero balla a ogni aggiornamento */}
@@ -1661,6 +1682,13 @@ function Manutenzione() {
     catch (e: any) { setMsg(e.message); }
   }
 
+  // Il cestino su una sala del contatore salta dritto alla conferma della
+  // scheda "Svuota la settimana corrente", gia' con quella sala scelta: la
+  // conferma la chiede comunque quella scheda, non serve chiederla qui.
+  function pulisciSala(id: SalaId) {
+    setChiesto("settimana"); setSala(id); setParola(""); setMsg(null);
+  }
+
   // Si rilegge da solo ogni dieci secondi, cosi' resta vero anche mentre
   // qualcun altro prenota. Se la scheda e' nascosta non si chiede niente: in
   // portineria il pannello resta aperto per ore.
@@ -1706,7 +1734,7 @@ function Manutenzione() {
         cancellato: serve proprio a sapere chi ha svuotato cosa e quando.
       </p>
 
-      <Contatore dati={conteggi} scaduto={scaduto} />
+      <Contatore dati={conteggi} scaduto={scaduto} onPulisci={pulisciSala} />
       <ListaIscrizioni
         titolo="Notifiche push (web app)"
         riepilogo={pushSubs ? `${pushSubs.camere_totali} camere · ${pushSubs.dispositivi_totali} dispositivi` : null}

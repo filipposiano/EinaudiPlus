@@ -140,6 +140,7 @@ const es: Testi = {
   bloccateBrowser: "Bloqueadas en los ajustes del navegador",
   disattiva: "Desactivar",
   attiva: "Activar",
+  nonOra: "Ahora no",
   telegramDesc: "Útil en iPhone, donde las notificaciones fallan a menudo",
   riapri: "Reabrir",
   collega: "Vincular",

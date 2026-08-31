@@ -30,7 +30,7 @@ import {
   type MyBooking, type Fav,
 } from "./modello";
 import { T, errMsg, linguaIniziale, salvaLingua, type Lang } from "./i18n";
-import { SettingsSheet, InstallPrompt, Toast } from "./pannelli";
+import { SettingsSheet, InstallPrompt, Toast, WelcomeReminderPrompt } from "./pannelli";
 import {
   RED, RED_FG, GREEN, YELLOW, OOS_C, ORANGE,
   GREEN_T, YELLOW_T, OOS_T, ORANGE_T, type Theme,
@@ -2509,7 +2509,40 @@ export default function App() {
     push.refreshSubscription(roomNumber);
   }, [roomNumber]);
 
+  // Il prompt "vuoi i promemoria?" compare una volta sola, subito dopo aver
+  // scelto la camera — chooseRoom() ha lasciato il segnale in sessionStorage
+  // apposta perche' sopravvivesse al reload. Lo si legge e lo si toglie
+  // subito, cosi' un refresh successivo (o il prossimo avvio) non lo
+  // ripropone: se qui non lo attiva, puo' sempre farlo dalle Impostazioni.
+  //
+  // Niente prompt se il permesso e' gia' negato o se i promemoria sono gia'
+  // attivi (un altro dispositivo li aveva gia' accesi per questa camera, e
+  // refreshSubscription qui sopra l'ha appena confermato) — chiedere di
+  // nuovo sarebbe solo rumore.
+  const [reminderPrompt, setReminderPrompt] = useState(false);
+  useEffect(() => {
+    if (!roomNumber) return;
+    let chiesto = false;
+    try { chiesto = sessionStorage.getItem("laundryhub.chiediNotifiche") === "1"; } catch {}
+    if (!chiesto) return;
+    try { sessionStorage.removeItem("laundryhub.chiediNotifiche"); } catch {}
+    if (!push.pushSupported()) return;
+    push.getReminderState().then((s) => { if (s === "off") setReminderPrompt(true); });
+  }, [roomNumber]);
+
   function chooseRoom(room: string) {
+    // Solo per un vero accesso ("Continua senza accedere" manda ""), e non
+    // per la DIREZIONE: quella non passa da qui digitando una camera, ci
+    // arriva da sola aprendo una sessione amministrativa — chiederle se vuole
+    // i promemoria nel mezzo di quel percorso non c'entrerebbe niente.
+    //
+    // sessionStorage e non localStorage: deve sopravvivere al reload qui
+    // sotto (stessa scheda) ma sparire da solo se poi la scheda si chiude
+    // senza che il prompt sia mai comparso — niente che si accumuli per
+    // sempre se, fra il set e la lettura, qualcosa va storto.
+    if (room && room !== api.DIREZIONE) {
+      try { sessionStorage.setItem("laundryhub.chiediNotifiche", "1"); } catch {}
+    }
     try { localStorage.setItem("laundryhub.room", room); } catch {}
     window.location.reload();
   }
@@ -2695,6 +2728,10 @@ export default function App() {
     </Suspense>
   );
 
+  const reminderPromptSheet = reminderPrompt && roomNumber && (
+    <WelcomeReminderPrompt lang={lang} room={roomNumber} onClose={() => setReminderPrompt(false)}/>
+  );
+
   if (isDesktop) {
     return (
       <div className="relative h-dvh w-full flex overflow-hidden"
@@ -2703,6 +2740,7 @@ export default function App() {
         {showChrome && <InstallPrompt lang={lang}/>}
         {accessibilityModal}
         {adminLoginSheet}
+        {reminderPromptSheet}
         <DesktopSidebar
           lang={lang}
           roomNumber={roomNumber} showNav={showChrome}
@@ -2743,6 +2781,7 @@ export default function App() {
         {showChrome && <InstallPrompt lang={lang}/>}
         {accessibilityModal}
         {adminLoginSheet}
+        {reminderPromptSheet}
 
         <div className="flex items-center justify-between px-7 pt-3 pb-0 shrink-0 mt-2 md:mt-0">
           {/* Prima di scegliere una camera qui c'era un orologio finto (9:41,

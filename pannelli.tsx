@@ -213,6 +213,59 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
   );
 }
 
+// ─── Prompt "vuoi i promemoria?" dopo aver scelto la camera ────────────────────
+//
+// Compare una volta sola, subito dopo l'accesso (vedi chooseRoom in App.tsx):
+// chi entra per la prima volta non sa nemmeno che i promemoria esistono se
+// non gli capita di aprire le Impostazioni. Chiederlo qui, la volta che conta
+// davvero, funziona molto meglio di aspettare che qualcuno vada a cercarli —
+// e chi rifiuta puo' sempre attivarli piu' tardi da li'.
+//
+// Solo push: Telegram resta nelle Impostazioni. E' l'alternativa per iPhone,
+// non il primo passo — proporre due scelte nello stesso istante in cui si e'
+// appena scelta la camera sarebbe stato un tocco di troppo per un prompt che
+// si puo' ignorare con un dito.
+export function WelcomeReminderPrompt({ lang, room, onClose }: {
+  lang: Lang; room: string; onClose: () => void;
+}) {
+  const t = T[lang];
+  const [busy, setBusy] = useState(false);
+
+  async function attiva() {
+    setBusy(true);
+    // Un rifiuto del permesso o del server non deve bloccare l'accesso: chi
+    // rifiuta qui puo' comunque riprovare dalle Impostazioni, dove l'errore
+    // si spiega per esteso (vedi RemindersSheet).
+    try { await push.enableReminders(room); } catch { /* silenzioso, vedi sopra */ }
+    finally { setBusy(false); onClose(); }
+  }
+
+  return (
+    <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
+      <div className="w-full rounded-t-3xl p-6 pb-8" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
+        <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background:"color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
+        <div className="flex flex-col items-center text-center mb-6">
+          <div className="p-3.5 rounded-2xl mb-4" style={{ background:`color-mix(in srgb, ${RED} 14%, transparent)` }}>
+            <BellRing size={26} style={{ color:RED }}/>
+          </div>
+          <p className="text-lg font-bold mb-1.5" style={{ color:"var(--foreground)" }}>{t.promemoriaTurni}</p>
+          <p className="text-sm" style={{ color:"var(--gray-accessible-text)" }}>{t.promemoriaDesc}</p>
+        </div>
+        <div className="flex flex-col gap-2">
+          <button onClick={attiva} disabled={busy}
+            className="w-full py-3.5 rounded-2xl text-sm font-semibold" style={{ background:RED, color:RED_FG }}>
+            {busy ? "…" : t.attiva}
+          </button>
+          <button onClick={onClose} disabled={busy}
+            className="w-full py-3 rounded-2xl text-sm" style={{ color:"var(--gray-accessible-text)" }}>
+            {t.nonOra}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Pannello promemoria: push + Telegram ──────────────────────────────────────
 //
 // Telegram è l'alternativa che conta su iPhone, dove le notifiche push delle

@@ -158,6 +158,7 @@ const it = {
   bloccateBrowser: "Bloccate nelle impostazioni del browser",
   disattiva: "Disattiva",
   attiva: "Attiva",
+  nonOra: "Non ora",
   telegramDesc: "Utile su iPhone, dove le notifiche sono capricciose",
   riapri: "Riapri",
   collega: "Collega",
