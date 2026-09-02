@@ -152,6 +152,8 @@ const de: Testi = {
   disattiva: "Ausschalten",
   attiva: "Einschalten",
   nonOra: "Jetzt nicht",
+  attivaWebApp: "In der Web-App aktivieren",
+  attivaTelegram: "Über Telegram aktivieren",
   telegramDesc: "Praktisch auf dem iPhone, wo Push unzuverlässig ist",
   riapri: "Erneut öffnen",
   collega: "Verknüpfen",

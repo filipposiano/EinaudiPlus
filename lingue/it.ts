@@ -170,6 +170,8 @@ const it = {
   disattiva: "Disattiva",
   attiva: "Attiva",
   nonOra: "Non ora",
+  attivaWebApp: "Attiva sulla web app",
+  attivaTelegram: "Attiva su Telegram",
   telegramDesc: "Utile su iPhone, dove le notifiche sono capricciose",
   riapri: "Riapri",
   collega: "Collega",

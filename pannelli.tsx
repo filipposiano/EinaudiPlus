@@ -268,28 +268,53 @@ function PrivacySheet({ lang, onClose }: { lang: Lang; onClose: () => void }) {
 // davvero, funziona molto meglio di aspettare che qualcuno vada a cercarli —
 // e chi rifiuta puo' sempre attivarli piu' tardi da li'.
 //
-// Solo push: Telegram resta nelle Impostazioni. E' l'alternativa per iPhone,
-// non il primo passo — proporre due scelte nello stesso istante in cui si e'
-// appena scelta la camera sarebbe stato un tocco di troppo per un prompt che
-// si puo' ignorare con un dito.
+// Due strade, due tasti distinti: le notifiche della web app e Telegram.
+// Telegram non e' un ripiego da cercare nelle Impostazioni — su iPhone le
+// push funzionano solo se l'app e' stata installata dalla schermata Home e
+// restano capricciose, quindi chi entra da li' deve poter scegliere subito
+// l'unica delle due che gli funzionera' davvero. Chi non vuole nessuna delle
+// due tocca "Non ora" e le ritrova comunque nelle Impostazioni.
 export function WelcomeReminderPrompt({ lang, room, onClose }: {
   lang: Lang; room: string; onClose: () => void;
 }) {
   const t = T[lang];
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"push" | "tg" | null>(null);
+  const [code, setCode] = useState<string | null>(null);
+  const [tgErr, setTgErr] = useState(false);
+  const bot = import.meta.env.VITE_TELEGRAM_BOT as string | undefined;
 
-  async function attiva() {
-    setBusy(true);
+  async function attivaPush() {
+    setBusy("push");
     // Un rifiuto del permesso o del server non deve bloccare l'accesso: chi
     // rifiuta qui puo' comunque riprovare dalle Impostazioni, dove l'errore
     // si spiega per esteso (vedi RemindersSheet).
     try { await push.enableReminders(room); } catch { /* silenzioso, vedi sopra */ }
-    finally { setBusy(false); onClose(); }
+    finally { setBusy(null); onClose(); }
+  }
+
+  // Stesso collegamento in un tocco solo del pannello Impostazioni: si apre
+  // gia' il link finale (una finestra vuota poi reindirizzata verrebbe
+  // bloccata dai browser) e il codice resta visibile come riserva. Qui il
+  // foglio NON si chiude: chi torna dall'app di Telegram deve ritrovare la
+  // riserva se il primo tentativo non e' andato a buon fine.
+  async function attivaTelegram() {
+    setBusy("tg"); setTgErr(false);
+    try {
+      const c = await api.telegramCode();
+      setCode(c);
+      if (bot) {
+        const link = `https://t.me/${bot}?start=${c}`;
+        const w = window.open(link, "_blank", "noopener,noreferrer");
+        if (!w) window.location.href = link;   // popup bloccato: si va diretti
+      }
+    } catch {
+      setTgErr(true);
+    } finally { setBusy(null); }
   }
 
   return (
     <div className="absolute inset-0 z-40 flex items-end" style={{ background:"rgba(0,0,0,0.6)" }} onClick={onClose}>
-      <div className="w-full rounded-t-3xl p-6 pb-8" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
+      <div className="w-full rounded-t-3xl p-6 pb-8 max-h-[92%] overflow-y-auto overscroll-contain" style={{ background:"var(--background)" }} onClick={(e)=>e.stopPropagation()}>
         <div className="w-10 h-1 rounded-full mx-auto mb-5" style={{ background:"color-mix(in srgb, var(--foreground) 15%, transparent)" }}/>
         <div className="flex flex-col items-center text-center mb-6">
           <div className="p-3.5 rounded-2xl mb-4" style={{ background:`color-mix(in srgb, ${RED} 14%, transparent)` }}>
@@ -299,15 +324,55 @@ export function WelcomeReminderPrompt({ lang, room, onClose }: {
           <p className="text-sm" style={{ color:"var(--gray-accessible-text)" }}>{t.promemoriaDesc}</p>
         </div>
         <div className="flex flex-col gap-2">
-          <button onClick={attiva} disabled={busy}
-            className="w-full py-3.5 rounded-2xl text-sm font-semibold" style={{ background:RED, color:RED_FG }}>
-            {busy ? "…" : t.attiva}
+          {/* Il tasto della web app sparisce solo dove le push non esistono
+              proprio (o sono state bloccate nel browser): mostrarlo li'
+              sarebbe un tasto che non puo' funzionare. Telegram resta. */}
+          {push.pushSupported() && Notification.permission !== "denied" && (
+            <button onClick={attivaPush} disabled={busy !== null}
+              className="w-full py-3.5 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2"
+              style={{ background:RED, color:RED_FG }}>
+              <BellRing size={16}/>
+              {busy === "push" ? "…" : t.attivaWebApp}
+            </button>
+          )}
+          <button onClick={attivaTelegram} disabled={busy !== null || !room}
+            className="w-full py-3.5 rounded-2xl text-sm font-semibold flex items-center justify-center gap-2"
+            style={{ background:`color-mix(in srgb, ${RED} 12%, transparent)`, color:RED }}>
+            <Send size={16}/>
+            {busy === "tg" ? "…" : code ? t.riapri : t.attivaTelegram}
           </button>
-          <button onClick={onClose} disabled={busy}
+          <button onClick={onClose} disabled={busy !== null}
             className="w-full py-3 rounded-2xl text-sm" style={{ color:"var(--gray-accessible-text)" }}>
             {t.nonOra}
           </button>
         </div>
+
+        {tgErr && (
+          <p className="text-xs mt-4 text-center" style={{ color:RED }}>{t.telegramErrore}</p>
+        )}
+
+        {code && (
+          <div className="mt-4 pt-4" style={{ borderTop:"1px solid var(--border)" }}>
+            <p className="text-xs" style={{ color:"var(--foreground)" }}>{t.telegramAperto}</p>
+            {/* Riserva, non il percorso principale: serve solo se l'apertura
+                automatica non e' andata a buon fine (popup bloccato, Telegram
+                non installato al primo tocco, ecc.). */}
+            <p className="text-[11px] mt-2 mb-1.5" style={{ color:"var(--gray-accessible-text)" }}>{t.nonSiApre}</p>
+            {bot ? (
+              <a href={`https://t.me/${bot}?start=${code}`} target="_blank" rel="noopener noreferrer"
+                 className="block text-center text-xs font-semibold py-2.5 rounded-xl"
+                 style={{ background:`color-mix(in srgb, ${RED} 12%, transparent)`, color:RED }}>
+                {t.riprovaTelegram}
+              </a>
+            ) : (
+              <p className="text-[11px]" style={{ color:"var(--gray-accessible-text)" }}>
+                {t.scriviCodice}
+                <span className="font-mono font-bold tracking-wider" style={{ color:"var(--foreground)" }}>{code}</span>
+              </p>
+            )}
+            <p className="text-[11px] mt-2" style={{ color:"var(--gray-accessible-text)" }}>{t.codiceUsaEGetta}</p>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -152,6 +152,8 @@ const fr: Testi = {
   disattiva: "Désactiver",
   attiva: "Activer",
   nonOra: "Plus tard",
+  attivaWebApp: "Activer dans la web app",
+  attivaTelegram: "Activer sur Telegram",
   telegramDesc: "Pratique sur iPhone, où les notifications sont capricieuses",
   riapri: "Rouvrir",
   collega: "Associer",

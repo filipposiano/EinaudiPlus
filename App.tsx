@@ -2515,10 +2515,9 @@ export default function App() {
   // subito, cosi' un refresh successivo (o il prossimo avvio) non lo
   // ripropone: se qui non lo attiva, puo' sempre farlo dalle Impostazioni.
   //
-  // Niente prompt se il permesso e' gia' negato o se i promemoria sono gia'
-  // attivi (un altro dispositivo li aveva gia' accesi per questa camera, e
-  // refreshSubscription qui sopra l'ha appena confermato) — chiedere di
-  // nuovo sarebbe solo rumore.
+  // Niente prompt se i promemoria sono gia' attivi (un altro dispositivo li
+  // aveva gia' accesi per questa camera, e refreshSubscription qui sopra
+  // l'ha appena confermato) — chiedere di nuovo sarebbe solo rumore.
   const [reminderPrompt, setReminderPrompt] = useState(false);
   useEffect(() => {
     if (!roomNumber) return;
@@ -2526,8 +2525,14 @@ export default function App() {
     try { chiesto = sessionStorage.getItem("laundryhub.chiediNotifiche") === "1"; } catch {}
     if (!chiesto) return;
     try { sessionStorage.removeItem("laundryhub.chiediNotifiche"); } catch {}
-    if (!push.pushSupported()) return;
-    push.getReminderState().then((s) => { if (s === "off") setReminderPrompt(true); });
+    // Niente prompt se i promemoria sono gia' attivi. Dove le push non sono
+    // disponibili (o sono bloccate) il prompt resta comunque utile finche' c'e'
+    // Telegram: e' proprio il caso dell'iPhone, dove Telegram e' l'unica delle
+    // due strade che funziona davvero.
+    push.getReminderState().then((s) => {
+      if (s === "on") return;
+      if (s === "off" || import.meta.env.VITE_TELEGRAM_BOT) setReminderPrompt(true);
+    });
   }, [roomNumber]);
 
   function chooseRoom(room: string) {

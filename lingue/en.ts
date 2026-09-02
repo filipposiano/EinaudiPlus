@@ -152,6 +152,8 @@ const en: Testi = {
   disattiva: "Turn off",
   attiva: "Turn on",
   nonOra: "Not now",
+  attivaWebApp: "Enable in the web app",
+  attivaTelegram: "Enable on Telegram",
   telegramDesc: "Handy on iPhone, where push is unreliable",
   riapri: "Reopen",
   collega: "Link",
