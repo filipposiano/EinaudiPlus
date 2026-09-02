@@ -786,6 +786,29 @@ section("Confine della settimana");
   );
 }
 
+// ─── Iscrizioni push e DIREZIONE ────────────────────────────────
+//
+// Il difetto sorvegliato: chi amministra entra con 1935 e l'app lo porta su
+// DIREZIONE. Se in quel momento refreshSubscription() riallinea l'iscrizione
+// del dispositivo, l'upsert sull'endpoint la sposta sotto DIREZIONE: la camera
+// vera smette di ricevere i promemoria, e in portineria compare una DIREZIONE
+// che nessuno ha attivato — che si ricrea da sola a ogni riapertura, anche
+// dopo averla cancellata dal pannello.
+//
+// Prova locale sulla sorgente: il riallineamento silenzioso e' l'unica strada
+// che porta li' senza un gesto dell'utente, e nessun test di rete potrebbe
+// accorgersene (il server accetta DIREZIONE apposta, per chi la attiva a mano).
+
+section("Iscrizioni push e DIREZIONE");
+{
+  const push = fs.readFileSync(path.join(ROOT, "push.ts"), "utf8");
+  const corpo = push.slice(push.indexOf("export async function refreshSubscription"));
+  check(
+    "refreshSubscription() non riaggancia in silenzio la DIREZIONE",
+    /if \(room === api\.DIREZIONE\) return;/.test(corpo.slice(0, corpo.indexOf("try {")))
+  );
+}
+
 // ─── Pulizia ─────────────────────────────────────────────────────────────────
 //
 // L'account temporaneo va tolto SEMPRE, anche se qualche prova sopra e'

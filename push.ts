@@ -136,9 +136,19 @@ export async function enableReminders(room: string): Promise<void> {
  *
  * È idempotente lato server (upsert sull'endpoint), quindi si può chiamare a
  * ogni avvio senza effetti collaterali.
+ *
+ * Mai per la DIREZIONE, però. Quella non è la camera del dispositivo ma un
+ * ruolo di sessione: chi amministra entra con 1935 e l'app lo porta subito su
+ * DIREZIONE, e un dispositivo che aveva i promemoria della propria camera si
+ * vedrebbe spostare l'iscrizione lì sotto in silenzio — la camera vera smette
+ * di ricevere, e in portineria compare una DIREZIONE che nessuno ha attivato.
+ * Peggio: cancellarla dal pannello non basterebbe, perché la riapertura
+ * dell'app la ricrea. Chi sta in portineria i promemoria se li attiva a mano
+ * dalle Impostazioni: un gesto esplicito, che resta.
  */
 export async function refreshSubscription(room: string): Promise<void> {
   if (!pushSupported() || Notification.permission !== "granted") return;
+  if (room === api.DIREZIONE) return;
   try {
     const reg = await navigator.serviceWorker.getRegistration();
     if (!reg) return;
