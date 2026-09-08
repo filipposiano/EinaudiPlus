@@ -2465,7 +2465,37 @@ export default function App() {
   const [adminRole, setAdminRole] = useState<AdminRole | null>(null);
   const [adminLoginOpen, setAdminLoginOpen] = useState(false);
   const isAdmin = adminRole !== null;
-  useEffect(() => { api.adminRole().then((r) => setAdminRole((r as AdminRole) ?? null)); }, []);
+
+  // Un solo punto in cui la sessione amministrativa cambia, da qualunque parte
+  // arrivi (login, uscita, scadenza rilevata da una sezione o dal controllo
+  // all'avvio qui sotto). Chi smette di essere amministratore smette anche di
+  // essere la DIREZIONE: senza questo resterebbe con un'identità che non può
+  // più usare, e ogni prenotazione fallirebbe lato server senza che si capisca
+  // perché.
+  //
+  // `setAdminRole` non va MAI chiamato altrove: prima il controllo all'avvio
+  // qui sotto lo chiamava direttamente, scavalcando questa funzione. Chi
+  // riapriva l'app (o veniva ricaricato dal controllo sulla tab rimasta
+  // nascosta troppo a lungo, qualche schermata sopra) con la sessione admin
+  // già scaduta si ritrovava con l'interfaccia admin correttamente nascosta
+  // ma l'identità DIREZIONE ancora agganciata in localStorage — un downgrade
+  // invece di un logout, che lasciava prenotare come DIREZIONE finché quella
+  // richiesta non falliva a sua volta lato server (vedi SESSIONE_SCADUTA
+  // sotto, e adminAction() in api.ts).
+  const handleAdminSession = useCallback((r: AdminRole | null) => {
+    setAdminRole(r);
+    // Traccia locale: dice ad adminRole() se al prossimo avvio vale la pena
+    // chiedere al server. Vedi il commento in api.ts — non è autorizzazione.
+    api.markAdminSeen(r !== null);
+    if (r === null && localStorage.getItem("laundryhub.room") === api.DIREZIONE) {
+      try { localStorage.removeItem("laundryhub.room"); } catch {}
+      window.location.reload();
+    }
+  }, []);
+
+  useEffect(() => {
+    api.adminRole().then((r) => handleAdminSession((r as AdminRole) ?? null));
+  }, [handleAdminSession]);
 
   // Chi esce (o la cui sessione scade) mentre sta guardando una sezione
   // riservata non deve restare su una schermata che non gli appartiene più:
@@ -2477,22 +2507,6 @@ export default function App() {
       setFacility("laundry");
     }
   }, [adminRole, facility]);
-
-  // Un solo punto in cui la sessione amministrativa cambia, da qualunque parte
-  // arrivi (login, uscita, scadenza rilevata da una sezione). Chi smette di
-  // essere amministratore smette anche di essere la DIREZIONE: senza questo
-  // resterebbe con un'identità che non può più usare, e ogni prenotazione
-  // fallirebbe lato server senza che si capisca perché.
-  const handleAdminSession = useCallback((r: AdminRole | null) => {
-    setAdminRole(r);
-    // Traccia locale: dice ad adminRole() se al prossimo avvio vale la pena
-    // chiedere al server. Vedi il commento in api.ts — non è autorizzazione.
-    api.markAdminSeen(r !== null);
-    if (r === null && localStorage.getItem("laundryhub.room") === api.DIREZIONE) {
-      try { localStorage.removeItem("laundryhub.room"); } catch {}
-      window.location.reload();
-    }
-  }, []);
 
   // L'uscita dalla modalità amministratore non ha più un pulsante suo: la fa
   // changeRoom(), cioè il pulsante della camera in alto. Vedi lì.
@@ -2574,11 +2588,19 @@ export default function App() {
   // DIREZIONE la richiesta passa dall'endpoint amministrativo (autorizzato dal
   // cookie di sessione, non dal client), altrimenti dal percorso normale.
   const handleBook = useCallback(async (day:number, slot:number, machine:string, room:string) => {
-    const s = room === api.DIREZIONE
-      ? await api.bookAsDirezione(day, slot, machine)
-      : await api.book(day, slot, machine, room);
-    setWeek(s.week); setStatus(s.status);
-  }, []);
+    try {
+      const s = room === api.DIREZIONE
+        ? await api.bookAsDirezione(day, slot, machine)
+        : await api.book(day, slot, machine, room);
+      setWeek(s.week); setStatus(s.status);
+    } catch (e: any) {
+      // La sessione DIREZIONE e' scaduta proprio mentre si tentava di
+      // prenotare: niente errore generico, logout forzato come per qualunque
+      // altra scadenza rilevata durante l'uso (vedi handleAdminSession sopra).
+      if (e?.message === "SESSIONE_SCADUTA") { handleAdminSession(null); return; }
+      throw e;
+    }
+  }, [handleAdminSession]);
   /**
    * Libera un turno.
    *
@@ -2598,11 +2620,16 @@ export default function App() {
     // 006 è quella che quella migrazione introduce, e nient'altro cambia
     // comportamento nel frattempo.
     const diChiE = week[day]?.[slot]?.[machine];
-    const s = isAdmin && diChiE === api.DIREZIONE
-      ? await api.clearAsDirezione(day, slot, machine)
-      : await api.clearBooking(day, slot, machine);
-    setWeek(s.week); setStatus(s.status);
-  }, [isAdmin, week]);
+    try {
+      const s = isAdmin && diChiE === api.DIREZIONE
+        ? await api.clearAsDirezione(day, slot, machine)
+        : await api.clearBooking(day, slot, machine);
+      setWeek(s.week); setStatus(s.status);
+    } catch (e: any) {
+      if (e?.message === "SESSIONE_SCADUTA") { handleAdminSession(null); return; }
+      throw e;
+    }
+  }, [isAdmin, week, handleAdminSession]);
   // Il residente segnala il guasto, non cambia lo stato: la segnalazione finisce
   // fra i feedback e un amministratore decide. Lo stato mostrato non cambia
   // subito, ed e' corretto cosi' — cambiera' quando l'admin l'avra' verificato.

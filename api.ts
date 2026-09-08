@@ -185,6 +185,14 @@ async function adminAction(action: string, payload: Record<string, unknown>) {
     headers: { "Content-Type": "application/json", "x-requested-with": "admin" },
     body: JSON.stringify({ action, ...payload }),
   });
+  // Stesso segnale usato da AdminPanel.tsx (vedi `call()`): un 401 qui vuol
+  // dire che il cookie e' scaduto o assente. Senza questo, un tentativo di
+  // prenotare o liberare un turno come DIREZIONE con la sessione scaduta
+  // falliva con un errore generico, senza mai far scattare il downgrade a
+  // camera vuota che App.tsx fa in risposta a "SESSIONE_SCADUTA" — chi aveva
+  // la sessione appena scaduta restava con l'identita' DIREZIONE agganciata a
+  // un ruolo admin ormai nullo, e ci riprovava.
+  if (res.status === 401) throw new Error("SESSIONE_SCADUTA");
   const data = await res.json();
   if (!data.ok) {
     const err = new Error(data.error || "Errore durante l'operazione") as Error & { by?: string };
