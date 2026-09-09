@@ -434,8 +434,10 @@ function ModifyModal({ target, lang, onEdit, onDelete, onClose }: {
           <button onClick={onClose} className="p-1.5 rounded-lg" style={{ color:sub, background:chip }}><X size={14}/></button>
         </div>
         <p className="text-lg font-bold mb-1" style={{ color:fg }}>{slot.start} – {slot.end}</p>
-        <p className="text-sm mb-6" style={{ color:sub }}>
-          {t.bookedBy(target.currentRoom).replace(target.currentRoom, "")}<span style={{ color:fg, fontWeight:600 }}>{target.currentRoom}</span>
+        <p className="text-sm mb-6 flex items-center gap-1.5 flex-wrap" style={{ color:sub }}>
+          <span>{t.bookedBy(target.currentRoom).replace(target.currentRoom, "")}</span>
+          {pianoDi(target.currentRoom) && <span className="size-2 rounded-full shrink-0" style={{ background:colorePiano(pianoDi(target.currentRoom)!) }}/>}
+          <span style={{ color:fg, fontWeight:600 }}>{target.currentRoom}</span>
         </p>
         <p className="text-xs mb-3" style={{ color:sub }}>{t.wantModify}</p>
         <div className="flex flex-col gap-2">
@@ -1092,14 +1094,11 @@ function TesseraMacchina({ machine, lang }: { machine: Machine; lang: Lang }) {
   const etichetta = `${nome} ${machine.label} — ${statusText === machine.room ? `${t.room} ${machine.room}` : statusText}`
     + (machine.prevRoom ? `. ${t.lgPrev}: ${machine.prevRoom}` : "");
 
-  // Un pallino colorato per piano accanto al numero di camera: non
-  // sostituisce lo stato (che resta verde/giallo/rosso, personalizzabile
-  // dall'Accessibilità) ma aiuta a riconoscere la camera senza leggere la
-  // cifra. Solo quando statusText *è* davvero un numero di camera — "Libera"
-  // e "Fuori servizio" non hanno un piano.
-  const pianoCorrente = !isFree && statusText === machine.room ? pianoDi(machine.room) : null;
-  const pianoPrec     = machine.prevRoom ? pianoDi(machine.prevRoom) : null;
-
+  // Niente pallino per piano qui: nella Dashboard sono al massimo tre gruppi
+  // per lavatrice/asciugatrice, ma sommando tutti e sei i colori possibili
+  // (Manica + quattro piani + basso fabbricato) diventava un'accozzaglia —
+  // il colore aiuta quando raggruppa tante camere in un elenco (i calendari,
+  // il pannello Bici), non quando ne mostra due o tre isolate.
   return (
     <div className="flex flex-col items-center gap-1.5 w-full" aria-label={etichetta}>
       <div className="relative" aria-hidden="true">
@@ -1113,14 +1112,12 @@ function TesseraMacchina({ machine, lang }: { machine: Machine; lang: Lang }) {
           "Libera"), e vanno a capo solo se proprio non entrano — mai uno
           sopra l'altro come prima. */}
       <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5" aria-hidden="true">
-        <p className="flex items-center gap-1 text-sm font-bold leading-tight" style={{ color:statusColor }}>
-          {pianoCorrente && <span className="size-1.5 rounded-full shrink-0" style={{ background:colorePiano(pianoCorrente) }}/>}
+        <p className="text-sm font-bold leading-tight" style={{ color:statusColor }}>
           {statusText}
         </p>
         {machine.prevRoom && (
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-0.5">
             <History size={11} className="shrink-0" style={{ color:ORANGE_T }}/>
-            {pianoPrec && <span className="size-1.5 rounded-full shrink-0" style={{ background:colorePiano(pianoPrec) }}/>}
             <span className="text-xs font-mono font-bold" style={{ color:ORANGE_T }}>{machine.prevRoom}</span>
           </span>
         )}
@@ -1286,6 +1283,10 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
               {washIds.map((mid) => {
                 const room = dayData[si]?.[mid];
                 const isMe = !!sessionRoom && room === sessionRoom;
+                // Il piano si vede solo su una camera che non e' la propria:
+                // la propria e' gia' il rosso pieno, che deve restare il
+                // segnale piu' forte della riga.
+                const piano = room && !isMe ? pianoDi(room) : null;
                 return (
                   <div key={mid} className="flex-1 px-1 py-1.5">
                     {room ? (
@@ -1293,8 +1294,8 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
                         onClick={()=>!isPast && setModTarget({ dayIdx:selDay, slotIdx:si, machineId:mid, currentRoom:room })}
                         className="w-full h-9 rounded-xl flex items-center justify-center transition-all active:scale-95"
                         style={{
-                          background: isMe ? RED : "var(--secondary)",
-                          border: `1px solid ${isMe ? RED : "var(--border)"}`,
+                          background: isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 16%, var(--secondary))` : "var(--secondary)",
+                          border: `1px solid ${isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 45%, var(--border))` : "var(--border)"}`,
                           boxShadow: isMe ? "0 2px 8px color-mix(in srgb, var(--primary) 35%, transparent)" : "none",
                           cursor:isPast?"default":"pointer"
                         }}>
@@ -1375,7 +1376,8 @@ function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify,
                   <WashingMachine size={18} style={{ color:room?fg:sub, flexShrink:0 }}/>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold" style={{ color:fg }}>{t.washer} {lbl}</p>
-                    <p className="text-xs font-mono" style={{ color:room?sub:GREEN_T }}>
+                    <p className="text-xs font-mono flex items-center gap-1" style={{ color:room?sub:GREEN_T }}>
+                      {room && pianoDi(room) && <span className="size-1.5 rounded-full shrink-0" style={{ background:colorePiano(pianoDi(room)!) }}/>}
                       {room ? `${t.room} ${room}` : t.free}
                     </p>
                   </div>
@@ -1590,11 +1592,12 @@ const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber
                     {isPrevSl && <div className="absolute left-0 top-0 bottom-0 w-0.5" style={{ background:ORANGE }}/>}
                     {rooms.map(([mid, room]) => {
                       const isMe = !!sessionRoom && room === sessionRoom;
+                      const piano = !isMe ? pianoDi(room) : null;
                       return (
                         <div key={mid} className={`rounded-md flex items-center gap-1 w-full border ${isDesktop ? "px-1.5 py-1" : "px-1 py-0.5"}`}
                           style={{
-                            background: isMe ? RED : "var(--secondary)",
-                            borderColor: isMe ? RED : "var(--border)",
+                            background: isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 16%, var(--secondary))` : "var(--secondary)",
+                            borderColor: isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 45%, var(--border))` : "var(--border)",
                           }}>
                           <span className={`${fsChip} font-mono font-bold shrink-0`} style={{ color:isMe?RED_FG:sub }}>{mid[2]}</span>
                           <span className={`${fsChip} font-mono truncate`} style={{ color:isMe?RED_FG:fg }}>{room}</span>

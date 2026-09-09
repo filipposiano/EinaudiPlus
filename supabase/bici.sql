@@ -80,12 +80,28 @@ begin
 end;
 $$;
 
+-- Come sysadmin_delete_push_sub / sysadmin_delete_telegram_sub: la
+-- cancellazione di UNA riga sola, per quando il caso non è il reset annuale
+-- ma una singola camera da correggere (chi se n'è andato a metà anno, un
+-- tocco sbagliato).
+create or replace function bike_delete_room(p_room text)
+returns jsonb language plpgsql as $$
+declare v_n int;
+begin
+  delete from bike where room = p_room;
+  get diagnostics v_n = row_count;
+  return jsonb_build_object('ok', true, 'deleted', v_n > 0);
+end;
+$$;
+
 revoke all on function bike_set(text, boolean) from public, anon, authenticated;
 revoke all on function bike_get(text) from public, anon, authenticated;
 revoke all on function bike_admin_list() from public, anon, authenticated;
 revoke all on function bike_purge() from public, anon, authenticated;
+revoke all on function bike_delete_room(text) from public, anon, authenticated;
 
 grant execute on function bike_set(text, boolean) to service_role;
 grant execute on function bike_get(text) to service_role;
 grant execute on function bike_admin_list() to service_role;
 grant execute on function bike_purge() to service_role;
+grant execute on function bike_delete_room(text) to service_role;

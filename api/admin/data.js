@@ -19,7 +19,7 @@ const MUTATIONS = new Set([
   "conferenzaAdd", "conferenzaUpdate", "conferenzaDelete",
   "conferenzaSkip", "conferenzaMove", "conferenzaResetOccorrenza",
   "accountCreate", "accountSetPassword", "accountSetActive", "accountDelete",
-  "accountChangeOwnPassword", "biciPurge",
+  "accountChangeOwnPassword", "biciPurge", "biciDeleteRoom",
 ]);
 
 // Riservate al sistemista. La portineria non le vede nel pannello, ma il
@@ -29,7 +29,7 @@ const SOLO_SISTEMISTA = new Set([
   "recurringSetActive", "recurringDelete", "applyRecurring", "purge", "counts",
   "pushSubs", "deletePushSub", "telegramSubs", "deleteTelegramSub",
   "accountList", "accountCreate", "accountSetPassword",
-  "accountSetActive", "accountDelete", "biciPurge",
+  "accountSetActive", "accountDelete", "biciPurge", "biciDeleteRoom",
 ]);
 
 // Macchine e segnalazioni restano affari di FDO e sistemista: lo staff
@@ -453,6 +453,10 @@ export default async function handler(req, res) {
 
       case "biciPurge":
         result = await rpc("bike_purge");
+        break;
+
+      case "biciDeleteRoom":
+        result = await rpc("bike_delete_room", { p_room: String(body.room || "") });
         break;
 
       default:

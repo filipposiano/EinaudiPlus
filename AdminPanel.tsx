@@ -687,11 +687,37 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
 
 type BiciDati = { totale: number; camere: string[] };
 
+// Una camera, come pastiglia colorata del suo piano. Cliccabile solo dal
+// sistemista — vedi il commento su SOLO_SISTEMISTA in api/admin/data.js:
+// togliere una dichiarazione e' un "cancella" come deletePushSub e
+// deleteTelegramSub, riservati allo stesso ruolo. L'FDO la vede ma non la
+// tocca, come per "Cancella tutte" piu' sotto.
+function CameraChip({ room, colore, sistemista, onClick }: {
+  room: string; colore: string; sistemista: boolean; onClick: () => void;
+}) {
+  const stile = {
+    display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+    padding: "9px 10px", borderRadius: 12, fontSize: 13, fontWeight: 700, fontFamily: "monospace",
+    background: `color-mix(in srgb, ${colore} 12%, var(--card))`,
+    border: `1px solid color-mix(in srgb, ${colore} 32%, var(--border))`,
+    color: "var(--foreground)",
+  } as const;
+  const icona = <span style={{ color: colore, display: "flex", flexShrink: 0 }}><IconaBici /></span>;
+
+  return sistemista ? (
+    <button onClick={onClick} style={{ ...stile, cursor: "pointer" }}>{icona}{room}</button>
+  ) : (
+    <div style={stile}>{icona}{room}</div>
+  );
+}
+
 function Bici({ sistemista }: { sistemista: boolean }) {
   const [dati, setDati] = useState<BiciDati | null>(null);
   const [busy, setBusy] = useState(false);
   const [chiesto, setChiesto] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // La camera per cui e' apparso il popup "Elimina" (solo sistemista).
+  const [daEliminare, setDaEliminare] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -719,10 +745,25 @@ function Bici({ sistemista }: { sistemista: boolean }) {
     }
   }
 
+  async function eliminaCamera() {
+    if (!daEliminare) return;
+    setBusy(true); setMsg(null);
+    try {
+      await call("biciDeleteRoom", { room: daEliminare });
+      setDaEliminare(null);
+      load();
+    } catch (e: any) {
+      setMsg("Non è riuscito: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
       <p style={{ fontSize: 13, ...S.sub, marginBottom: 16, maxWidth: "70ch" }}>
         Le camere che hanno dichiarato di avere una bici, dalla loro sezione "Bici".
+        {sistemista && " Tocca una camera per togliere la sua dichiarazione."}
       </p>
 
       <div style={{
@@ -738,17 +779,13 @@ function Bici({ sistemista }: { sistemista: boolean }) {
           <span style={{ transform: "scale(1.5)" }}><IconaBici /></span>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+          <p style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums", color: "var(--foreground)" }}>
             {dati ? dati.totale : "—"}
           </p>
-          <p style={{ fontSize: 12, ...S.sub }}>
+          <p style={{ fontSize: 12, color: "var(--foreground)" }}>
             {dati?.totale === 1 ? "camera con una bici" : "camere con una bici"}
           </p>
         </div>
-        <button style={{ ...S.btn, padding: "8px 9px", lineHeight: 0 }}
-                disabled={busy} onClick={load} title="Aggiorna" aria-label="Aggiorna">
-          <IconaAggiorna />
-        </button>
       </div>
 
       {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
@@ -774,15 +811,8 @@ function Bici({ sistemista }: { sistemista: boolean }) {
                 </div>
                 <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))" }}>
                   {camere.map((r) => (
-                    <div key={r} style={{
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                      padding: "9px 10px", borderRadius: 12, fontSize: 13, fontWeight: 700, fontFamily: "monospace",
-                      background: `color-mix(in srgb, ${colore} 12%, var(--card))`,
-                      border: `1px solid color-mix(in srgb, ${colore} 32%, var(--border))`,
-                    }}>
-                      <span style={{ color: colore, display: "flex", flexShrink: 0 }}><IconaBici /></span>
-                      {r}
-                    </div>
+                    <CameraChip key={r} room={r} colore={colore} sistemista={sistemista}
+                      onClick={() => setDaEliminare(r)} />
                   ))}
                 </div>
               </div>
@@ -802,13 +832,8 @@ function Bici({ sistemista }: { sistemista: boolean }) {
                 </p>
                 <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))" }}>
                   {fuoriSchema.map((r) => (
-                    <div key={r} style={{
-                      ...S.card, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                      padding: "9px 10px", fontSize: 13, fontWeight: 700, fontFamily: "monospace",
-                    }}>
-                      <span style={{ color: "var(--foreground)", display: "flex", flexShrink: 0 }}><IconaBici /></span>
-                      {r}
-                    </div>
+                    <CameraChip key={r} room={r} colore="var(--foreground)" sistemista={sistemista}
+                      onClick={() => setDaEliminare(r)} />
                   ))}
                 </div>
               </div>
@@ -857,6 +882,33 @@ function Bici({ sistemista }: { sistemista: boolean }) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Popup di eliminazione singola: un overlay centrato, non una scheda
+          che si espande sul posto come "Cancella tutte" — qui il tocco parte
+          da una pastiglia dentro una griglia fitta, e la conferma deve
+          comparire dove l'occhio sta gia' guardando, non scorrere per
+          trovarla. */}
+      {daEliminare && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 60, display: "flex",
+          alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.55)", padding: 20,
+        }} onClick={() => !busy && setDaEliminare(null)}>
+          <div style={{ ...S.card, padding: 20, maxWidth: 320, width: "100%" }} onClick={(e) => e.stopPropagation()}>
+            <p style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Camera {daEliminare}</p>
+            <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
+              Togliere la dichiarazione di questa camera? Potrà rifarla in qualsiasi momento dalla sua sezione "Bici".
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={S.danger} disabled={busy} onClick={eliminaCamera}>
+                {busy ? "In corso…" : "Elimina"}
+              </button>
+              <button style={S.btn} disabled={busy} onClick={() => setDaEliminare(null)}>
+                Annulla
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </>
