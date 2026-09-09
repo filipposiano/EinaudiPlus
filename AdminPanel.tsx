@@ -433,6 +433,16 @@ const IconaAggiorna = () => (
   </svg>
 );
 
+const IconaBici = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="5.5" cy="17.5" r="3.5" />
+    <circle cx="18.5" cy="17.5" r="3.5" />
+    <path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" fill="currentColor" stroke="none" />
+    <path d="M12 17.5V14l-3-3 4-3 2 3h3" />
+  </svg>
+);
+
 /** "3 ore fa" — in triage conta da quanto aspetta, non la data esatta. */
 function quandoRelativo(iso: string): string {
   const min = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -671,8 +681,8 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
 //
 // Non ha niente a che fare con lavanderia o sale: e' la stessa domanda che
 // oggi si segna a mano su un foglio all'ingresso — "questa camera ha una
-// bici?" — vista da chi sta in portineria. Ogni riga la dichiara il
-// residente stesso, dalle sue Impostazioni.
+// bici?" — vista da chi sta alla reception. Ogni riga la dichiara il
+// residente stesso, dalla sua sezione "Bici".
 
 type BiciDati = { totale: number; camere: string[] };
 
@@ -711,10 +721,21 @@ function Bici({ sistemista }: { sistemista: boolean }) {
   return (
     <>
       <p style={{ fontSize: 13, ...S.sub, marginBottom: 16, maxWidth: "70ch" }}>
-        Le camere che hanno dichiarato di avere una bici, dalle loro Impostazioni.
+        Le camere che hanno dichiarato di avere una bici, dalla loro sezione "Bici".
       </p>
 
-      <div style={{ ...S.card, padding: 14, marginBottom: 16, display: "flex", alignItems: "center", gap: 14 }}>
+      <div style={{
+        ...S.card, padding: 14, marginBottom: 16, display: "flex", alignItems: "center", gap: 14,
+        background: "color-mix(in srgb, var(--primary) 6%, var(--card))",
+        borderColor: "color-mix(in srgb, var(--primary) 25%, var(--border))",
+      }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: 14, flexShrink: 0,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: "color-mix(in srgb, var(--primary) 16%, transparent)", color: "var(--primary)",
+        }}>
+          <span style={{ transform: "scale(1.5)" }}><IconaBici /></span>
+        </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <p style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
             {dati ? dati.totale : "—"}
@@ -732,11 +753,20 @@ function Bici({ sistemista }: { sistemista: boolean }) {
       {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
 
       {dati && dati.camere.length > 0 ? (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+        <div style={{
+          display: "grid", gap: 8, marginBottom: 16,
+          gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))",
+        }}>
           {dati.camere.map((r) => (
-            <span key={r} style={{
-              ...S.card, padding: "6px 12px", fontSize: 13, fontWeight: 600, fontFamily: "monospace",
-            }}>{r}</span>
+            <div key={r} style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              padding: "9px 10px", borderRadius: 12, fontSize: 13, fontWeight: 700, fontFamily: "monospace",
+              background: "color-mix(in srgb, var(--primary) 8%, var(--card))",
+              border: "1px solid color-mix(in srgb, var(--primary) 22%, var(--border))",
+            }}>
+              <span style={{ color: "var(--primary)", display: "flex", flexShrink: 0 }}><IconaBici /></span>
+              {r}
+            </div>
           ))}
         </div>
       ) : (
