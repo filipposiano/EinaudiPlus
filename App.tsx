@@ -1294,12 +1294,22 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
                         onClick={()=>!isPast && setModTarget({ dayIdx:selDay, slotIdx:si, machineId:mid, currentRoom:room })}
                         className="w-full h-9 rounded-xl flex items-center justify-center transition-all active:scale-95"
                         style={{
-                          background: isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 16%, var(--secondary))` : "var(--secondary)",
-                          border: `1px solid ${isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 45%, var(--border))` : "var(--border)"}`,
+                          // Tinta piu' carica (32%/65%) di quanto basterebbe per
+                          // essere solo "leggibile": deve reggere il confronto
+                          // diretto col rosso pieno di "isMe" senza sembrare la
+                          // stessa cosa sbiadita — il 3deg piano e' rosso quanto
+                          // il 2deg e' verde, non un rosso "quasi tuo".
+                          background: isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 32%, var(--secondary))` : "var(--secondary)",
+                          border: `1px solid ${isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 65%, var(--border))` : "var(--border)"}`,
                           boxShadow: isMe ? "0 2px 8px color-mix(in srgb, var(--primary) 35%, transparent)" : "none",
                           cursor:isPast?"default":"pointer"
                         }}>
-                        <span className="text-[10px] font-mono font-bold" style={{ color:isMe?RED_FG:sub }}>{room}</span>
+                        {/* Il testo prende il colore del piano (non il grigio
+                            neutro di prima): e' la terza differenza da "isMe",
+                            oltre a sfondo pieno/tenue e bordo — cosi' anche chi
+                            guarda di sfuggita non scambia una camera del 3deg
+                            piano per la propria. */}
+                        <span className="text-[10px] font-mono font-bold" style={{ color:isMe?RED_FG:piano?colorePiano(piano):sub }}>{room}</span>
                       </button>
                     ) : (
                       <button disabled={isPast}
@@ -1596,11 +1606,16 @@ const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber
                       return (
                         <div key={mid} className={`rounded-md flex items-center gap-1 w-full border ${isDesktop ? "px-1.5 py-1" : "px-1 py-0.5"}`}
                           style={{
-                            background: isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 16%, var(--secondary))` : "var(--secondary)",
-                            borderColor: isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 45%, var(--border))` : "var(--border)",
+                            // Stessa tinta rinforzata (32%/65%) e stesso testo
+                            // colorato per piano di DaySchedule: qui la stessa
+                            // camera del 3deg piano compare accanto a una
+                            // propria, ed e' li' che la somiglianza col rosso
+                            // pieno si nota di piu'.
+                            background: isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 32%, var(--secondary))` : "var(--secondary)",
+                            borderColor: isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 65%, var(--border))` : "var(--border)",
                           }}>
                           <span className={`${fsChip} font-mono font-bold shrink-0`} style={{ color:isMe?RED_FG:sub }}>{mid[2]}</span>
-                          <span className={`${fsChip} font-mono truncate`} style={{ color:isMe?RED_FG:fg }}>{room}</span>
+                          <span className={`${fsChip} font-mono truncate`} style={{ color:isMe?RED_FG:piano?colorePiano(piano):fg }}>{room}</span>
                         </div>
                       );
                     })}
