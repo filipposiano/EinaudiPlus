@@ -2148,7 +2148,7 @@ function DesktopSidebar({ lang, roomNumber, showNav, facility, onFacility, admin
             dashboard, e si torna indietro dall'interruttore in cima a
             ciascuna vista — e tenerle qui faceva del desktop una navigazione
             diversa da quella del telefono, per le stesse tre schermate. */}
-        {showNav && FACILITIES.map(({ id, icon: Icon, chiave }) => {
+        {showNav && facilitiesFor(roomNumber).map(({ id, icon: Icon, chiave }) => {
           const isActive = facility === id;
           return (
             <button key={id} onClick={()=>onFacility(id)}
@@ -2248,6 +2248,13 @@ const FACILITIES: {
   { id: "bike",       icon: Bike,           chiave: "bici" },
 ];
 
+// La Direzione non e' una camera: non ha una bici da dichiarare, quindi non
+// ha senso che veda la scheda. Nascondere la voce non e' una protezione (la
+// sezione stessa mostra gia' un messaggio se ci si arriva lo stesso, vedi
+// Bici.tsx) — e' solo per non promettere una cosa che DIREZIONE non puo' fare.
+const facilitiesFor = (roomNumber: string | null) =>
+  FACILITIES.filter((f) => f.id !== "bike" || roomNumber !== api.DIREZIONE);
+
 // Le voci riservate al sistemista non compaiono con la sessione FDO, ma il
 // controllo vero resta sul server: nascondere una voce non è un'autorizzazione.
 const ADMIN_SECTIONS: {
@@ -2302,10 +2309,10 @@ const PAGINE_UTILITA: { id: "guasto" | "impostazioni" | "feedback"; chiave: "rep
 // regole su chi vede cosa. Manca solo l'annidamento delle schede della
 // lavanderia: quelle non ci sono piu' da nessuna parte, si arriva al
 // giornaliero e alla settimana dai due pulsanti della dashboard.
-function MenuStrutture({ aperto, onClose, facility, onChange, lang, adminRole }: {
+function MenuStrutture({ aperto, onClose, facility, onChange, lang, adminRole, roomNumber }: {
   aperto: boolean; onClose: ()=>void;
   facility: Facility; onChange: (f: Facility)=>void;
-  lang: Lang; adminRole: AdminRole | null;
+  lang: Lang; adminRole: AdminRole | null; roomNumber: string | null;
 }) {
   const sub      = "var(--gray-accessible-text)";
   const div      = "var(--border)";
@@ -2348,7 +2355,7 @@ function MenuStrutture({ aperto, onClose, facility, onChange, lang, adminRole }:
         </div>
 
         <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 flex flex-col gap-0.5">
-          {FACILITIES.map(({ id, icon, chiave }) => (
+          {facilitiesFor(roomNumber).map(({ id, icon, chiave }) => (
             <Voce key={id} id={id} icon={icon} label={T[lang][chiave]}/>
           ))}
 
@@ -2936,7 +2943,7 @@ export default function App() {
         </div>
 
         <MenuStrutture aperto={menuAperto} onClose={() => setMenuAperto(false)}
-          facility={facility} onChange={setFacility} lang={lang} adminRole={adminRole}/>
+          facility={facility} onChange={setFacility} lang={lang} adminRole={adminRole} roomNumber={roomNumber}/>
 
         <div className="flex-1 overflow-y-auto overscroll-contain min-h-0 flex flex-col mt-2">
           {bodyContent}
