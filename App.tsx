@@ -10,6 +10,7 @@ import {
 import * as api from "./api";
 import * as push from "./push";
 import RoomView from "./Rooms";
+import BiciView from "./Bici";
 // La ruota la usa ancora il popup dei preferiti (giorno + fascia oraria).
 import RuotaPicker from "./RuotaPicker";
 import Conferenze from "./Conferenze";
@@ -48,7 +49,11 @@ const AdminLoginSheet = lazy(() => import("./AdminPanel").then((m) => ({ default
 // Le tre pagine di utilita' (segnalazione guasti, impostazioni, feedback)
 // sono destinazioni come le altre: si raggiungono dallo stesso menu, con lo
 // stesso `onChange`, e non aprono piu' un foglio sopra la pagina.
-type Facility = "laundry" | "cinema" | "music" | "conferenze" | "guasto" | "impostazioni" | "feedback" | AdminTab;
+// "bike" e non "bici": l'id amministrativo "bici" (vedi ADMIN_TABS) e' gia'
+// preso — sono due schermate diverse (qui la camera dichiara la sua, li' la
+// portineria le vede tutte) e non possono condividere lo stesso id o
+// `isAdminFacility` scambierebbe l'una per l'altra.
+type Facility = "laundry" | "cinema" | "music" | "conferenze" | "bike" | "guasto" | "impostazioni" | "feedback" | AdminTab;
 
 const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "bici", "account", "ricorrenti", "manutenzione"];
 const isAdminFacility = (f: Facility): f is AdminTab => (ADMIN_TABS as string[]).includes(f);
@@ -2196,7 +2201,7 @@ function CenterState({ children }: { isDark?: boolean; children: React.ReactNode
 // lingue un oggetto { it, en } scritto qui dentro non reggeva piu'.
 const FACILITIES: {
   id: Facility; icon: any;
-  chiave: "navLavanderia" | "navCinema" | "navMusica" | "navConferenze";
+  chiave: "navLavanderia" | "navCinema" | "navMusica" | "navConferenze" | "bici";
 }[] = [
   { id: "laundry",    icon: WashingMachine, chiave: "navLavanderia" },
   { id: "cinema",     icon: Film,           chiave: "navCinema" },
@@ -2205,6 +2210,10 @@ const FACILITIES: {
   // guarda. Sta comunque fra le strutture perche' la domanda che ci si fa
   // ("e' libera adesso?") e' la stessa che si fa per le altre.
   { id: "conferenze", icon: Presentation,   chiave: "navConferenze" },
+  // Non e' una prenotazione ma la domanda ("questa camera ha una bici?") e'
+  // la stessa specie delle altre: una struttura, non un'impostazione — per
+  // questo sta qui e non piu' dentro Impostazioni.
+  { id: "bike",       icon: Bike,           chiave: "bici" },
 ];
 
 // Le voci riservate al sistemista non compaiono con la sessione FDO, ma il
@@ -2721,6 +2730,8 @@ export default function App() {
     bodyContent = <Conferenze lang={lang} adminRole={adminRole}/>;
   } else if (facility === "cinema" || facility === "music") {
     bodyContent = <RoomView room={facility} lang={lang} roomNumber={roomNumber}/>;
+  } else if (facility === "bike") {
+    bodyContent = <BiciView lang={lang} roomNumber={roomNumber}/>;
   } else if (facility === "guasto") {
     bodyContent = (
       <SegnalaGuastoSheet lang={lang} status={status} onStatus={handleStatus}
