@@ -13,6 +13,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import type { Occorrenza } from "./conferenzeApi";
 import { RuotaOrario } from "./RuotaPicker";
+import { PIANI, pianoDi, nomePiano, colorePiano } from "./piani";
 
 // ─── Tipi ────────────────────────────────────────────────────────────────────
 
@@ -753,21 +754,66 @@ function Bici({ sistemista }: { sistemista: boolean }) {
       {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
 
       {dati && dati.camere.length > 0 ? (
-        <div style={{
-          display: "grid", gap: 8, marginBottom: 16,
-          gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))",
-        }}>
-          {dati.camere.map((r) => (
-            <div key={r} style={{
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              padding: "9px 10px", borderRadius: 12, fontSize: 13, fontWeight: 700, fontFamily: "monospace",
-              background: "color-mix(in srgb, var(--primary) 8%, var(--card))",
-              border: "1px solid color-mix(in srgb, var(--primary) 22%, var(--border))",
-            }}>
-              <span style={{ color: "var(--primary)", display: "flex", flexShrink: 0 }}><IconaBici /></span>
-              {r}
-            </div>
-          ))}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 16 }}>
+          {/* Un gruppo per piano, nell'ordine di PIANI — non alfabetico, cosi'
+              "Manica" (un edificio a se') resta separata dai piani veri e
+              propri, che a loro volta salgono dal primo al quarto. I piani
+              senza nessuna camera non compaiono: un elenco di intestazioni
+              vuote non aiuta chi deve solo vedere dove sono le bici. */}
+          {PIANI.map((p) => {
+            const camere = dati.camere.filter((r) => pianoDi(r) === p);
+            if (camere.length === 0) return null;
+            const colore = colorePiano(p);
+            return (
+              <div key={p}>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
+                  <span style={{ width: 9, height: 9, borderRadius: 99, background: colore, flexShrink: 0 }} />
+                  <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", ...S.sub }}>
+                    {nomePiano(p)} · {camere.length}
+                  </p>
+                </div>
+                <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))" }}>
+                  {camere.map((r) => (
+                    <div key={r} style={{
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                      padding: "9px 10px", borderRadius: 12, fontSize: 13, fontWeight: 700, fontFamily: "monospace",
+                      background: `color-mix(in srgb, ${colore} 12%, var(--card))`,
+                      border: `1px solid color-mix(in srgb, ${colore} 32%, var(--border))`,
+                    }}>
+                      <span style={{ color: colore, display: "flex", flexShrink: 0 }}><IconaBici /></span>
+                      {r}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Rete di sicurezza: una camera con un formato che non torna in
+              nessun piano (non dovrebbe succedere, bike_set valida il
+              formato lato server) non sparisce silenziosamente. */}
+          {(() => {
+            const fuoriSchema = dati.camere.filter((r) => pianoDi(r) === null);
+            if (fuoriSchema.length === 0) return null;
+            return (
+              <div>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", ...S.sub, marginBottom: 7 }}>
+                  Altre · {fuoriSchema.length}
+                </p>
+                <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))" }}>
+                  {fuoriSchema.map((r) => (
+                    <div key={r} style={{
+                      ...S.card, display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                      padding: "9px 10px", fontSize: 13, fontWeight: 700, fontFamily: "monospace",
+                    }}>
+                      <span style={{ color: "var(--foreground)", display: "flex", flexShrink: 0 }}><IconaBici /></span>
+                      {r}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       ) : (
         <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>

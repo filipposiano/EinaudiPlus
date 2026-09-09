@@ -31,6 +31,7 @@ import {
   type MyBooking, type Fav,
 } from "./modello";
 import { T, errMsg, linguaIniziale, salvaLingua, type Lang } from "./i18n";
+import { pianoDi, colorePiano } from "./piani";
 import { SettingsSheet, InstallPrompt, Toast, WelcomeReminderPrompt } from "./pannelli";
 import {
   RED, RED_FG, GREEN, YELLOW, OOS_C, ORANGE,
@@ -1091,6 +1092,14 @@ function TesseraMacchina({ machine, lang }: { machine: Machine; lang: Lang }) {
   const etichetta = `${nome} ${machine.label} — ${statusText === machine.room ? `${t.room} ${machine.room}` : statusText}`
     + (machine.prevRoom ? `. ${t.lgPrev}: ${machine.prevRoom}` : "");
 
+  // Un pallino colorato per piano accanto al numero di camera: non
+  // sostituisce lo stato (che resta verde/giallo/rosso, personalizzabile
+  // dall'Accessibilità) ma aiuta a riconoscere la camera senza leggere la
+  // cifra. Solo quando statusText *è* davvero un numero di camera — "Libera"
+  // e "Fuori servizio" non hanno un piano.
+  const pianoCorrente = !isFree && statusText === machine.room ? pianoDi(machine.room) : null;
+  const pianoPrec     = machine.prevRoom ? pianoDi(machine.prevRoom) : null;
+
   return (
     <div className="flex flex-col items-center gap-1.5 w-full" aria-label={etichetta}>
       <div className="relative" aria-hidden="true">
@@ -1104,12 +1113,14 @@ function TesseraMacchina({ machine, lang }: { machine: Machine; lang: Lang }) {
           "Libera"), e vanno a capo solo se proprio non entrano — mai uno
           sopra l'altro come prima. */}
       <div className="flex flex-wrap items-center justify-center gap-x-1.5 gap-y-0.5" aria-hidden="true">
-        <p className="text-sm font-bold leading-tight" style={{ color:statusColor }}>
+        <p className="flex items-center gap-1 text-sm font-bold leading-tight" style={{ color:statusColor }}>
+          {pianoCorrente && <span className="size-1.5 rounded-full shrink-0" style={{ background:colorePiano(pianoCorrente) }}/>}
           {statusText}
         </p>
         {machine.prevRoom && (
-          <span className="flex items-center gap-0.5">
+          <span className="flex items-center gap-1">
             <History size={11} className="shrink-0" style={{ color:ORANGE_T }}/>
+            {pianoPrec && <span className="size-1.5 rounded-full shrink-0" style={{ background:colorePiano(pianoPrec) }}/>}
             <span className="text-xs font-mono font-bold" style={{ color:ORANGE_T }}>{machine.prevRoom}</span>
           </span>
         )}
