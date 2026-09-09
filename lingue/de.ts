@@ -180,6 +180,10 @@ const de: Testi = {
   bici: "Fahrrad",
   biciSi: "Ja, ich habe eins",
   biciNo: "Nein",
+  tema: "Erscheinungsbild",
+  temaSistema: "System",
+  temaChiaro: "Hell",
+  temaScuro: "Dunkel",
 };
 
 export default de;

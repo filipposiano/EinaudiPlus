@@ -9,12 +9,12 @@
 import { useState, useEffect } from "react";
 import {
   X, ChevronRight, Globe, Bell, BellRing, Download, Eye, ShieldCheck,
-  Send, Share, Menu, CheckCircle2, FileText,
+  Send, Share, Menu, CheckCircle2, FileText, SunMoon, Sun, Moon, Monitor,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
 import { T, LINGUE, type Lang } from "./i18n";
-import { RED, RED_FG } from "./tema";
+import { RED, RED_FG, type TemaPreferenza } from "./tema";
 import type { Role as AdminRole } from "./AdminPanel";
 
 /** Come si chiama un ruolo quando lo si mostra a chi ha fatto l'accesso. */
@@ -61,17 +61,26 @@ export function Toast({ msg, onClose, undo }: { msg: string; onClose: () => void
 // tutto (riaprire l'app ricarica già i dati da sola) e così il selettore
 // manuale del tema, che ora segue sempre quello del telefono — vedi l'effetto
 // che ascolta prefers-color-scheme in cima al componente App.
-export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, onClose }: {
+export function SettingsSheet({ lang, room, adminRole, onLang, temaPref, onTema, onAccessibility, onClose }: {
   lang: Lang; room: string | null;
   adminRole: AdminRole | null;
-  onLang: (l: Lang) => void; onAccessibility: () => void; onClose: () => void;
+  onLang: (l: Lang) => void;
+  temaPref: TemaPreferenza; onTema: (t: TemaPreferenza) => void;
+  onAccessibility: () => void; onClose: () => void;
 }) {
   // Le lingue non sono più due: al posto dell'interruttore c'è un elenco che
   // si apre. Vive qui e non in un foglio a parte perché è una riga sola che
   // si espande — aprire un altro pannello sopra questo, per scegliere fra sei
   // voci, sarebbe stato un livello di troppo.
   const [lingueAperte, setLingueAperte] = useState(false);
+  const [temaAperto, setTemaAperto] = useState(false);
   const linguaCorrente = LINGUE.find((l) => l.id === lang);
+  const OPZIONI_TEMA: { id: TemaPreferenza; icon: React.ReactNode; chiave: "temaSistema" | "temaChiaro" | "temaScuro" }[] = [
+    { id: "system", icon: <Monitor size={16}/>, chiave: "temaSistema" },
+    { id: "light",  icon: <Sun size={16}/>,     chiave: "temaChiaro" },
+    { id: "dark",   icon: <Moon size={16}/>,    chiave: "temaScuro" },
+  ];
+  const temaCorrente = OPZIONI_TEMA.find((o) => o.id === temaPref)!;
   const fg  = "var(--foreground)";
   const sub = "var(--gray-accessible-text)";
   const div = "var(--border)";
@@ -157,6 +166,27 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
                     <span className="text-base shrink-0">{l.bandiera}</span>
                     <span className="truncate">{l.etichetta}</span>
                     {l.id === lang && <span className="ml-auto shrink-0">✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          <div style={{ borderBottom:`1px solid ${div}` }}>
+            <Row icon={<SunMoon size={18}/>} label={T[lang].tema}
+              sub={T[lang][temaCorrente.chiave]}
+              onClick={() => setTemaAperto((v) => !v)}/>
+            {temaAperto && (
+              <div className="grid grid-cols-3 gap-x-1 p-1" style={{ background:"var(--secondary)" }}>
+                {OPZIONI_TEMA.map((o) => (
+                  <button key={o.id}
+                    onClick={() => { onTema(o.id); setTemaAperto(false); }}
+                    className="w-full flex flex-col items-center gap-1 px-2 py-2.5 text-xs text-left rounded-lg"
+                    style={{
+                      color: o.id === temaPref ? RED : fg,
+                      fontWeight: o.id === temaPref ? 600 : 400,
+                    }}>
+                    {o.icon}
+                    <span className="truncate">{T[lang][o.chiave]}</span>
                   </button>
                 ))}
               </div>

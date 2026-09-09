@@ -180,6 +180,10 @@ const fr: Testi = {
   bici: "Vélo",
   biciSi: "Oui, j'en ai un",
   biciNo: "Non",
+  tema: "Apparence",
+  temaSistema: "Système",
+  temaChiaro: "Clair",
+  temaScuro: "Sombre",
 };
 
 export default fr;

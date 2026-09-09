@@ -5,6 +5,32 @@
 
 export type Theme = "dark" | "light";
 
+// ─── Preferenza di tema ──────────────────────────────────────────────────────
+//
+// "system" segue il telefono (con aggiornamento live se lo si cambia mentre
+// l'app è aperta, vedi l'effetto in App.tsx); "light"/"dark" lo forzano.
+// Non salvata affatto = "system": è la scelta di chi non ha mai toccato
+// l'impostazione, e deve continuare a seguire il telefono anche se un giorno
+// cambia dispositivo o pulisce il browser.
+export type TemaPreferenza = "system" | "light" | "dark";
+
+const CHIAVE_TEMA = "einaudiplus.tema";
+
+export function temaIniziale(): TemaPreferenza {
+  try {
+    const salvata = localStorage.getItem(CHIAVE_TEMA);
+    if (salvata === "light" || salvata === "dark") return salvata;
+  } catch { /* modalità privata: si ricade su "system", che è già il default */ }
+  return "system";
+}
+
+export function salvaTema(t: TemaPreferenza) {
+  try {
+    if (t === "system") localStorage.removeItem(CHIAVE_TEMA);
+    else localStorage.setItem(CHIAVE_TEMA, t);
+  } catch { /* niente da fare: la scelta vale solo per questa sessione */ }
+}
+
 export const RED    = "var(--primary)";
 export const RED_FG = "var(--primary-foreground)";
 

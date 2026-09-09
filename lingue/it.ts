@@ -198,6 +198,10 @@ const it = {
   bici: "Bici",
   biciSi: "Sì, ce l'ho",
   biciNo: "No",
+  tema: "Aspetto",
+  temaSistema: "Sistema",
+  temaChiaro: "Chiaro",
+  temaScuro: "Scuro",
 };
 
 export default it;

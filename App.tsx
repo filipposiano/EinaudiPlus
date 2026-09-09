@@ -36,6 +36,7 @@ import { SettingsSheet, InstallPrompt, Toast, WelcomeReminderPrompt } from "./pa
 import {
   RED, RED_FG, GREEN, YELLOW, OOS_C, ORANGE,
   GREEN_T, YELLOW_T, OOS_T, ORANGE_T, type Theme,
+  type TemaPreferenza, temaIniziale, salvaTema,
 } from "./tema";
 
 // Le schermate amministrative vivono dentro questa stessa app, aperte dal menu
@@ -2407,15 +2408,24 @@ export default function App() {
   const [accessibilityOpen, setAccessibilityOpen] = useState(false);
   const [menuAperto, setMenuAperto] = useState(false);   // il menu laterale, solo su telefono
   const [_aPrefs, _setAPrefs] = useState<AccessibilityPrefs>(loadPrefs);
-  // Il tema segue sempre quello del telefono: niente più selettore manuale né
-  // preferenza salvata. Un secondo interruttore che duplica un'impostazione
-  // che il sistema operativo offre già non aggiunge nulla, e rischia solo di
-  // restare "bloccato" su una scelta vecchia quando l'utente cambia tema al
-  // telefono altrove.
-  const [theme, setTheme] = useState<Theme>(() =>
-    typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark" : "light"
-  );
+  // Di default il tema segue quello del telefono ("system"); dalle
+  // Impostazioni si può forzare chiaro o scuro. La preferenza vive in
+  // tema.ts insieme alla funzione che la legge, cosi' come linguaIniziale
+  // sta in i18n.ts.
+  const [temaPref, setTemaPref] = useState<TemaPreferenza>(temaIniziale);
+  const [theme, setTheme] = useState<Theme>(() => {
+    const pref = temaIniziale();
+    if (pref !== "system") return pref;
+    return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark" : "light";
+  });
+  const cambiaTema = useCallback((t: TemaPreferenza) => {
+    setTemaPref(t);
+    salvaTema(t);
+    setTheme(t === "system"
+      ? (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+      : t);
+  }, []);
   const [lang,   setLang]     = useState<Lang>(linguaIniziale);
   const [roomNumber] = useState<string | null>(() => {
     try { return localStorage.getItem("laundryhub.room"); } catch { return null; }
@@ -2450,13 +2460,15 @@ export default function App() {
   }, [theme]);
 
   // Se l'utente cambia tema al telefono MENTRE l'app è aperta, si adegua
-  // subito invece di aspettare una ricarica.
+  // subito invece di aspettare una ricarica — ma solo quando la preferenza è
+  // "system": chi ha forzato chiaro o scuro non deve vederselo scavalcare dal
+  // telefono.
   useEffect(() => {
     const mq = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = (e: MediaQueryListEvent) => setTheme(e.matches ? "dark" : "light");
+    const onChange = (e: MediaQueryListEvent) => { if (temaPref === "system") setTheme(e.matches ? "dark" : "light"); };
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
-  }, []);
+  }, [temaPref]);
 
   // Applica preferenze accessibilità al DOM al mount
   useEffect(() => { applyToDOM(accessibilityPrefs); }, []);
@@ -2772,6 +2784,7 @@ export default function App() {
     bodyContent = (
       <SettingsSheet lang={lang} room={roomNumber} adminRole={adminRole}
         onLang={(l)=>{ setLang(l); salvaLingua(l); }}
+        temaPref={temaPref} onTema={cambiaTema}
         onAccessibility={() => setAccessibilityOpen(true)}
         onClose={() => setFacility("laundry")}/>
     );
