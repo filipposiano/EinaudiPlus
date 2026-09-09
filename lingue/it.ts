@@ -194,6 +194,10 @@ const it = {
   usaTastiera: "Puoi anche digitare da tastiera e premere Invio.",
   autoReservedLabel: "inclusa",
   giornoDopo: "(del giorno successivo)",
+  navBici: "Bici",
+  bici: "Bici",
+  biciSi: "Sì, ce l'ho",
+  biciNo: "No",
 };
 
 export default it;

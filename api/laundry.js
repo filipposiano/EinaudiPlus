@@ -144,6 +144,22 @@ export default async function handler(req, res) {
         }));
       }
 
+      // Se in camera c'è una bici. Letta e scritta dalle Impostazioni
+      // dell'app, non ha niente a che fare con la lavanderia: vive qui solo
+      // perché questo è l'unico endpoint pubblico già legato a una camera.
+      case "bikeGet": {
+        if (!camera(room)) return fail(res, "camera non valida");
+        return json(res, 200, await rpc("bike_get", { p_room: camera(room) }));
+      }
+
+      case "bikeSet": {
+        if (!camera(room)) return fail(res, "camera non valida");
+        return json(res, 200, await rpc("bike_set", {
+          p_room: camera(room),
+          p_has_bike: Boolean(body.has_bike),
+        }));
+      }
+
       default:
         return fail(res, "azione sconosciuta");
     }

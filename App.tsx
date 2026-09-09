@@ -5,7 +5,7 @@ import {
   Delete, X, Wrench, Loader2, Star,
   History, Trash2, Film, Music, Menu,
   MessageSquare, Send, LogOut, Printer, Download,
-  Settings, Repeat, Eraser, Presentation, UserCog, ChevronLeft,
+  Settings, Repeat, Eraser, Presentation, UserCog, ChevronLeft, Bike,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -50,7 +50,7 @@ const AdminLoginSheet = lazy(() => import("./AdminPanel").then((m) => ({ default
 // stesso `onChange`, e non aprono piu' un foglio sopra la pagina.
 type Facility = "laundry" | "cinema" | "music" | "conferenze" | "guasto" | "impostazioni" | "feedback" | AdminTab;
 
-const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "account", "ricorrenti", "manutenzione"];
+const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "bici", "account", "ricorrenti", "manutenzione"];
 const isAdminFacility = (f: Facility): f is AdminTab => (ADMIN_TABS as string[]).includes(f);
 
 /** Etichetta della camera nell'intestazione. Chi amministra è la Direzione. */
@@ -2211,7 +2211,7 @@ const FACILITIES: {
 // controllo vero resta sul server: nascondere una voce non è un'autorizzazione.
 const ADMIN_SECTIONS: {
   id: AdminTab; icon: any;
-  chiave: "navMacchine" | "navSegnalazioni" | "navAccount" | "navRicorrenti" | "navManutenzione";
+  chiave: "navMacchine" | "navSegnalazioni" | "navBici" | "navAccount" | "navRicorrenti" | "navManutenzione";
   sistemistaOnly?: boolean;
   // Macchine e segnalazioni restano affari di FDO e sistemista: lo staff
   // prenota per conto della Direzione come l'FDO, ma non deve vedere lo
@@ -2220,6 +2220,10 @@ const ADMIN_SECTIONS: {
 }[] = [
   { id: "macchine",       icon: Wrench,        chiave: "navMacchine",     staffEsclusa: true },
   { id: "segnalazioni",   icon: MessageSquare, chiave: "navSegnalazioni", staffEsclusa: true },
+  // Quali camere hanno una bici: la vede chi e' in portineria, come le
+  // macchine e le segnalazioni. Cancellarle tutte (reset annuale) resta al
+  // sistemista — il pulsante compare solo a lui dentro la sezione stessa.
+  { id: "bici",           icon: Bike,          chiave: "navBici",         staffEsclusa: true },
   // La programmazione della sala polivalente non e' piu' una scheda a se':
   // vive dentro la sezione "Polivalente" stessa (vedi Conferenze.tsx), visibile
   // li' a chiunque abbia una sessione admin — non serve piu' una voce qui.

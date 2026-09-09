@@ -115,6 +115,18 @@ export async function sendFeedback(room: string | null, text: string) {
   return postAction("feedback", { room: room || "", text });
 }
 
+/** Se questa camera ha dichiarato una bici. */
+export async function getBike(room: string): Promise<boolean> {
+  const res = await postAction("bikeGet", { room });
+  return Boolean(res.has_bike);
+}
+
+/** Dichiara (o ritira la dichiarazione) che questa camera ha una bici. */
+export async function setBike(room: string, hasBike: boolean): Promise<boolean> {
+  const res = await postAction("bikeSet", { room, has_bike: hasBike });
+  return Boolean(res.has_bike);
+}
+
 /**
  * Codice usa-e-getta da incollare al bot Telegram per collegare la chat a
  * questa camera. Serve un codice perché senza, chiunque potrebbe scrivere al

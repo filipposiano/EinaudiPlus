@@ -9,7 +9,7 @@
 import { useState, useEffect } from "react";
 import {
   X, ChevronRight, Globe, Bell, BellRing, Download, Eye, ShieldCheck,
-  Send, Share, Menu, CheckCircle2, FileText,
+  Send, Share, Menu, CheckCircle2, FileText, Bike,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -54,6 +54,27 @@ export function Toast({ msg, onClose, undo }: { msg: string; onClose: () => void
     </div>
   );
 }
+// ─── Interruttore ───────────────────────────────────────────────────────────
+//
+// Usato solo per la bici, qui sotto: le altre righe di Impostazioni aprono
+// un altro schermo (la freccetta di `Row`), questa cambia uno stato sul
+// posto e non ha senso navigarci sopra.
+function Interruttore({ checked, onChange, busy, label }: {
+  checked: boolean; onChange: () => void; busy?: boolean; label: string;
+}) {
+  return (
+    <button
+      type="button" role="switch" aria-checked={checked} aria-label={label}
+      onClick={onChange} disabled={busy}
+      className="relative shrink-0 w-11 h-6 rounded-full transition-colors"
+      style={{ background: checked ? RED : "var(--secondary)", opacity: busy ? 0.6 : 1 }}
+    >
+      <span className="absolute top-0.5 size-5 rounded-full shadow transition-all"
+        style={{ left: checked ? "22px" : "2px", background: "#fff" }} />
+    </button>
+  );
+}
+
 // ─── Impostazioni ───────────────────────────────────────────────────────────
 //
 // Un solo pulsante al posto di quattro-cinque icone sparse nell'header: lingua,
@@ -90,6 +111,27 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
     (window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true);
 
   useEffect(() => { push.getReminderState().then(setReminderState); }, []);
+
+  // La bici e' una dichiarazione di camera, non della Direzione: DIREZIONE
+  // non e' una stanza vera e non ha una bici da segnare.
+  const camera = room && room !== api.DIREZIONE ? room : null;
+  const [haBici, setHaBici] = useState<boolean | null>(null);
+  const [biciBusy, setBiciBusy] = useState(false);
+
+  useEffect(() => {
+    if (!camera) return;
+    setHaBici(null);
+    api.getBike(camera).then(setHaBici).catch(() => setHaBici(null));
+  }, [camera]);
+
+  async function toggleBici() {
+    if (!camera || biciBusy || haBici === null) return;
+    const next = !haBici;
+    setBiciBusy(true);
+    try { setHaBici(await api.setBike(camera, next)); }
+    catch { /* stato non cambiato: l'interruttore torna com'era da solo */ }
+    finally { setBiciBusy(false); }
+  }
 
   async function toggleReminders() {
     if (busy || !room) return;
@@ -167,6 +209,20 @@ export function SettingsSheet({ lang, room, adminRole, onLang, onAccessibility, 
               <Row icon={reminderState==="on" ? <BellRing size={18}/> : <Bell size={18}/>}
                 label={T[lang].notificheTurni} sub={reminderSub}
                 onClick={() => setRemindersOpen(true)}/>
+            </div>
+          )}
+          {camera && (
+            <div style={{ borderBottom:`1px solid ${div}` }}
+              className="w-full flex items-center gap-3 px-4 py-3">
+              <span style={{ color: sub }}><Bike size={18}/></span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-sm font-semibold" style={{ color: fg }}>{T[lang].bici}</span>
+                <span className="block text-xs" style={{ color: sub }}>
+                  {haBici === null ? "…" : haBici ? T[lang].biciSi : T[lang].biciNo}
+                </span>
+              </span>
+              <Interruttore checked={!!haBici} busy={biciBusy || haBici === null}
+                onChange={toggleBici} label={T[lang].bici}/>
             </div>
           )}
           {!standalone && (

@@ -59,8 +59,9 @@ quest'ordine, e nient'altro:
 | 6 | `account.sql` | account amministrativi e cambio password |
 | 7 | `telegram.sql` | collegamento del bot |
 | 8 | `reminders.sql` | promemoria dovuti e potatura periodica |
-| 9 | `cron.sql` | job `pg_cron` (va personalizzato: contiene dei segnaposto) |
-| 10 | **`permessi.sql`** | **restringe l'esecuzione a `service_role`. Non è facoltativo** |
+| 9 | `bici.sql` | dichiarazione bici per camera, vista di portineria/sistemista |
+| 10 | `cron.sql` | job `pg_cron` (va personalizzato: contiene dei segnaposto) |
+| 11 | **`permessi.sql`** | **restringe l'esecuzione a `service_role`. Non è facoltativo** |
 
 `permessi.sql` va **per ultimo** e va eseguito: agisce su tutte le funzioni
 già create, e senza di lui ognuna resta invocabile via `/rest/v1/rpc/` da

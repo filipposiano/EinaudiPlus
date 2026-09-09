@@ -19,7 +19,7 @@ const MUTATIONS = new Set([
   "conferenzaAdd", "conferenzaUpdate", "conferenzaDelete",
   "conferenzaSkip", "conferenzaMove", "conferenzaResetOccorrenza",
   "accountCreate", "accountSetPassword", "accountSetActive", "accountDelete",
-  "accountChangeOwnPassword",
+  "accountChangeOwnPassword", "biciPurge",
 ]);
 
 // Riservate al sistemista. La portineria non le vede nel pannello, ma il
@@ -29,7 +29,7 @@ const SOLO_SISTEMISTA = new Set([
   "recurringSetActive", "recurringDelete", "applyRecurring", "purge", "counts",
   "pushSubs", "deletePushSub", "telegramSubs", "deleteTelegramSub",
   "accountList", "accountCreate", "accountSetPassword",
-  "accountSetActive", "accountDelete",
+  "accountSetActive", "accountDelete", "biciPurge",
 ]);
 
 // Macchine e segnalazioni restano affari di FDO e sistemista: lo staff
@@ -37,7 +37,7 @@ const SOLO_SISTEMISTA = new Set([
 // vedere ne' toccare lo stato guasto/funzionante delle macchine ne' le
 // segnalazioni dei residenti.
 const VIETATE_A_STAFF = new Set([
-  "overview", "setMachineStatus", "feedback", "markFeedback",
+  "overview", "setMachineStatus", "feedback", "markFeedback", "biciList",
 ]);
 
 export default async function handler(req, res) {
@@ -442,6 +442,17 @@ export default async function handler(req, res) {
 
       case "deleteTelegramSub":
         result = await rpc("sysadmin_delete_telegram_sub", { p_id: Number(body.id) });
+        break;
+
+      // ── Bici ──────────────────────────────────────────────────────────────
+      // Lettura: FDO e sistemista (vedi VIETATE_A_STAFF). Cancellazione totale,
+      // per il reset annuale: solo sistemista (vedi SOLO_SISTEMISTA).
+      case "biciList":
+        result = await rpc("bike_admin_list");
+        break;
+
+      case "biciPurge":
+        result = await rpc("bike_purge");
         break;
 
       default:

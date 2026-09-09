@@ -176,6 +176,10 @@ const de: Testi = {
   usaTastiera: "Du kannst auch über die Tastatur eingeben und Enter drücken.",
   autoReservedLabel: "inbegriffen",
   giornoDopo: "(am Folgetag)",
+  navBici: "Fahrräder",
+  bici: "Fahrrad",
+  biciSi: "Ja, ich habe eins",
+  biciNo: "Nein",
 };
 
 export default de;

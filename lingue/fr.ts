@@ -176,6 +176,10 @@ const fr: Testi = {
   usaTastiera: "Tu peux aussi taper au clavier et appuyer sur Entrée.",
   autoReservedLabel: "incluse",
   giornoDopo: "(le lendemain)",
+  navBici: "Vélos",
+  bici: "Vélo",
+  biciSi: "Oui, j'en ai un",
+  biciNo: "Non",
 };
 
 export default fr;

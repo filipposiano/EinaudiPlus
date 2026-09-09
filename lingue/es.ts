@@ -176,6 +176,10 @@ const es: Testi = {
   usaTastiera: "También puedes escribir con el teclado y pulsar Intro.",
   autoReservedLabel: "incluida",
   giornoDopo: "(del día siguiente)",
+  navBici: "Bicis",
+  bici: "Bicicleta",
+  biciSi: "Sí, tengo una",
+  biciNo: "No",
 };
 
 export default es;

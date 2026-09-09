@@ -46,7 +46,7 @@ type Recurring = {
 // `staff` ha gli stessi poteri di `fdo`; solo `sistemista` puo' di piu'.
 // Restano account distinti perche' l'audit log registra chi ha fatto cosa.
 export type Role = "fdo" | "staff" | "sistemista";
-export type Tab = "macchine" | "segnalazioni" | "account" | "ricorrenti" | "manutenzione";
+export type Tab = "macchine" | "segnalazioni" | "bici" | "account" | "ricorrenti" | "manutenzione";
 
 // ─── Chiamate ────────────────────────────────────────────────────────────────
 
@@ -663,6 +663,126 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
           );
         })}
       </div>
+    </>
+  );
+}
+
+// ─── Bici ────────────────────────────────────────────────────────────────────
+//
+// Non ha niente a che fare con lavanderia o sale: e' la stessa domanda che
+// oggi si segna a mano su un foglio all'ingresso — "questa camera ha una
+// bici?" — vista da chi sta in portineria. Ogni riga la dichiara il
+// residente stesso, dalle sue Impostazioni.
+
+type BiciDati = { totale: number; camere: string[] };
+
+function Bici({ sistemista }: { sistemista: boolean }) {
+  const [dati, setDati] = useState<BiciDati | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [chiesto, setChiesto] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    try { setDati(await call<BiciDati>("biciList")); }
+    catch (e: any) { setMsg(e.message); }
+    finally { setBusy(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Solo il sistemista arriva a vedere questo pulsante (vedi AdminScreens),
+  // ma il controllo vero e' server-side: SOLO_SISTEMISTA in
+  // api/admin/data.js rifiuterebbe comunque la chiamata a chi non lo e'.
+  async function reset() {
+    setBusy(true); setMsg(null);
+    try {
+      const r = await call<{ cancellate: number }>("biciPurge");
+      setMsg(`Fatto — camere cancellate: ${r.cancellate}.`);
+      setChiesto(false);
+      load();
+    } catch (e: any) {
+      setMsg("Non è riuscito: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <p style={{ fontSize: 13, ...S.sub, marginBottom: 16, maxWidth: "70ch" }}>
+        Le camere che hanno dichiarato di avere una bici, dalle loro Impostazioni.
+      </p>
+
+      <div style={{ ...S.card, padding: 14, marginBottom: 16, display: "flex", alignItems: "center", gap: 14 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: 26, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+            {dati ? dati.totale : "—"}
+          </p>
+          <p style={{ fontSize: 12, ...S.sub }}>
+            {dati?.totale === 1 ? "camera con una bici" : "camere con una bici"}
+          </p>
+        </div>
+        <button style={{ ...S.btn, padding: "8px 9px", lineHeight: 0 }}
+                disabled={busy} onClick={load} title="Aggiorna" aria-label="Aggiorna">
+          <IconaAggiorna />
+        </button>
+      </div>
+
+      {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
+
+      {dati && dati.camere.length > 0 ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+          {dati.camere.map((r) => (
+            <span key={r} style={{
+              ...S.card, padding: "6px 12px", fontSize: 13, fontWeight: 600, fontFamily: "monospace",
+            }}>{r}</span>
+          ))}
+        </div>
+      ) : (
+        <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
+          {dati ? "Nessuna camera ha dichiarato una bici." : "Caricamento…"}
+        </p>
+      )}
+
+      {/* Il reset annuale: solo il sistemista lo vede. Una conferma sola,
+          non la parola da scrivere che chiede "Azzera tutto" in
+          Manutenzione — qui non si perdono prenotazioni ne' account, solo
+          dichiarazioni che ogni residente puo' rifare in un tocco. */}
+      {sistemista && (
+        <div style={{ ...S.card, padding: 14, borderColor: chiesto ? "var(--destructive)" : "var(--border)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontSize: 14, fontWeight: 600 }}>Cancella tutte le bici</p>
+              <p style={{ fontSize: 12, ...S.sub }}>
+                Per il reset annuale, a inizio anno: ogni residente dovrà dichiararla di nuovo.
+              </p>
+            </div>
+            {!chiesto && (
+              <button style={S.danger} disabled={busy}
+                onClick={() => { setChiesto(true); setMsg(null); }}>
+                Esegui
+              </button>
+            )}
+          </div>
+
+          {chiesto && (
+            <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+              <p style={{ fontSize: 13, marginBottom: 10 }}>
+                <strong>L'operazione non è annullabile.</strong> Confermi?
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button style={S.danger} disabled={busy} onClick={reset}>
+                  {busy ? "In corso…" : "Sì, cancella tutte"}
+                </button>
+                <button style={S.btn} disabled={busy} onClick={() => setChiesto(false)}>
+                  Annulla
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -2060,6 +2180,9 @@ export function AdminScreens({ tab, onSession }: {
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata a FDO e sistemista.</p>)}
       {tab === "segnalazioni" && (!staff
         ? <Segnalazioni laundries={laundries} reload={loadOverview} />
+        : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata a FDO e sistemista.</p>)}
+      {tab === "bici" && (!staff
+        ? <Bici sistemista={sistemista} />
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata a FDO e sistemista.</p>)}
       {tab === "account" && (sistemista
         ? <Accounts me={username} />
