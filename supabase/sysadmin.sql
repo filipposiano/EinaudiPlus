@@ -568,3 +568,15 @@ begin
   return jsonb_build_object('ok', true, 'pruned', v_pruned);
 end;
 $$;
+
+-- Stesso broadcast, canale Telegram (vedi migrations/027). Solo le chat
+-- verificate: un codice mai incollato al bot non e' un'iscrizione.
+create or replace function sysadmin_all_telegram_subs()
+returns jsonb language sql stable as $$
+  select coalesce(
+    jsonb_agg(jsonb_build_object('chat_id', chat_id)),
+    '[]'::jsonb
+  )
+  from telegram_sub
+  where verified_at is not null;
+$$;

@@ -7,6 +7,7 @@ import { rpc } from "../_lib/db.js";
 import { readBody, json, fail, methodOk, intero } from "../_lib/http.js";
 import { currentAdmin, isSysadmin, isStaff, hashPassword, verifyPassword } from "../_lib/auth.js";
 import { sendWebPush, pushConfigured } from "../_lib/push.js";
+import { sendTelegram, telegramConfigured } from "../_lib/telegram.js";
 
 // Le azioni che modificano qualcosa finiscono nell'audit log. Le letture no,
 // sarebbero solo rumore.
@@ -449,43 +450,72 @@ export default async function handler(req, res) {
       // lavanderia/camera): usata per comunicazioni del sistemista, non per i
       // promemoria automatici che restano affari del cron.
       case "broadcastPush": {
+        // Limite per account, non per IP: un cookie rubato funziona da
+        // qualunque indirizzo, quindi il freno deve seguire CHI sta mandando,
+        // non da dove. Tre invii ogni mezz'ora bastano a chi lo usa davvero
+        // (comunicazioni occasionali) e tengono corto il danno se l'account
+        // e' compromesso — non lo impediscono, ma un blast di massa richiede
+        // comunque piu' di un colpo solo.
+        const puoInviare = await rpc("rl_hit", {
+          p_bucket: `broadcast:${me.u}`, p_limit: 3, p_window_secs: 1800,
+        }).catch(() => true); // DB muto: non e' questo il controllo che deve bloccare tutto
+        if (!puoInviare) {
+          return fail(res, "troppi invii, riprova fra un po' (max 3 ogni mezz'ora)", {}, 429);
+        }
+
         const title = String(body.title || "").trim();
         const testo = String(body.body || "").trim();
         if (!title || !testo) return fail(res, "titolo e testo sono obbligatori");
-        if (!pushConfigured()) return fail(res, "push non configurato sul server");
 
-        const subs = await rpc("sysadmin_all_push_subs");
-        const dispositivi = Array.isArray(subs) ? subs : [];
-
-        let ok = 0, falliti = 0;
-        const gone = [];
-        await Promise.all(dispositivi.map(async (s) => {
-          const esito = await sendWebPush(
-            // `tag` diverso da "laundry-reminder" (il default in sw.js): senza,
-            // una notifica di lavanderia in arrivo sostituirebbe questa, o
-            // viceversa, invece di comparire entrambe.
-            { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-            { title, body: testo, url: "/", tag: "sysadmin-broadcast" }
-          );
-          if (esito === "ok") ok++;
-          else {
-            falliti++;
-            if (esito === "gone") gone.push(s.id);
-          }
-        }));
-
-        // Stessa potatura del cron: chi ha disinstallato o revocato il
-        // permesso non ricevera' mai piu' nulla, la riga resta solo rumore.
-        if (gone.length) {
-          await rpc("sysadmin_prune_push_subs", { p_ids: gone }).catch(() => {});
+        const usaPush = pushConfigured();
+        const usaTelegram = telegramConfigured();
+        if (!usaPush && !usaTelegram) {
+          return fail(res, "nessun canale di notifica configurato sul server");
         }
 
-        result = {
-          ok: true,
-          dispositivi_totali: dispositivi.length,
-          inviati: ok,
-          falliti,
-        };
+        const push = { totali: 0, inviati: 0, falliti: 0 };
+        const telegram = { totali: 0, inviati: 0, falliti: 0 };
+
+        if (usaPush) {
+          const subs = await rpc("sysadmin_all_push_subs");
+          const dispositivi = Array.isArray(subs) ? subs : [];
+          push.totali = dispositivi.length;
+
+          const gone = [];
+          await Promise.all(dispositivi.map(async (s) => {
+            const esito = await sendWebPush(
+              // `tag` diverso da "laundry-reminder" (il default in sw.js):
+              // senza, una notifica di lavanderia in arrivo sostituirebbe
+              // questa, o viceversa, invece di comparire entrambe.
+              { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+              { title, body: testo, url: "/", tag: "sysadmin-broadcast" }
+            );
+            if (esito === "ok") push.inviati++;
+            else {
+              push.falliti++;
+              if (esito === "gone") gone.push(s.id);
+            }
+          }));
+
+          // Stessa potatura del cron: chi ha disinstallato o revocato il
+          // permesso non ricevera' mai piu' nulla, la riga resta solo rumore.
+          if (gone.length) {
+            await rpc("sysadmin_prune_push_subs", { p_ids: gone }).catch(() => {});
+          }
+        }
+
+        if (usaTelegram) {
+          const chats = await rpc("sysadmin_all_telegram_subs");
+          const lista = Array.isArray(chats) ? chats : [];
+          telegram.totali = lista.length;
+
+          await Promise.all(lista.map(async (c) => {
+            const esito = await sendTelegram(c.chat_id, title, testo);
+            if (esito === "ok") telegram.inviati++; else telegram.falliti++;
+          }));
+        }
+
+        result = { ok: true, push, telegram };
         break;
       }
 

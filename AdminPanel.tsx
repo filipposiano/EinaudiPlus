@@ -1900,9 +1900,10 @@ function ListaIscrizioni({ titolo, riepilogo, righe, vuoto, onDelete }: {
   );
 }
 
-/** Notifica manuale a tutti i dispositivi iscritti alle push, a prescindere
- *  da lavanderia o camera — comunicazioni del sistemista (es. manutenzione
- *  programmata), non i promemoria automatici che restano affari del cron. */
+/** Notifica manuale a tutti i dispositivi/chat iscritti — push e Telegram, a
+ *  prescindere da lavanderia o camera — per comunicazioni del sistemista
+ *  (es. manutenzione programmata), non i promemoria automatici che restano
+ *  affari del cron. */
 function InvioNotifica() {
   const [titolo, setTitolo] = useState("");
   const [testo, setTesto] = useState("");
@@ -1912,18 +1913,23 @@ function InvioNotifica() {
   async function invia() {
     const t = titolo.trim(), b = testo.trim();
     if (!t || !b) return;
-    if (!confirm(`Inviare questa notifica a tutti i dispositivi iscritti?\n\n"${t}"\n${b}`)) return;
+    if (!confirm(`Inviare questa notifica a tutti i dispositivi e chat iscritti?\n\n"${t}"\n${b}`)) return;
 
     setBusy(true); setEsito(null);
     try {
-      const r = await call<{ dispositivi_totali: number; inviati: number; falliti: number }>(
-        "broadcastPush", { title: t, body: b }
-      );
-      setEsito(
-        r.dispositivi_totali === 0
-          ? "Nessun dispositivo ha le notifiche attive."
-          : `Inviata a ${r.inviati} di ${r.dispositivi_totali} dispositivi` + (r.falliti ? ` — ${r.falliti} non raggiunti` : "")
-      );
+      const r = await call<{
+        push: { totali: number; inviati: number; falliti: number };
+        telegram: { totali: number; inviati: number; falliti: number };
+      }>("broadcastPush", { title: t, body: b });
+
+      const parti: string[] = [];
+      if (r.push.totali > 0) {
+        parti.push(`push: ${r.push.inviati}/${r.push.totali}` + (r.push.falliti ? ` (${r.push.falliti} non raggiunti)` : ""));
+      }
+      if (r.telegram.totali > 0) {
+        parti.push(`Telegram: ${r.telegram.inviati}/${r.telegram.totali}` + (r.telegram.falliti ? ` (${r.telegram.falliti} falliti)` : ""));
+      }
+      setEsito(parti.length ? "Inviata — " + parti.join(" · ") : "Nessun dispositivo o chat ha le notifiche attive.");
       setTitolo(""); setTesto("");
     } catch (e: any) {
       setEsito("Non è riuscito: " + e.message);
@@ -1938,8 +1944,8 @@ function InvioNotifica() {
         Invia notifica a tutti i dispositivi
       </p>
       <p style={{ fontSize: 13, ...S.sub, marginBottom: 12 }}>
-        Arriva come notifica push a chiunque abbia attivato le notifiche della web app,
-        indipendentemente da lavanderia o camera. Non tocca Telegram.
+        Arriva come notifica push a chi ha attivato le notifiche della web app e come
+        messaggio a chi ha collegato Telegram, indipendentemente da lavanderia o camera.
       </p>
       <input style={{ ...S.input, marginBottom: 8 }} placeholder="Titolo" value={titolo}
              maxLength={80} onChange={(e) => setTitolo(e.target.value)} disabled={busy} />

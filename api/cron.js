@@ -8,28 +8,8 @@
 
 import { rpc } from "./_lib/db.js";
 import { sendWebPush, pushConfigured } from "./_lib/push.js";
+import { sendTelegram } from "./_lib/telegram.js";
 import { json, methodOk } from "./_lib/http.js";
-
-const TELEGRAM_API = "https://api.telegram.org";
-
-async function sendTelegram(chatId, title, body) {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token || !chatId) return "err";
-  try {
-    const res = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: `*${title}*\n${body}`,
-        parse_mode: "Markdown",
-      }),
-    });
-    return res.ok ? "ok" : "err";
-  } catch {
-    return "err";
-  }
-}
 
 export default async function handler(req, res) {
   if (!methodOk(req, res, ["POST", "GET"])) return;
