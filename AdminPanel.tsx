@@ -424,16 +424,6 @@ const IconaArchivia = () => (
   </svg>
 );
 
-const IconaAggiorna = () => (
-  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-    <path d="M3 3v5h5" />
-    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
-    <path d="M16 16h5v5" />
-  </svg>
-);
-
 const IconaBici = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -536,13 +526,6 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
         <Scheda attiva={onlyOpen}  onClick={() => setOnlyOpen(true)}  label="Da gestire"  n={daGestire.length} />
         <Scheda attiva={!onlyOpen} onClick={() => setOnlyOpen(false)} label="Archiviate" n={archiviate.length} />
-        {/* Solo icona: e' l'unico pulsante di questa riga che non sceglie un
-            filtro, e scriverci "Aggiorna" accanto a due schede piu' grandi lo
-            faceva sembrare un terzo filtro invece che un'azione a parte. */}
-        <button style={{ ...S.btn, marginLeft: "auto", padding: "8px 9px", lineHeight: 0 }}
-                disabled={busy} onClick={load} title="Aggiorna" aria-label="Aggiorna">
-          <IconaAggiorna />
-        </button>
       </div>
 
       {busy && items.length === 0 && <p style={{ fontSize: 13, ...S.sub }}>Caricamento…</p>}
@@ -688,9 +671,9 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
 type Camera = { room: string; creato_da: "residente" | "sistemista" };
 type BiciDati = { totale: number; camere: Camera[] };
 
-// Stessa famiglia grafica di IconaBici/IconaArchivia/IconaAggiorna: una
-// sagoma minima, non un'icona di libreria — questo file resta senza
-// lucide-react per non appesantire il bundle lazy con due glifi soli.
+// Stessa famiglia grafica di IconaBici/IconaArchivia: una sagoma minima, non
+// un'icona di libreria — questo file resta senza lucide-react per non
+// appesantire il bundle lazy con due glifi soli.
 const IconaReception = () => (
   <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor"
        strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
