@@ -1900,6 +1900,63 @@ function ListaIscrizioni({ titolo, riepilogo, righe, vuoto, onDelete }: {
   );
 }
 
+/** Notifica manuale a tutti i dispositivi iscritti alle push, a prescindere
+ *  da lavanderia o camera — comunicazioni del sistemista (es. manutenzione
+ *  programmata), non i promemoria automatici che restano affari del cron. */
+function InvioNotifica() {
+  const [titolo, setTitolo] = useState("");
+  const [testo, setTesto] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [esito, setEsito] = useState<string | null>(null);
+
+  async function invia() {
+    const t = titolo.trim(), b = testo.trim();
+    if (!t || !b) return;
+    if (!confirm(`Inviare questa notifica a tutti i dispositivi iscritti?\n\n"${t}"\n${b}`)) return;
+
+    setBusy(true); setEsito(null);
+    try {
+      const r = await call<{ dispositivi_totali: number; inviati: number; falliti: number }>(
+        "broadcastPush", { title: t, body: b }
+      );
+      setEsito(
+        r.dispositivi_totali === 0
+          ? "Nessun dispositivo ha le notifiche attive."
+          : `Inviata a ${r.inviati} di ${r.dispositivi_totali} dispositivi` + (r.falliti ? ` — ${r.falliti} non raggiunti` : "")
+      );
+      setTitolo(""); setTesto("");
+    } catch (e: any) {
+      setEsito("Non è riuscito: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ ...S.card, padding: 14, marginBottom: 16 }}>
+      <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", ...S.sub, marginBottom: 12 }}>
+        Invia notifica a tutti i dispositivi
+      </p>
+      <p style={{ fontSize: 13, ...S.sub, marginBottom: 12 }}>
+        Arriva come notifica push a chiunque abbia attivato le notifiche della web app,
+        indipendentemente da lavanderia o camera. Non tocca Telegram.
+      </p>
+      <input style={{ ...S.input, marginBottom: 8 }} placeholder="Titolo" value={titolo}
+             maxLength={80} onChange={(e) => setTitolo(e.target.value)} disabled={busy} />
+      <textarea
+        style={{ ...S.input, marginBottom: 12, minHeight: 70, resize: "vertical", fontFamily: "inherit" }}
+        placeholder="Testo del messaggio" value={testo} maxLength={500} disabled={busy}
+        onChange={(e) => setTesto(e.target.value)}
+      />
+      <button onClick={invia} disabled={busy || !titolo.trim() || !testo.trim()}
+              style={{ ...S.btn, background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent", opacity: busy ? 0.6 : 1 }}>
+        {busy ? "Invio…" : "Invia a tutti"}
+      </button>
+      {esito && <p style={{ fontSize: 13, ...S.sub, marginTop: 10 }}>{esito}</p>}
+    </div>
+  );
+}
+
 function Manutenzione() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -1997,6 +2054,8 @@ function Manutenzione() {
         vuoto="Nessuna chat Telegram collegata."
         onDelete={eliminaTelegram}
       />
+
+      <InvioNotifica />
 
       {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
 

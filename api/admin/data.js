@@ -6,6 +6,7 @@
 import { rpc } from "../_lib/db.js";
 import { readBody, json, fail, methodOk, intero } from "../_lib/http.js";
 import { currentAdmin, isSysadmin, isStaff, hashPassword, verifyPassword } from "../_lib/auth.js";
+import { sendWebPush, pushConfigured } from "../_lib/push.js";
 
 // Le azioni che modificano qualcosa finiscono nell'audit log. Le letture no,
 // sarebbero solo rumore.
@@ -14,7 +15,7 @@ const MUTATIONS = new Set([
   "markFeedback", "deleteSpaceBooking",
   "recurringAddLaundry", "recurringAddSpace", "recurringSetActive",
   "recurringDelete", "applyRecurring", "purge",
-  "deletePushSub", "deleteTelegramSub",
+  "deletePushSub", "deleteTelegramSub", "broadcastPush",
   "bookDirezione", "bookSpaceDirezione", "clearDirezione",
   "conferenzaAdd", "conferenzaUpdate", "conferenzaDelete",
   "conferenzaSkip", "conferenzaMove", "conferenzaResetOccorrenza",
@@ -27,7 +28,7 @@ const MUTATIONS = new Set([
 const SOLO_SISTEMISTA = new Set([
   "recurringList", "recurringAddLaundry", "recurringAddSpace",
   "recurringSetActive", "recurringDelete", "applyRecurring", "purge", "counts",
-  "pushSubs", "deletePushSub", "telegramSubs", "deleteTelegramSub",
+  "pushSubs", "deletePushSub", "telegramSubs", "deleteTelegramSub", "broadcastPush",
   "accountList", "accountCreate", "accountSetPassword",
   "accountSetActive", "accountDelete", "biciPurge", "biciDeleteRoom",
 ]);
@@ -443,6 +444,50 @@ export default async function handler(req, res) {
       case "deleteTelegramSub":
         result = await rpc("sysadmin_delete_telegram_sub", { p_id: Number(body.id) });
         break;
+
+      // Notifica manuale a tutti i dispositivi push iscritti (qualunque
+      // lavanderia/camera): usata per comunicazioni del sistemista, non per i
+      // promemoria automatici che restano affari del cron.
+      case "broadcastPush": {
+        const title = String(body.title || "").trim();
+        const testo = String(body.body || "").trim();
+        if (!title || !testo) return fail(res, "titolo e testo sono obbligatori");
+        if (!pushConfigured()) return fail(res, "push non configurato sul server");
+
+        const subs = await rpc("sysadmin_all_push_subs");
+        const dispositivi = Array.isArray(subs) ? subs : [];
+
+        let ok = 0, falliti = 0;
+        const gone = [];
+        await Promise.all(dispositivi.map(async (s) => {
+          const esito = await sendWebPush(
+            // `tag` diverso da "laundry-reminder" (il default in sw.js): senza,
+            // una notifica di lavanderia in arrivo sostituirebbe questa, o
+            // viceversa, invece di comparire entrambe.
+            { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+            { title, body: testo, url: "/", tag: "sysadmin-broadcast" }
+          );
+          if (esito === "ok") ok++;
+          else {
+            falliti++;
+            if (esito === "gone") gone.push(s.id);
+          }
+        }));
+
+        // Stessa potatura del cron: chi ha disinstallato o revocato il
+        // permesso non ricevera' mai piu' nulla, la riga resta solo rumore.
+        if (gone.length) {
+          await rpc("sysadmin_prune_push_subs", { p_ids: gone }).catch(() => {});
+        }
+
+        result = {
+          ok: true,
+          dispositivi_totali: dispositivi.length,
+          inviati: ok,
+          falliti,
+        };
+        break;
+      }
 
       // ── Bici ──────────────────────────────────────────────────────────────
       // Lettura: FDO e sistemista (vedi VIETATE_A_STAFF). Cancellazione totale,

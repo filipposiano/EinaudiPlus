@@ -541,3 +541,30 @@ begin
   return jsonb_build_object('ok', true);
 end;
 $$;
+
+-- Notifica manuale a tutti i dispositivi iscritti (vedi migrations/026): a
+-- differenza di sysadmin_push_subs, qui servono endpoint/p256dh/auth per
+-- spedire davvero, non room/laundry per mostrarli in lista.
+create or replace function sysadmin_all_push_subs()
+returns jsonb language sql stable as $$
+  select coalesce(
+    jsonb_agg(jsonb_build_object(
+      'id', id, 'endpoint', endpoint, 'p256dh', p256dh, 'auth', auth
+    )),
+    '[]'::jsonb
+  )
+  from push_sub;
+$$;
+
+create or replace function sysadmin_prune_push_subs(p_ids bigint[])
+returns jsonb language plpgsql as $$
+declare
+  v_pruned int := 0;
+begin
+  if array_length(p_ids, 1) > 0 then
+    delete from push_sub where id = any(p_ids);
+    get diagnostics v_pruned = row_count;
+  end if;
+  return jsonb_build_object('ok', true, 'pruned', v_pruned);
+end;
+$$;

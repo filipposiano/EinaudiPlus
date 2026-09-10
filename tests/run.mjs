@@ -501,7 +501,7 @@ section("Separazione dei ruoli");
   if (!cookie) {
     console.log("  salto  (nessuna sessione FDO)");
   } else {
-    for (const action of ["recurringList", "purge", "applyRecurring", "counts"]) {
+    for (const action of ["recurringList", "purge", "applyRecurring", "counts", "broadcastPush"]) {
       const r = await call(adminData, { body: { action, scope: "settimana" }, cookie });
       check(`FDO non puo' '${action}' -> 403`, r.status === 403, `ricevuto ${r.status}`);
     }
@@ -517,6 +517,11 @@ section("Sistemista");
 
     check("puo' leggere le regole",
       (await call(adminData, { body: { action: "recurringList" }, cookie: sysCookie })).body?.ok === true);
+
+    const broadcastVuoto = await call(adminData, {
+      body: { action: "broadcastPush", title: "", body: "" }, cookie: sysCookie,
+    });
+    check("notifica senza titolo/testo respinta", broadcastVuoto.body?.ok === false, JSON.stringify(broadcastVuoto.body));
 
     // Regola lavanderia, su un turno mercoledì DAVVERO libero.
     //

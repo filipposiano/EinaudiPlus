@@ -39,7 +39,8 @@ function urlSicuro(raw) {
 function iconFor(kind) {
   if (kind === "washerend") return "/icon-dryer.svg";   // sposta in asciugatrice
   if (kind === "dryerend")  return "/icon-ritiro.svg";  // vieni a prendere il bucato
-  return "/icon-washer.svg";                            // 'pre': inizia il turno
+  if (kind === "pre")       return "/icon-washer.svg";  // inizia il turno
+  return "/icon.svg";                                   // notifica generica (es. broadcast sistemista)
 }
 
 self.addEventListener("push", (event) => {
