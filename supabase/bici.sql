@@ -24,7 +24,13 @@
 
 create table if not exists bike (
   room       text primary key check (room ~ '^[0-9]{1,4}(-?[abAB])?$'),
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  -- Chi ha creato la dichiarazione: il residente stesso (default) o il
+  -- sistemista dal pannello, per conto della reception. Serve a due cose:
+  -- ricordare alla reception di averla gia' assegnata lei, e decidere se
+  -- avvisare il residente (solo quando la mette la reception — se se la
+  -- dichiara da solo lo sa gia').
+  creato_da  text not null default 'residente' check (creato_da in ('residente', 'sistemista'))
 );
 
 alter table bike enable row level security;
@@ -33,6 +39,8 @@ alter table bike enable row level security;
 
 -- Idempotente in entrambe le direzioni: dichiararla due volte non duplica
 -- niente (la chiave è la camera), toglierla quando già non c'è non fallisce.
+-- creato_da prende il default 'residente': questa e' l'unica funzione che il
+-- residente puo' chiamare su se stesso.
 create or replace function bike_set(p_room text, p_has_bike boolean)
 returns jsonb language plpgsql as $$
 begin
@@ -55,13 +63,36 @@ $$;
 
 -- ─── Portineria e sistemista ────────────────────────────────────────────────
 
+-- Ogni camera porta anche `creato_da`: il pannello lo usa per segnare quali
+-- bici le ha assegnate la reception stessa, invece di mostrare un elenco
+-- indistinguibile da quello autodichiarato.
 create or replace function bike_admin_list()
 returns jsonb language sql stable as $$
   select jsonb_build_object(
     'ok', true,
     'totale', (select count(*) from bike),
-    'camere', coalesce((select jsonb_agg(room order by room) from bike), '[]'::jsonb)
+    'camere', coalesce((
+      select jsonb_agg(jsonb_build_object('room', room, 'creato_da', creato_da) order by room)
+      from bike
+    ), '[]'::jsonb)
   );
+$$;
+
+-- Assegna una bici a una camera dal pannello — l'altra faccia di
+-- bike_delete_room, riservata allo stesso ruolo. A differenza di bike_set,
+-- marca la riga come creato_da='sistemista' e dice al chiamante se ha
+-- davvero inserito qualcosa di nuovo (`inserted`): su una camera che
+-- l'aveva gia' (dichiarata da lei o gia' assegnata prima) non cambia niente,
+-- e il chiamante lo usa per decidere se vale la pena avvisare il residente.
+create or replace function bike_admin_set(p_room text)
+returns jsonb language plpgsql as $$
+declare v_n int;
+begin
+  insert into bike (room, creato_da) values (p_room, 'sistemista')
+  on conflict (room) do nothing;
+  get diagnostics v_n = row_count;
+  return jsonb_build_object('ok', true, 'inserted', v_n > 0);
+end;
 $$;
 
 -- Riservata al sistemista (il controllo vero sta in /api/admin/data, come per
@@ -94,14 +125,35 @@ begin
 end;
 $$;
 
+-- A chi avvisare quando la reception assegna una bici: stessa forma di
+-- sysadmin_all_push_subs / sysadmin_all_telegram_subs, ma per una camera
+-- sola invece che per tutte — non e' un broadcast, e' un avviso mirato.
+create or replace function bike_notify_targets(p_room text)
+returns jsonb language sql stable as $$
+  select jsonb_build_object(
+    'push', coalesce((
+      select jsonb_agg(jsonb_build_object('id', id, 'endpoint', endpoint, 'p256dh', p256dh, 'auth', auth))
+      from push_sub where room = p_room
+    ), '[]'::jsonb),
+    'telegram', coalesce((
+      select jsonb_agg(jsonb_build_object('chat_id', chat_id))
+      from telegram_sub where room = p_room and verified_at is not null
+    ), '[]'::jsonb)
+  );
+$$;
+
 revoke all on function bike_set(text, boolean) from public, anon, authenticated;
 revoke all on function bike_get(text) from public, anon, authenticated;
 revoke all on function bike_admin_list() from public, anon, authenticated;
+revoke all on function bike_admin_set(text) from public, anon, authenticated;
 revoke all on function bike_purge() from public, anon, authenticated;
 revoke all on function bike_delete_room(text) from public, anon, authenticated;
+revoke all on function bike_notify_targets(text) from public, anon, authenticated;
 
 grant execute on function bike_set(text, boolean) to service_role;
 grant execute on function bike_get(text) to service_role;
 grant execute on function bike_admin_list() to service_role;
+grant execute on function bike_admin_set(text) to service_role;
 grant execute on function bike_purge() to service_role;
 grant execute on function bike_delete_room(text) to service_role;
+grant execute on function bike_notify_targets(text) to service_role;
