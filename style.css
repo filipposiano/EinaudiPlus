@@ -671,12 +671,19 @@
 
 /* ── Tema stagionale (vedi App.tsx → TemaEffetto) ───────────────────────────
    Solo CSS, come il resto delle animazioni qui sopra: nessuna libreria per
-   un fiocco di neve e un pipistrello. */
+   neve, pipistrelli e zucche.
+
+   La neve scende a zigzag (non in diagonale dritta) e ruota, con tre "strati"
+   di profondita' impostati da App.tsx via --op (opacita' del fiocco): un
+   fiocco vicino e' piu' grande, veloce e opaco di uno lontano. */
 @keyframes fioccoCade {
-  from { transform: translateY(-10%) translateX(0); opacity: 0; }
-  10%  { opacity: .85; }
-  90%  { opacity: .85; }
-  to   { transform: translateY(110%) translateX(18px); opacity: 0; }
+  0%   { transform: translateY(-10%) translateX(0)     rotate(0deg);   opacity: 0; }
+  5%   { opacity: var(--op, .7); }
+  25%  { transform: translateY(28%)  translateX(16px)  rotate(80deg); }
+  50%  { transform: translateY(56%)  translateX(-14px) rotate(170deg); }
+  75%  { transform: translateY(83%)  translateX(14px)  rotate(260deg); }
+  95%  { opacity: var(--op, .7); }
+  100% { transform: translateY(112%) translateX(0)     rotate(340deg); opacity: 0; }
 }
 .tema-fiocco {
   position: absolute;
@@ -684,25 +691,44 @@
   color: #fff;
   text-shadow: 0 0 3px rgba(0, 0, 0, .25);
   animation-name: fioccoCade;
-  animation-timing-function: linear;
+  animation-timing-function: ease-in-out;
   animation-iteration-count: infinite;
 }
 
+/* `left` e non `transform: translateX()`: una percentuale dentro transform e'
+   relativa alla larghezza DELL'ELEMENTO stesso (poche decine di pixel per
+   un'emoji), non del contenitore — il pipistrello restava incollato al
+   bordo sinistro invece di attraversare lo schermo. `left` invece e'
+   relativo al contenitore, che e' quello che serve qui. */
 @keyframes pipistrelloVola {
-  from { transform: translateX(-10%) translateY(0) scale(.9); opacity: 0; }
+  from { left: -10%; transform: translateY(0) scale(.9); opacity: 0; }
   10%  { opacity: .9; }
-  50%  { transform: translateX(50%) translateY(-14px) scale(1); }
+  50%  { left: 50%; transform: translateY(-14px) scale(1); }
   90%  { opacity: .9; }
-  to   { transform: translateX(115%) translateY(6px) scale(.9); opacity: 0; }
+  to   { left: 115%; transform: translateY(6px) scale(.9); opacity: 0; }
 }
 .tema-pipistrello {
   position: absolute;
-  left: 0;
   font-size: 18px;
   animation-name: pipistrelloVola;
   animation-timing-function: ease-in-out;
   animation-iteration-count: infinite;
 }
+
+/* Appoggiate in basso, non attraversano lo schermo come i pipistrelli: si
+   dondolano appena, come una zucca vera lasciata su un davanzale. */
+@keyframes zuccaFluttua {
+  0%, 100% { transform: translateY(0)    rotate(-3deg); }
+  50%      { transform: translateY(-7px) rotate(3deg); }
+}
+.tema-zucca {
+  position: absolute;
+  filter: drop-shadow(0 0 6px rgba(255, 140, 0, .6));
+  animation-name: zuccaFluttua;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
 .tema-halloween-tinta {
   position: absolute;
   inset: 0;
@@ -713,7 +739,9 @@
 
 /* Molti elementi in movimento sono proprio il caso per cui esiste questa
    preferenza: chi la imposta non deve vedersi riempire lo schermo di neve o
-   pipistrelli solo perche' il sistemista ha acceso un tema. */
+   pipistrelli solo perche' il sistemista ha acceso un tema. Le zucche restano
+   (sono ferme quasi quanto un'icona), solo senza il dondolio. */
 @media (prefers-reduced-motion: reduce) {
   .tema-fiocco, .tema-pipistrello { animation: none; display: none; }
+  .tema-zucca { animation: none; }
 }
