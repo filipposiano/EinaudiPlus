@@ -54,11 +54,17 @@ begin
 end;
 $$;
 
--- Letta dalle Impostazioni all'apertura, per mostrare l'interruttore nello
--- stato giusto invece di partire sempre da "no".
+-- Letta dalla sezione Bici all'apertura, per mostrare l'interruttore nello
+-- stato giusto invece di partire sempre da "no". Porta anche `creato_da`:
+-- una camera assegnata dalla reception (migrazione 029) deve poter leggere
+-- che non e' stata lei a dichiararla, non solo che "ha" una bici.
 create or replace function bike_get(p_room text)
 returns jsonb language sql stable as $$
-  select jsonb_build_object('ok', true, 'has_bike', exists(select 1 from bike where room = p_room));
+  select jsonb_build_object(
+    'ok', true,
+    'has_bike', exists(select 1 from bike where room = p_room),
+    'creato_da', (select creato_da from bike where room = p_room)
+  );
 $$;
 
 -- ─── Portineria e sistemista ────────────────────────────────────────────────

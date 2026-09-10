@@ -19,6 +19,7 @@ const T = {
     titolo: "Bici",
     desc: "Fai sapere alla reception se hai una bici in collegio.",
     siHo: "Hai dichiarato una bici",
+    daReception: "Te l'ha segnata la reception. Se non è corretto, puoi toglierla.",
     nonHo: "Non hai dichiarato nessuna bici",
     aggiungi: "Sì, ho una bici",
     rimuovi: "Non ce l'ho più",
@@ -31,6 +32,7 @@ const T = {
     titolo: "Bike",
     desc: "Let reception know if you keep a bike at the dorm.",
     siHo: "You've declared a bike",
+    daReception: "Reception marked it for you. If that's wrong, you can remove it.",
     nonHo: "You haven't declared a bike",
     aggiungi: "Yes, I have a bike",
     rimuovi: "I don't have it anymore",
@@ -43,6 +45,7 @@ const T = {
     titolo: "Vélo",
     desc: "Préviens la réception si tu as un vélo au collège.",
     siHo: "Tu as déclaré un vélo",
+    daReception: "La réception te l'a signalé. Si ce n'est pas exact, tu peux le retirer.",
     nonHo: "Tu n'as déclaré aucun vélo",
     aggiungi: "Oui, j'ai un vélo",
     rimuovi: "Je ne l'ai plus",
@@ -55,6 +58,7 @@ const T = {
     titolo: "Fahrrad",
     desc: "Sag der Rezeption, ob du ein Fahrrad im Kolleg hast.",
     siHo: "Du hast ein Fahrrad angegeben",
+    daReception: "Die Rezeption hat es für dich eingetragen. Falls das nicht stimmt, kannst du es entfernen.",
     nonHo: "Du hast kein Fahrrad angegeben",
     aggiungi: "Ja, ich habe ein Fahrrad",
     rimuovi: "Ich habe es nicht mehr",
@@ -67,6 +71,7 @@ const T = {
     titolo: "Bicicleta",
     desc: "Avisa a recepción si tienes una bici en el colegio.",
     siHo: "Has declarado una bici",
+    daReception: "Recepción te la ha registrado. Si no es correcto, puedes quitarla.",
     nonHo: "No has declarado ninguna bici",
     aggiungi: "Sí, tengo una bici",
     rimuovi: "Ya no la tengo",
@@ -79,6 +84,7 @@ const T = {
     titolo: "Bici",
     desc: "Fa' sapé â reception si tiene 'na bicicletta 'o cullegio.",
     siHo: "Hê dichiarato 'na bici",
+    daReception: "T''a segnata 'a reception. Si nun è ggiusto, 'a può levà.",
     nonHo: "Nun hê dichiarato nisciuna bici",
     aggiungi: "Sì, tengo 'na bici",
     rimuovi: "Nun 'a tengo cchiù",
@@ -229,6 +235,10 @@ export default function BiciView({ lang, roomNumber }: { lang: Lang; roomNumber:
   const camera = roomNumber && roomNumber !== api.DIREZIONE ? roomNumber : null;
 
   const [haBici, setHaBici] = useState<boolean | null>(null);
+  // Chi l'ha dichiarata: la camera stessa, o la reception per suo conto — in
+  // quel caso lo si dice, cosi' chi non ha mai toccato l'interruttore capisce
+  // perche' la trova gia' "sì" e puo' comunque toglierla se e' sbagliata.
+  const [creatoDa, setCreatoDa] = useState<api.BikeSource | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -240,7 +250,10 @@ export default function BiciView({ lang, roomNumber }: { lang: Lang; roomNumber:
   const load = useCallback(async () => {
     if (!camera) { setLoading(false); return; }
     setLoading(true); setError(false);
-    try { setHaBici(await api.getBike(camera)); }
+    try {
+      const r = await api.getBike(camera);
+      setHaBici(r.hasBike); setCreatoDa(r.creatoDa);
+    }
     catch { setError(true); }
     finally { setLoading(false); }
   }, [camera]);
@@ -253,6 +266,10 @@ export default function BiciView({ lang, roomNumber }: { lang: Lang; roomNumber:
     setBusy(true);
     try {
       setHaBici(await api.setBike(camera, next));
+      // Chi tocca l'interruttore lo fa per se stesso: da qui in poi la
+      // dichiarazione (attiva o no) e' di nuovo "della camera", non piu'
+      // della reception — anche se prima l'aveva messa lei.
+      setCreatoDa(next ? "residente" : null);
       if (next) setRideKey((k) => k + 1);
     } catch { /* stato non cambiato: il pulsante torna semplicemente cliccabile */ }
     finally { setBusy(false); }
@@ -312,7 +329,7 @@ export default function BiciView({ lang, roomNumber }: { lang: Lang; roomNumber:
         </div>
 
         <p className="text-xs text-center leading-relaxed" style={{ color: sub, maxWidth: "34ch" }}>
-          {t.desc}
+          {attiva && creatoDa === "sistemista" ? t.daReception : t.desc}
         </p>
 
         <button onClick={toggle} disabled={busy}

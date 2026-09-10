@@ -120,10 +120,13 @@ export async function sendFeedback(room: string | null, text: string) {
   return postAction("feedback", { room: room || "", text });
 }
 
-/** Se questa camera ha dichiarato una bici. */
-export async function getBike(room: string): Promise<boolean> {
+/** Chi ha dichiarato la bici: la camera stessa, o la reception per suo conto. */
+export type BikeSource = "residente" | "sistemista";
+
+/** Se questa camera ha dichiarato una bici, e chi l'ha fatto. */
+export async function getBike(room: string): Promise<{ hasBike: boolean; creatoDa: BikeSource | null }> {
   const res = await postAction("bikeGet", { room });
-  return Boolean(res.has_bike);
+  return { hasBike: Boolean(res.has_bike), creatoDa: (res.creato_da as BikeSource | undefined) ?? null };
 }
 
 /** Dichiara (o ritira la dichiarazione) che questa camera ha una bici. */
