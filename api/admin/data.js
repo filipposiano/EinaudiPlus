@@ -21,7 +21,7 @@ const MUTATIONS = new Set([
   "conferenzaAdd", "conferenzaUpdate", "conferenzaDelete",
   "conferenzaSkip", "conferenzaMove", "conferenzaResetOccorrenza",
   "accountCreate", "accountSetPassword", "accountSetActive", "accountDelete",
-  "accountChangeOwnPassword", "biciPurge", "biciDeleteRoom", "biciAddRoom",
+  "accountChangeOwnPassword", "biciPurge", "biciDeleteRoom", "biciAddRoom", "temaSet",
 ]);
 
 // Riservate al sistemista. La portineria non le vede nel pannello, ma il
@@ -32,6 +32,7 @@ const SOLO_SISTEMISTA = new Set([
   "pushSubs", "deletePushSub", "telegramSubs", "deleteTelegramSub", "broadcastPush",
   "accountList", "accountCreate", "accountSetPassword",
   "accountSetActive", "accountDelete", "biciPurge", "biciDeleteRoom", "biciAddRoom",
+  "temaGet", "temaSet",
 ]);
 
 // Macchine e segnalazioni restano affari di FDO e sistemista: lo staff
@@ -519,6 +520,24 @@ export default async function handler(req, res) {
         break;
       }
 
+      // ── Tema stagionale ──────────────────────────────────────────────────
+      // Decorazione dell'app lato residenti (Halloween, Natale con la
+      // neve...), accesa/spenta dal sistemista in qualsiasi momento. Vive in
+      // una riga sola nel database (app_theme): la legge laundry_snapshot a
+      // ogni avvio dell'app, non serve un canale a parte.
+      case "temaGet":
+        result = { ok: true, tema: await rpc("app_theme_get") };
+        break;
+
+      case "temaSet": {
+        const tema = String(body.tema || "");
+        if (!["nessuno", "halloween", "natale"].includes(tema)) {
+          return fail(res, "tema non valido");
+        }
+        result = await rpc("sysadmin_set_theme", { p_tema: tema });
+        break;
+      }
+
       // ── Bici ──────────────────────────────────────────────────────────────
       // Lettura: FDO e sistemista (vedi VIETATE_A_STAFF). Cancellazione totale,
       // per il reset annuale: solo sistemista (vedi SOLO_SISTEMISTA).
@@ -536,13 +555,39 @@ export default async function handler(req, res) {
 
       // Assegna una bici a una camera dal pannello, invece che aspettare che
       // il residente la dichiari da solo dalle sue Impostazioni — utile per
-      // chi non usa l'app, o per farlo fare alla reception. Stessa RPC del
-      // residente (bike_set): e' idempotente, dichiararla due volte non
-      // duplica niente.
+      // chi non usa l'app, o per farlo fare alla reception. bike_admin_set (a
+      // differenza di bike_set, usata dal residente) marca la riga come
+      // assegnata dalla reception e dice se ha inserito davvero qualcosa di
+      // nuovo: solo allora avvisiamo il residente, cosi' un secondo tocco
+      // sulla stessa camera non manda una notifica doppia.
       case "biciAddRoom": {
         const room = camera(body.room);
         if (!room) return fail(res, "numero di camera non valido");
-        result = await rpc("bike_set", { p_room: room, p_has_bike: true });
+        const esito = await rpc("bike_admin_set", { p_room: room });
+
+        if (esito?.inserted) {
+          const targets = await rpc("bike_notify_targets", { p_room: room }).catch(() => null);
+          const title = "Bici registrata";
+          const testo = `La reception ha segnato che la tua camera (${room}) ha una bici.`;
+
+          if (pushConfigured() && Array.isArray(targets?.push) && targets.push.length) {
+            const gone = [];
+            await Promise.all(targets.push.map(async (s) => {
+              const esitoInvio = await sendWebPush(
+                { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+                { title, body: testo, url: "/", tag: "bici-registrata" }
+              );
+              if (esitoInvio === "gone") gone.push(s.id);
+            }));
+            if (gone.length) await rpc("sysadmin_prune_push_subs", { p_ids: gone }).catch(() => {});
+          }
+
+          if (telegramConfigured() && Array.isArray(targets?.telegram) && targets.telegram.length) {
+            await Promise.all(targets.telegram.map((c) => sendTelegram(c.chat_id, title, testo)));
+          }
+        }
+
+        result = { ok: true, inserted: Boolean(esito?.inserted) };
         break;
       }
 

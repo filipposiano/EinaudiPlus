@@ -124,7 +124,11 @@ begin
     'ok',     true,
     'week',   week_snapshot(v_id, v_ws),
     'status', status_snapshot(v_id),
-    'slots',  v_l.n_slots
+    'slots',  v_l.n_slots,
+    -- Tema stagionale attivo (vedi tema.sql): viaggia qui perche' questo e'
+    -- gia' cio' che l'app legge a ogni avvio e a ogni ricarica automatica,
+    -- senza bisogno di un secondo endpoint o di un canale dedicato.
+    'tema',   app_theme_get()
   );
 end;
 $$;

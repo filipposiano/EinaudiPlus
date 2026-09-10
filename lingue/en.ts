@@ -120,7 +120,7 @@ const en: Testi = {
   soloDirezione:  "This slot belongs to the front desk: only an administrator can free it.",
   navLavanderia: "Laundry", navCinema: "Cinema", navMusica: "Music",
   navMacchine: "Machines", navSegnalazioni: "Reports",
-  navRicorrenti: "Recurring", navManutenzione: "Maintenance",
+  navRicorrenti: "Recurring", navManutenzione: "Maintenance", navTema: "Theme",
   amministrazione: "Administration",
   mesiBrevi: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
   navLingua: "Language",

@@ -138,7 +138,7 @@ const it = {
   // Voci di navigazione
   navLavanderia: "Lavanderia", navCinema: "Cinema", navMusica: "Musica",
   navMacchine: "Macchine", navSegnalazioni: "Segnalazioni",
-  navRicorrenti: "Ricorrenti", navManutenzione: "Manutenzione",
+  navRicorrenti: "Ricorrenti", navManutenzione: "Manutenzione", navTema: "Tema",
   amministrazione: "Amministrazione",
   mesiBrevi: ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"],
   navLingua: "Lingua",

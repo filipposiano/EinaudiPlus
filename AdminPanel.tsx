@@ -47,7 +47,7 @@ type Recurring = {
 // `staff` ha gli stessi poteri di `fdo`; solo `sistemista` puo' di piu'.
 // Restano account distinti perche' l'audit log registra chi ha fatto cosa.
 export type Role = "fdo" | "staff" | "sistemista";
-export type Tab = "macchine" | "segnalazioni" | "bici" | "account" | "ricorrenti" | "manutenzione";
+export type Tab = "macchine" | "segnalazioni" | "bici" | "account" | "ricorrenti" | "manutenzione" | "tema";
 
 // ─── Chiamate ────────────────────────────────────────────────────────────────
 
@@ -685,17 +685,30 @@ function Segnalazioni({ laundries, reload }: { laundries: Laundry[]; reload: () 
 // bici?" — vista da chi sta alla reception. Ogni riga la dichiara il
 // residente stesso, dalla sua sezione "Bici".
 
-type BiciDati = { totale: number; camere: string[] };
+type Camera = { room: string; creato_da: "residente" | "sistemista" };
+type BiciDati = { totale: number; camere: Camera[] };
+
+// Stessa famiglia grafica di IconaBici/IconaArchivia/IconaAggiorna: una
+// sagoma minima, non un'icona di libreria — questo file resta senza
+// lucide-react per non appesantire il bundle lazy con due glifi soli.
+const IconaReception = () => (
+  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+       strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21c0-4.5 3.5-8 8-8s8 3.5 8 8" />
+  </svg>
+);
 
 // Una camera, come pastiglia colorata del suo piano. Cliccabile solo dal
 // sistemista — vedi il commento su SOLO_SISTEMISTA in api/admin/data.js:
 // togliere una dichiarazione e' un "cancella" come deletePushSub e
 // deleteTelegramSub, riservati allo stesso ruolo. L'FDO la vede ma non la
 // tocca, come per "Cancella tutte" piu' sotto.
-function CameraChip({ room, colore, sistemista, onClick }: {
-  room: string; colore: string; sistemista: boolean; onClick: () => void;
+function CameraChip({ room, creatoDa, colore, sistemista, onClick }: {
+  room: string; creatoDa: Camera["creato_da"]; colore: string; sistemista: boolean; onClick: () => void;
 }) {
   const stile = {
+    position: "relative" as const,
     display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
     padding: "9px 10px", borderRadius: 12, fontSize: 13, fontWeight: 700, fontFamily: "monospace",
     background: `color-mix(in srgb, ${colore} 12%, var(--card))`,
@@ -703,11 +716,23 @@ function CameraChip({ room, colore, sistemista, onClick }: {
     color: "var(--foreground)",
   } as const;
   const icona = <span style={{ color: colore, display: "flex", flexShrink: 0 }}><IconaBici /></span>;
+  // Segno persistente, non un messaggio che si legge una volta sola e sparisce:
+  // la prossima persona di turno alla reception deve poter vedere "questa
+  // l'ho assegnata io" tornando su questa stessa lista domani.
+  const distintivo = creatoDa === "sistemista" && (
+    <span title="Assegnata dalla reception, non dal residente" style={{
+      position: "absolute", top: -5, right: -5, width: 15, height: 15, borderRadius: 99,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      background: colore, color: "#fff", border: "2px solid var(--card)",
+    }}>
+      <IconaReception />
+    </span>
+  );
 
   return sistemista ? (
-    <button onClick={onClick} style={{ ...stile, cursor: "pointer" }}>{icona}{room}</button>
+    <button onClick={onClick} style={{ ...stile, cursor: "pointer" }}>{icona}{room}{distintivo}</button>
   ) : (
-    <div style={stile}>{icona}{room}</div>
+    <div style={stile}>{icona}{room}{distintivo}</div>
   );
 }
 
@@ -762,14 +787,18 @@ function Bici({ sistemista }: { sistemista: boolean }) {
 
   // Solo il sistemista arriva a vedere questo campo (stesso motivo di
   // reset()): assegnare una bici e' l'altra faccia di toglierla, riservata
-  // allo stesso ruolo. Riusa bike_set, la stessa RPC del residente — e'
-  // idempotente, dichiararla due volte non duplica niente.
+  // allo stesso ruolo. bike_admin_set e' idempotente come bike_set (dichiararla
+  // due volte non duplica niente) ma marca la riga come assegnata dalla
+  // reception e avvisa il residente — solo se la camera non l'aveva gia'.
   async function assegnaCamera() {
     const room = nuovaCamera.trim();
     if (!room) return;
     setBusy(true); setMsg(null);
     try {
-      await call("biciAddRoom", { room });
+      const r = await call<{ inserted: boolean }>("biciAddRoom", { room });
+      setMsg(r.inserted
+        ? `Fatto — camera ${room} segnata. Se ha le notifiche attive, il residente riceverà un avviso.`
+        : `La camera ${room} aveva già una bici registrata: non è cambiato nulla.`);
       setNuovaCamera("");
       load();
     } catch (e: any) {
@@ -843,7 +872,7 @@ function Bici({ sistemista }: { sistemista: boolean }) {
               senza nessuna camera non compaiono: un elenco di intestazioni
               vuote non aiuta chi deve solo vedere dove sono le bici. */}
           {PIANI.map((p) => {
-            const camere = dati.camere.filter((r) => pianoDi(r) === p);
+            const camere = dati.camere.filter((c) => pianoDi(c.room) === p);
             if (camere.length === 0) return null;
             const colore = colorePiano(p);
             return (
@@ -855,9 +884,9 @@ function Bici({ sistemista }: { sistemista: boolean }) {
                   </p>
                 </div>
                 <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))" }}>
-                  {camere.map((r) => (
-                    <CameraChip key={r} room={r} colore={colore} sistemista={sistemista}
-                      onClick={() => setDaEliminare(r)} />
+                  {camere.map((c) => (
+                    <CameraChip key={c.room} room={c.room} creatoDa={c.creato_da} colore={colore} sistemista={sistemista}
+                      onClick={() => setDaEliminare(c.room)} />
                   ))}
                 </div>
               </div>
@@ -868,7 +897,7 @@ function Bici({ sistemista }: { sistemista: boolean }) {
               nessun piano (non dovrebbe succedere, bike_set valida il
               formato lato server) non sparisce silenziosamente. */}
           {(() => {
-            const fuoriSchema = dati.camere.filter((r) => pianoDi(r) === null);
+            const fuoriSchema = dati.camere.filter((c) => pianoDi(c.room) === null);
             if (fuoriSchema.length === 0) return null;
             return (
               <div>
@@ -876,9 +905,9 @@ function Bici({ sistemista }: { sistemista: boolean }) {
                   Altre · {fuoriSchema.length}
                 </p>
                 <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))" }}>
-                  {fuoriSchema.map((r) => (
-                    <CameraChip key={r} room={r} colore="var(--foreground)" sistemista={sistemista}
-                      onClick={() => setDaEliminare(r)} />
+                  {fuoriSchema.map((c) => (
+                    <CameraChip key={c.room} room={c.room} creatoDa={c.creato_da} colore="var(--foreground)" sistemista={sistemista}
+                      onClick={() => setDaEliminare(c.room)} />
                   ))}
                 </div>
               </div>
@@ -2317,6 +2346,85 @@ export function AdminLoginSheet({ onClose, onSession }: {
   );
 }
 
+// ─── Tema stagionale ─────────────────────────────────────────────────────────
+//
+// Decorazione dell'app lato residenti (neve a Natale, pipistrelli a
+// Halloween...), non una funzione: si accende e si spegne quando si vuole,
+// senza conferme ne' audit particolare oltre al log normale delle azioni.
+// Una sola scelta per tutta l'app — vive nel database (tabella app_theme),
+// non nelle Impostazioni di ciascun residente.
+
+type TemaAttivo = "nessuno" | "halloween" | "natale";
+
+const TEMI: [TemaAttivo, string, string][] = [
+  ["nessuno",   "Nessuno",   "Aspetto normale, tutto l'anno."],
+  ["halloween", "Halloween", "Pipistrelli e una tinta scura sullo sfondo."],
+  ["natale",    "Natale",    "Neve che cade sullo schermo."],
+];
+
+function Tema() {
+  const [attivo, setAttivo] = useState<TemaAttivo | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    call<{ tema: TemaAttivo }>("temaGet")
+      .then((r) => setAttivo(r.tema))
+      .catch((e: any) => setMsg(e.message));
+  }, []);
+
+  async function scegli(tema: TemaAttivo) {
+    if (tema === attivo || busy) return;
+    setBusy(true); setMsg(null);
+    try {
+      await call("temaSet", { tema });
+      setAttivo(tema);
+    } catch (e: any) {
+      setMsg("Non è riuscito: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <p style={{ fontSize: 13, ...S.sub, marginBottom: 16, maxWidth: "70ch" }}>
+        Si applica subito a tutta l'app di residenti, non solo al pannello. Chi la tiene
+        aperta la vede al prossimo caricamento (torna in primo piano dopo un po', o ricarica).
+      </p>
+
+      {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
+
+      <div style={{ display: "grid", gap: 10 }}>
+        {TEMI.map(([id, label, desc]) => {
+          const scelto = attivo === id;
+          return (
+            <button key={id} onClick={() => scegli(id)} disabled={busy || attivo === null}
+              style={{
+                ...S.card, padding: 14, textAlign: "left", cursor: busy ? "default" : "pointer",
+                display: "flex", alignItems: "center", gap: 12,
+                borderColor: scelto ? "var(--primary)" : "var(--border)",
+                background: scelto ? "color-mix(in srgb, var(--primary) 8%, var(--card))" : "var(--card)",
+              }}>
+              <div style={{
+                width: 20, height: 20, borderRadius: 99, flexShrink: 0,
+                border: `2px solid ${scelto ? "var(--primary)" : "var(--border)"}`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {scelto && <div style={{ width: 10, height: 10, borderRadius: 99, background: "var(--primary)" }} />}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 14, fontWeight: 600 }}>{label}</p>
+                <p style={{ fontSize: 12, ...S.sub }}>{desc}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
 // ─── Sezione amministrativa ──────────────────────────────────────────────────
 //
 // Non e' piu' una pagina a se' ne' un pannello sovrapposto: e' una destinazione
@@ -2430,6 +2538,9 @@ export function AdminScreens({ tab, onSession }: {
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata al sistemista.</p>)}
       {tab === "manutenzione" && (sistemista
         ? <Manutenzione />
+        : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata al sistemista.</p>)}
+      {tab === "tema" && (sistemista
+        ? <Tema />
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata al sistemista.</p>)}
     </div>
   );

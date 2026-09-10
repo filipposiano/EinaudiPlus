@@ -120,7 +120,7 @@ const fr: Testi = {
   soloDirezione:  "Ce créneau appartient à la Direction : seul un administrateur peut le libérer.",
   navLavanderia: "Buanderie", navCinema: "Cinéma", navMusica: "Musique",
   navMacchine: "Machines", navSegnalazioni: "Signalements",
-  navRicorrenti: "Récurrents", navManutenzione: "Maintenance",
+  navRicorrenti: "Récurrents", navManutenzione: "Maintenance", navTema: "Thème",
   amministrazione: "Administration",
   mesiBrevi: ["janv","févr","mars","avr","mai","juin","juil","août","sept","oct","nov","déc"],
   navLingua: "Langue",

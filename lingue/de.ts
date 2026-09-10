@@ -120,7 +120,7 @@ const de: Testi = {
   soloDirezione:  "Dieses Zeitfenster gehört der Verwaltung: Nur ein Administrator kann es freigeben.",
   navLavanderia: "Waschküche", navCinema: "Kino", navMusica: "Musik",
   navMacchine: "Maschinen", navSegnalazioni: "Meldungen",
-  navRicorrenti: "Wiederkehrend", navManutenzione: "Wartung",
+  navRicorrenti: "Wiederkehrend", navManutenzione: "Wartung", navTema: "Design",
   amministrazione: "Verwaltung",
   mesiBrevi: ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"],
   navLingua: "Sprache",

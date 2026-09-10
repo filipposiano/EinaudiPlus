@@ -10,6 +10,11 @@ const TOKEN = import.meta.env.VITE_SECRET_TOKEN;
 export type WeekData = Record<string, Record<string, Record<string, string>>>;
 export type StatusData = Record<string, string>;
 
+/** Tema decorativo stagionale, acceso/spento dal sistemista dal pannello
+ *  (vedi AdminPanel → Tema). Una sola scelta per tutta l'app, non una
+ *  preferenza per residente. */
+export type TemaStagionale = "nessuno" | "halloween" | "natale";
+
 /** La camera dichiarata su questo dispositivo. */
 function currentRoom(): string {
   try {
@@ -53,7 +58,7 @@ async function postAction(action: string, payload: Record<string, unknown>) {
   return data;
 }
 
-export async function getSnapshot(): Promise<{ week: WeekData; status: StatusData }> {
+export async function getSnapshot(): Promise<{ week: WeekData; status: StatusData; tema: TemaStagionale }> {
   const qs = `?token=${TOKEN}&room=${encodeURIComponent(currentRoom())}`;
   const res = await fetch(`${ENDPOINT}${qs}`);
   if (!res.ok) throw new Error("Errore di rete durante il caricamento");
@@ -61,7 +66,7 @@ export async function getSnapshot(): Promise<{ week: WeekData; status: StatusDat
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || "Errore restituito dal server.");
 
-  return { week: data.week || {}, status: data.status || {} };
+  return { week: data.week || {}, status: data.status || {}, tema: (data.tema as TemaStagionale) || "nessuno" };
 }
 
 export async function book(day: number, slot: number, machine: string, room: string) {

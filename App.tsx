@@ -5,7 +5,7 @@ import {
   Delete, X, Wrench, Loader2, Star,
   History, Trash2, Film, Music, Menu,
   MessageSquare, Send, LogOut, Printer, Download,
-  Settings, Repeat, Eraser, Presentation, UserCog, ChevronLeft, Bike,
+  Settings, Repeat, Eraser, Presentation, UserCog, ChevronLeft, Bike, Sparkles,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -57,7 +57,7 @@ const AdminLoginSheet = lazy(() => import("./AdminPanel").then((m) => ({ default
 // `isAdminFacility` scambierebbe l'una per l'altra.
 type Facility = "laundry" | "cinema" | "music" | "conferenze" | "bike" | "guasto" | "impostazioni" | "feedback" | AdminTab;
 
-const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "bici", "account", "ricorrenti", "manutenzione"];
+const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "bici", "account", "ricorrenti", "manutenzione", "tema"];
 const isAdminFacility = (f: Facility): f is AdminTab => (ADMIN_TABS as string[]).includes(f);
 
 /** Etichetta della camera nell'intestazione. Chi amministra è la Direzione. */
@@ -2259,7 +2259,7 @@ const facilitiesFor = (roomNumber: string | null) =>
 // controllo vero resta sul server: nascondere una voce non è un'autorizzazione.
 const ADMIN_SECTIONS: {
   id: AdminTab; icon: any;
-  chiave: "navMacchine" | "navSegnalazioni" | "navBici" | "navAccount" | "navRicorrenti" | "navManutenzione";
+  chiave: "navMacchine" | "navSegnalazioni" | "navBici" | "navAccount" | "navRicorrenti" | "navManutenzione" | "navTema";
   sistemistaOnly?: boolean;
   // Macchine e segnalazioni restano affari di FDO e sistemista: lo staff
   // prenota per conto della Direzione come l'FDO, ma non deve vedere lo
@@ -2280,6 +2280,10 @@ const ADMIN_SECTIONS: {
   { id: "account",        icon: UserCog,       chiave: "navAccount",      sistemistaOnly: true },
   { id: "ricorrenti",     icon: Repeat,        chiave: "navRicorrenti",   sistemistaOnly: true },
   { id: "manutenzione",   icon: Eraser,        chiave: "navManutenzione", sistemistaOnly: true },
+  // Decorazione dell'app (neve, pipistrelli...), acceso/spento a piacere:
+  // stesso livello di privilegio di Account e Manutenzione, non perche' sia
+  // rischioso quanto quelli, ma perche' cambia cosa vede OGNI residente.
+  { id: "tema",           icon: Sparkles,      chiave: "navTema",        sistemistaOnly: true },
 ];
 
 const adminSectionsFor = (role: AdminRole | null) =>
@@ -2397,6 +2401,54 @@ function MenuStrutture({ aperto, onClose, facility, onChange, lang, adminRole, r
   );
 }
 
+// ─── Tema stagionale ─────────────────────────────────────────────────────────
+//
+// Livello puramente decorativo sopra il resto dell'app, acceso/spento dal
+// sistemista (AdminPanel → Tema): neve a Natale, pipistrelli a Halloween.
+// `pointer-events-none` su tutto il layer, cosi' non intercetta mai un
+// tocco, qualunque sia il suo z-index rispetto al resto — non deve MAI
+// impedire di prenotare un turno solo perche' e' Natale.
+//
+// Elementi generati con una posizione/ritardo derivati dall'indice (non
+// Math.random): stabili fra un render e l'altro, non "saltano" ogni volta
+// che qualcos'altro nell'app fa ridisegnare il componente.
+const FIOCCHI_NEVE = Array.from({ length: 28 }, (_, i) => i);
+const PIPISTRELLI = Array.from({ length: 9 }, (_, i) => i);
+
+function TemaEffetto({ tema }: { tema: api.TemaStagionale }) {
+  if (tema === "natale") {
+    return (
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 30 }} aria-hidden="true">
+        {FIOCCHI_NEVE.map((i) => (
+          <span key={i} className="tema-fiocco" style={{
+            left: `${(i * 37) % 100}%`,
+            fontSize: 10 + (i % 4) * 4,
+            animationDuration: `${9 + (i % 6) * 1.6}s`,
+            animationDelay: `${-(i % 12) * 1.3}s`,
+          }}>❄</span>
+        ))}
+      </div>
+    );
+  }
+
+  if (tema === "halloween") {
+    return (
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 30 }} aria-hidden="true">
+        <div className="tema-halloween-tinta" />
+        {PIPISTRELLI.map((i) => (
+          <span key={i} className="tema-pipistrello" style={{
+            top: `${(i * 17) % 70}%`,
+            animationDuration: `${7 + (i % 5) * 1.3}s`,
+            animationDelay: `${-(i % 8) * 1.6}s`,
+          }}>🦇</span>
+        ))}
+      </div>
+    );
+  }
+
+  return null;
+}
+
 // ─── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -2439,6 +2491,10 @@ export default function App() {
   });
   const [week,   setWeek]     = useState<WeekData>({});
   const [status, setStatus]   = useState<StatusData>({});
+  // Tema stagionale deciso dal sistemista (vedi AdminPanel → Tema): non e'
+  // una preferenza di questo dispositivo, arriva dal server ad ogni
+  // caricamento, come week/status.
+  const [tema,   setTema]     = useState<api.TemaStagionale>("nessuno");
   const [loading, setLoading] = useState(true);
   const [error,  setError]    = useState<string | null>(null);
   // Preferiti caricati in base alla camera corrente (vedi loadFavs).
@@ -2490,7 +2546,7 @@ export default function App() {
   const refresh = useCallback(async () => {
     try {
       const s = await api.getSnapshot();
-      setWeek(s.week); setStatus(s.status); setError(null);
+      setWeek(s.week); setStatus(s.status); setTema(s.tema); setError(null);
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -2876,6 +2932,7 @@ export default function App() {
       {globalStyle}
       <div className="relative flex flex-col overflow-hidden w-full h-dvh md:h-[844px] md:max-w-[420px] md:rounded-[3rem] md:shadow-2xl md:border"
         style={{ background:"var(--background)", borderColor:"var(--border)" }}>
+        <TemaEffetto tema={tema} />
         {showChrome && <InstallPrompt lang={lang}/>}
         {accessibilityModal}
         {adminLoginSheet}

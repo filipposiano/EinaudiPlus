@@ -73,7 +73,7 @@ const nap: Partial<Testi> = {
   navLavanderia: "Lavanderij", navCinema: "O 'Cinema", navMusica: "A' Musica",
 
   navMacchine: "Machin", navSegnalazioni: "Segnalazion",
-  navRicorrenti: "Ricorrent", navManutenzione: "Manutenzion",
+  navRicorrenti: "Ricorrent", navManutenzione: "Manutenzion", navTema: "Tema",
   notaFacoltativa: "Facoltativo: a può nvia pur senza scriv nient.",
   inviaSegnalazione: "Invia a segnalazione",
 

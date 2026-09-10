@@ -501,7 +501,7 @@ section("Separazione dei ruoli");
   if (!cookie) {
     console.log("  salto  (nessuna sessione FDO)");
   } else {
-    for (const action of ["recurringList", "purge", "applyRecurring", "counts", "broadcastPush", "biciAddRoom"]) {
+    for (const action of ["recurringList", "purge", "applyRecurring", "counts", "broadcastPush", "biciAddRoom", "temaSet"]) {
       const r = await call(adminData, { body: { action, scope: "settimana" }, cookie });
       check(`FDO non puo' '${action}' -> 403`, r.status === 403, `ricevuto ${r.status}`);
     }
@@ -522,6 +522,15 @@ section("Sistemista");
       body: { action: "broadcastPush", title: "", body: "" }, cookie: sysCookie,
     });
     check("notifica senza titolo/testo respinta", broadcastVuoto.body?.ok === false, JSON.stringify(broadcastVuoto.body));
+
+    // Solo lettura: qui non si cambia il tema. Questi test girano contro il
+    // database di PRODUZIONE (vedi il commento piu' sotto su TEST_ALLOW_PURGE)
+    // e temaSet e' visibile a chiunque abbia l'app aperta in quel momento —
+    // non e' il caso di farlo lampeggiare a ogni `npm test`.
+    const temaAttuale = await call(adminData, { body: { action: "temaGet" }, cookie: sysCookie });
+    check("temaGet risponde", temaAttuale.body?.ok === true &&
+      ["nessuno", "halloween", "natale"].includes(temaAttuale.body?.tema),
+      JSON.stringify(temaAttuale.body));
 
     // Regola lavanderia, su un turno mercoledì DAVVERO libero.
     //

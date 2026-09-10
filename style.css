@@ -668,3 +668,52 @@
 @media (prefers-reduced-motion: reduce) {
   .lampeggia { animation: none; }
 }
+
+/* ── Tema stagionale (vedi App.tsx → TemaEffetto) ───────────────────────────
+   Solo CSS, come il resto delle animazioni qui sopra: nessuna libreria per
+   un fiocco di neve e un pipistrello. */
+@keyframes fioccoCade {
+  from { transform: translateY(-10%) translateX(0); opacity: 0; }
+  10%  { opacity: .85; }
+  90%  { opacity: .85; }
+  to   { transform: translateY(110%) translateX(18px); opacity: 0; }
+}
+.tema-fiocco {
+  position: absolute;
+  top: 0;
+  color: #fff;
+  text-shadow: 0 0 3px rgba(0, 0, 0, .25);
+  animation-name: fioccoCade;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes pipistrelloVola {
+  from { transform: translateX(-10%) translateY(0) scale(.9); opacity: 0; }
+  10%  { opacity: .9; }
+  50%  { transform: translateX(50%) translateY(-14px) scale(1); }
+  90%  { opacity: .9; }
+  to   { transform: translateX(115%) translateY(6px) scale(.9); opacity: 0; }
+}
+.tema-pipistrello {
+  position: absolute;
+  left: 0;
+  font-size: 18px;
+  animation-name: pipistrelloVola;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+.tema-halloween-tinta {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at top, color-mix(in srgb, #ff7518 10%, transparent), transparent 60%),
+    linear-gradient(color-mix(in srgb, #2b0a3d 12%, transparent), transparent 40%);
+}
+
+/* Molti elementi in movimento sono proprio il caso per cui esiste questa
+   preferenza: chi la imposta non deve vedersi riempire lo schermo di neve o
+   pipistrelli solo perche' il sistemista ha acceso un tema. */
+@media (prefers-reduced-motion: reduce) {
+  .tema-fiocco, .tema-pipistrello { animation: none; display: none; }
+}
