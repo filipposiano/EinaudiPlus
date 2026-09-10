@@ -501,7 +501,7 @@ section("Separazione dei ruoli");
   if (!cookie) {
     console.log("  salto  (nessuna sessione FDO)");
   } else {
-    for (const action of ["recurringList", "purge", "applyRecurring", "counts", "broadcastPush"]) {
+    for (const action of ["recurringList", "purge", "applyRecurring", "counts", "broadcastPush", "biciAddRoom"]) {
       const r = await call(adminData, { body: { action, scope: "settimana" }, cookie });
       check(`FDO non puo' '${action}' -> 403`, r.status === 403, `ricevuto ${r.status}`);
     }

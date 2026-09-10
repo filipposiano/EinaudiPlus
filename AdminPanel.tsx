@@ -718,6 +718,7 @@ function Bici({ sistemista }: { sistemista: boolean }) {
   const [msg, setMsg] = useState<string | null>(null);
   // La camera per cui e' apparso il popup "Elimina" (solo sistemista).
   const [daEliminare, setDaEliminare] = useState<string | null>(null);
+  const [nuovaCamera, setNuovaCamera] = useState("");
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -759,6 +760,25 @@ function Bici({ sistemista }: { sistemista: boolean }) {
     }
   }
 
+  // Solo il sistemista arriva a vedere questo campo (stesso motivo di
+  // reset()): assegnare una bici e' l'altra faccia di toglierla, riservata
+  // allo stesso ruolo. Riusa bike_set, la stessa RPC del residente — e'
+  // idempotente, dichiararla due volte non duplica niente.
+  async function assegnaCamera() {
+    const room = nuovaCamera.trim();
+    if (!room) return;
+    setBusy(true); setMsg(null);
+    try {
+      await call("biciAddRoom", { room });
+      setNuovaCamera("");
+      load();
+    } catch (e: any) {
+      setMsg("Non è riuscito: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <>
       <p style={{ fontSize: 13, ...S.sub, marginBottom: 16, maxWidth: "70ch" }}>
@@ -789,6 +809,31 @@ function Bici({ sistemista }: { sistemista: boolean }) {
       </div>
 
       {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
+
+      {/* Come per "Cancella tutte le bici" piu' sotto: solo il sistemista la
+          vede, l'FDO vede la lista ma non la tocca. */}
+      {sistemista && (
+        <div style={{ ...S.card, padding: 14, marginBottom: 16 }}>
+          <p style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Assegna una bici a una camera</p>
+          <p style={{ fontSize: 12, ...S.sub, marginBottom: 10 }}>
+            Per chi non usa l'app, o per farla dichiarare dalla reception invece che dal residente stesso.
+          </p>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              style={{ ...S.input, flex: 1 }} placeholder="Numero camera (es. 214 o 21-b)"
+              value={nuovaCamera} disabled={busy}
+              onChange={(e) => setNuovaCamera(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") assegnaCamera(); }}
+            />
+            <button
+              style={{ ...S.btn, background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
+              disabled={busy || !nuovaCamera.trim()} onClick={assegnaCamera}
+            >
+              Assegna
+            </button>
+          </div>
+        </div>
+      )}
 
       {dati && dati.camere.length > 0 ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 16 }}>

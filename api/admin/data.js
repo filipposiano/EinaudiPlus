@@ -4,7 +4,7 @@
 // prima di toccare il database.
 
 import { rpc } from "../_lib/db.js";
-import { readBody, json, fail, methodOk, intero } from "../_lib/http.js";
+import { readBody, json, fail, methodOk, intero, camera } from "../_lib/http.js";
 import { currentAdmin, isSysadmin, isStaff, hashPassword, verifyPassword } from "../_lib/auth.js";
 import { sendWebPush, pushConfigured } from "../_lib/push.js";
 import { sendTelegram, telegramConfigured } from "../_lib/telegram.js";
@@ -21,7 +21,7 @@ const MUTATIONS = new Set([
   "conferenzaAdd", "conferenzaUpdate", "conferenzaDelete",
   "conferenzaSkip", "conferenzaMove", "conferenzaResetOccorrenza",
   "accountCreate", "accountSetPassword", "accountSetActive", "accountDelete",
-  "accountChangeOwnPassword", "biciPurge", "biciDeleteRoom",
+  "accountChangeOwnPassword", "biciPurge", "biciDeleteRoom", "biciAddRoom",
 ]);
 
 // Riservate al sistemista. La portineria non le vede nel pannello, ma il
@@ -31,7 +31,7 @@ const SOLO_SISTEMISTA = new Set([
   "recurringSetActive", "recurringDelete", "applyRecurring", "purge", "counts",
   "pushSubs", "deletePushSub", "telegramSubs", "deleteTelegramSub", "broadcastPush",
   "accountList", "accountCreate", "accountSetPassword",
-  "accountSetActive", "accountDelete", "biciPurge", "biciDeleteRoom",
+  "accountSetActive", "accountDelete", "biciPurge", "biciDeleteRoom", "biciAddRoom",
 ]);
 
 // Macchine e segnalazioni restano affari di FDO e sistemista: lo staff
@@ -533,6 +533,18 @@ export default async function handler(req, res) {
       case "biciDeleteRoom":
         result = await rpc("bike_delete_room", { p_room: String(body.room || "") });
         break;
+
+      // Assegna una bici a una camera dal pannello, invece che aspettare che
+      // il residente la dichiari da solo dalle sue Impostazioni — utile per
+      // chi non usa l'app, o per farlo fare alla reception. Stessa RPC del
+      // residente (bike_set): e' idempotente, dichiararla due volte non
+      // duplica niente.
+      case "biciAddRoom": {
+        const room = camera(body.room);
+        if (!room) return fail(res, "numero di camera non valido");
+        result = await rpc("bike_set", { p_room: room, p_has_bike: true });
+        break;
+      }
 
       default:
         return fail(res, "azione sconosciuta");
