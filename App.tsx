@@ -1284,10 +1284,15 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
               {washIds.map((mid) => {
                 const room = dayData[si]?.[mid];
                 const isMe = !!sessionRoom && room === sessionRoom;
-                // Il piano si vede solo su una camera che non e' la propria:
-                // la propria e' gia' il rosso pieno, che deve restare il
-                // segnale piu' forte della riga.
-                const piano = room && !isMe ? pianoDi(room) : null;
+                // Anche sulla propria camera si vede il piano: prima era
+                // rosso pieno, ma il rosso e' gia' usato ovunque nell'app
+                // (bottoni, stato attivo) e sulla riga si confondeva col
+                // resto. Il colore del piano, molto piu' saturo che sulle
+                // altre camere, distingue la propria senza quell'ambiguita'.
+                // Il rosso pieno resta solo per le camere senza piano
+                // riconoscibile (es. DIREZIONE), dove non c'e' un colore
+                // di piano a cui appoggiarsi.
+                const piano = room ? pianoDi(room) : null;
                 return (
                   <div key={mid} className="flex-1 px-1 py-1.5">
                     {room ? (
@@ -1302,15 +1307,15 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
                           // quanto lo era il giallo chiaro su se stesso. Mescolato
                           // col bianco lo sfondo resta un pastello chiaro qualunque
                           // sia il colore o il tema, e il nero ci si legge sempre.
-                          background: isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 32%, white)` : "var(--secondary)",
-                          border: `1px solid ${isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 65%, white)` : "var(--border)"}`,
-                          boxShadow: isMe ? "0 2px 8px color-mix(in srgb, var(--primary) 35%, transparent)" : "none",
+                          background: piano ? `color-mix(in srgb, ${colorePiano(piano)} ${isMe?72:32}%, white)` : isMe ? RED : "var(--secondary)",
+                          border: `1px solid ${piano ? colorePiano(piano) : isMe ? RED : "var(--border)"}`,
+                          boxShadow: isMe && !piano ? "0 2px 8px color-mix(in srgb, var(--primary) 35%, transparent)" : "none",
                           cursor:isPast?"default":"pointer"
                         }}>
                         {/* Il numero resta nero: colorato si leggeva male
                             proprio sui piani chiari (il giallo su se stesso).
                             A dire "che piano e'" bastano gia' sfondo e bordo. */}
-                        <span className="text-[10px] font-mono font-bold" style={{ color:isMe?RED_FG:piano?"#111":sub }}>{room}</span>
+                        <span className="text-[10px] font-mono font-bold" style={{ color:piano?"#111":isMe?RED_FG:sub }}>{room}</span>
                       </button>
                     ) : (
                       <button disabled={isPast}
@@ -1603,7 +1608,11 @@ const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber
                     {isPrevSl && <div className="absolute left-0 top-0 bottom-0 w-0.5" style={{ background:ORANGE }}/>}
                     {rooms.map(([mid, room]) => {
                       const isMe = !!sessionRoom && room === sessionRoom;
-                      const piano = !isMe ? pianoDi(room) : null;
+                      // Vedi DaySchedule: anche sulla propria camera si vede
+                      // il piano, molto piu' saturo, invece del rosso pieno
+                      // che si confondeva col resto dell'app. Il rosso resta
+                      // solo dove non c'e' un piano riconoscibile.
+                      const piano = pianoDi(room);
                       return (
                         <div key={mid} className={`rounded-md flex items-center gap-1 w-full border ${isDesktop ? "px-1.5 py-1" : "px-1 py-0.5"}`}
                           style={{
@@ -1612,13 +1621,13 @@ const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber
                             // o il tema, cosi' il numero nero sotto si legge
                             // sempre — mescolato con var(--secondary) restava
                             // scuro in tema scuro, e il nero ci si perdeva.
-                            background: isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 32%, white)` : "var(--secondary)",
-                            borderColor: isMe ? RED : piano ? `color-mix(in srgb, ${colorePiano(piano)} 65%, white)` : "var(--border)",
+                            background: piano ? `color-mix(in srgb, ${colorePiano(piano)} ${isMe?72:32}%, white)` : isMe ? RED : "var(--secondary)",
+                            borderColor: piano ? colorePiano(piano) : isMe ? RED : "var(--border)",
                           }}>
-                          <span className={`${fsChip} font-mono font-bold shrink-0`} style={{ color:isMe?RED_FG:sub }}>{mid[2]}</span>
+                          <span className={`${fsChip} font-mono font-bold shrink-0`} style={{ color:piano?"#111":isMe?RED_FG:sub }}>{mid[2]}</span>
                           {/* Nero, non il colore del piano: colorato si leggeva
                               male sui piani chiari (il giallo su se stesso). */}
-                          <span className={`${fsChip} font-mono truncate`} style={{ color:isMe?RED_FG:piano?"#111":fg }}>{room}</span>
+                          <span className={`${fsChip} font-mono truncate`} style={{ color:piano?"#111":isMe?RED_FG:fg }}>{room}</span>
                         </div>
                       );
                     })}
