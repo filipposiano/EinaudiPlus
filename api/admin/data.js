@@ -447,9 +447,10 @@ export default async function handler(req, res) {
         result = await rpc("sysadmin_delete_telegram_sub", { p_id: Number(body.id) });
         break;
 
-      // Notifica manuale a tutti i dispositivi push iscritti (qualunque
-      // lavanderia/camera): usata per comunicazioni del sistemista, non per i
-      // promemoria automatici che restano affari del cron.
+      // Notifica manuale ai dispositivi push iscritti — a tutti, o a una sola
+      // camera se `body.room` e' valorizzato (es. un pacco arrivato, un
+      // problema di quella stanza): usata per comunicazioni del sistemista,
+      // non per i promemoria automatici che restano affari del cron.
       case "broadcastPush": {
         // Limite per account, non per IP: un cookie rubato funziona da
         // qualunque indirizzo, quindi il freno deve seguire CHI sta mandando,
@@ -468,6 +469,13 @@ export default async function handler(req, res) {
         const testo = String(body.body || "").trim();
         if (!title || !testo) return fail(res, "titolo e testo sono obbligatori");
 
+        // Vuoto/assente = tutti, come prima. Valorizzato = solo quella camera.
+        let room = null;
+        if (body.room != null && String(body.room).trim() !== "") {
+          room = camera(body.room);
+          if (!room) return fail(res, "camera non valida");
+        }
+
         const usaPush = pushConfigured();
         const usaTelegram = telegramConfigured();
         if (!usaPush && !usaTelegram) {
@@ -478,7 +486,7 @@ export default async function handler(req, res) {
         const telegram = { totali: 0, inviati: 0, falliti: 0 };
 
         if (usaPush) {
-          const subs = await rpc("sysadmin_all_push_subs");
+          const subs = await rpc("sysadmin_all_push_subs", { p_room: room });
           const dispositivi = Array.isArray(subs) ? subs : [];
           push.totali = dispositivi.length;
 
@@ -506,7 +514,7 @@ export default async function handler(req, res) {
         }
 
         if (usaTelegram) {
-          const chats = await rpc("sysadmin_all_telegram_subs");
+          const chats = await rpc("sysadmin_all_telegram_subs", { p_room: room });
           const lista = Array.isArray(chats) ? chats : [];
           telegram.totali = lista.length;
 
@@ -549,9 +557,38 @@ export default async function handler(req, res) {
         result = await rpc("bike_purge");
         break;
 
-      case "biciDeleteRoom":
-        result = await rpc("bike_delete_room", { p_room: String(body.room || "") });
+      // Come biciAddRoom, ma al contrario: avvisa il residente solo se c'era
+      // davvero una bici da togliere (bike_delete_room dice `deleted`), cosi'
+      // un tocco su una camera gia' senza bici non manda nessun avviso.
+      case "biciDeleteRoom": {
+        const room = camera(body.room);
+        if (!room) return fail(res, "numero di camera non valido");
+
+        result = await rpc("bike_delete_room", { p_room: room });
+
+        if (result?.deleted) {
+          const targets = await rpc("bike_notify_targets", { p_room: room }).catch(() => null);
+          const title = "Bici rimossa";
+          const testo = `La reception ha tolto la bici segnata per la tua camera (${room}).`;
+
+          if (pushConfigured() && Array.isArray(targets?.push) && targets.push.length) {
+            const gone = [];
+            await Promise.all(targets.push.map(async (s) => {
+              const esitoInvio = await sendWebPush(
+                { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+                { title, body: testo, url: "/", tag: "bici-rimossa" }
+              );
+              if (esitoInvio === "gone") gone.push(s.id);
+            }));
+            if (gone.length) await rpc("sysadmin_prune_push_subs", { p_ids: gone }).catch(() => {});
+          }
+
+          if (telegramConfigured() && Array.isArray(targets?.telegram) && targets.telegram.length) {
+            await Promise.all(targets.telegram.map((c) => sendTelegram(c.chat_id, title, testo)));
+          }
+        }
         break;
+      }
 
       // Assegna una bici a una camera dal pannello, invece che aspettare che
       // il residente la dichiari da solo dalle sue Impostazioni — utile per

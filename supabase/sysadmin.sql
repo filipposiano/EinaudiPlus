@@ -542,10 +542,11 @@ begin
 end;
 $$;
 
--- Notifica manuale a tutti i dispositivi iscritti (vedi migrations/026): a
+-- Notifica manuale ai dispositivi iscritti (vedi migrations/026 e 031): a
 -- differenza di sysadmin_push_subs, qui servono endpoint/p256dh/auth per
--- spedire davvero, non room/laundry per mostrarli in lista.
-create or replace function sysadmin_all_push_subs()
+-- spedire davvero, non room/laundry per mostrarli in lista. p_room e'
+-- opzionale: null vuol dire "tutti", una camera vuol dire solo quella.
+create or replace function sysadmin_all_push_subs(p_room text default null)
 returns jsonb language sql stable as $$
   select coalesce(
     jsonb_agg(jsonb_build_object(
@@ -553,7 +554,8 @@ returns jsonb language sql stable as $$
     )),
     '[]'::jsonb
   )
-  from push_sub;
+  from push_sub
+  where p_room is null or room = p_room;
 $$;
 
 create or replace function sysadmin_prune_push_subs(p_ids bigint[])
@@ -569,14 +571,15 @@ begin
 end;
 $$;
 
--- Stesso broadcast, canale Telegram (vedi migrations/027). Solo le chat
+-- Stesso broadcast, canale Telegram (vedi migrations/027 e 031). Solo le chat
 -- verificate: un codice mai incollato al bot non e' un'iscrizione.
-create or replace function sysadmin_all_telegram_subs()
+create or replace function sysadmin_all_telegram_subs(p_room text default null)
 returns jsonb language sql stable as $$
   select coalesce(
     jsonb_agg(jsonb_build_object('chat_id', chat_id)),
     '[]'::jsonb
   )
   from telegram_sub
-  where verified_at is not null;
+  where verified_at is not null
+    and (p_room is null or room = p_room);
 $$;

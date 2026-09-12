@@ -5,7 +5,7 @@ import {
   Delete, X, Wrench, Loader2, Star,
   History, Trash2, Film, Music, Menu,
   MessageSquare, Send, LogOut, Printer, Download,
-  Settings, Repeat, Eraser, Presentation, UserCog, ChevronLeft, Bike, Sparkles,
+  Settings, Repeat, Eraser, Presentation, UserCog, ChevronLeft, Bike, Sparkles, Bell,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -57,7 +57,7 @@ const AdminLoginSheet = lazy(() => import("./AdminPanel").then((m) => ({ default
 // `isAdminFacility` scambierebbe l'una per l'altra.
 type Facility = "laundry" | "cinema" | "music" | "conferenze" | "bike" | "guasto" | "impostazioni" | "feedback" | AdminTab;
 
-const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "bici", "account", "ricorrenti", "manutenzione", "tema"];
+const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "bici", "account", "ricorrenti", "notifiche", "manutenzione", "tema"];
 const isAdminFacility = (f: Facility): f is AdminTab => (ADMIN_TABS as string[]).includes(f);
 
 /** Etichetta della camera nell'intestazione. Chi amministra è la Direzione. */
@@ -745,6 +745,13 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
   const senzaQuota     = roomNumber === api.DIREZIONE;
   const remaining      = senzaQuota ? Infinity : WEEKLY_QUOTA - myBookings.length;
   const activeBookings = myBookings.filter((b) => !isPastBooking(b));
+  // Anche i turni gia' passati (di questa settimana) restano cancellabili: chi
+  // ha saltato un turno o ha prenotato per sbaglio deve poter liberare la
+  // quota senza aspettare che scompaia da solo a fine settimana. Vanno dopo
+  // gli attivi e in ordine dal piu' recente, cosi' l'elenco resta guidato dal
+  // "cosa mi serve adesso" e il passato non lo seppellisce.
+  const pastBookings   = myBookings.filter(isPastBooking).slice().reverse();
+  const displayBookings = [...activeBookings, ...pastBookings];
 
   // Prima lavatrice libera in un dato (giorno, slot)
   const firstFreeWasherAt = (day: number, s: number): string | null => {
@@ -885,7 +892,7 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
             </span>
           </div>
           <div className="rounded-2xl overflow-hidden border" style={{ background:surf, borderColor:div }}>
-            {activeBookings.length === 0 ? (
+            {displayBookings.length === 0 ? (
               /* "Nessuna prenotazione attiva" era un vicolo cieco: constatava
                  il vuoto e non diceva come uscirne. La riga sotto lo dice, e
                  porta dove i turni si vedono tutti insieme. */
@@ -893,9 +900,10 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
                 <p className="text-xs" style={{ color:sub }}>{t.noActiveBookings}</p>
               </div>
             ) : (
-              activeBookings.map((b, i) => {
-                const cur = isCurrentBooking(b);
-                const s   = TIME_SLOTS[b.slot];
+              displayBookings.map((b, i) => {
+                const cur  = isCurrentBooking(b);
+                const past = isPastBooking(b);
+                const s    = TIME_SLOTS[b.slot];
                 return (
                   /* Il turno in corso era rosso pieno sull'icona, con la riga
                      tinta dietro e un pallino che pulsava: tre segnali d'allarme
@@ -903,8 +911,9 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
                      che sta girando. Resta la parola "In corso ora" e un
                      pallino fermo; il colore accompagna, non grida. */
                   <div key={`${b.day}-${b.slot}-${b.mid}`} className="flex items-center gap-3 px-4 py-3"
-                    style={{ borderBottom: i < activeBookings.length - 1 ? `1px solid ${div}` : "none",
-                             background: cur ? `color-mix(in srgb, var(--primary) 4%, transparent)` : "transparent" }}>
+                    style={{ borderBottom: i < displayBookings.length - 1 ? `1px solid ${div}` : "none",
+                             background: cur ? `color-mix(in srgb, var(--primary) 4%, transparent)` : "transparent",
+                             opacity: past ? 0.6 : 1 }}>
                     {/* Il rosso resta una cosa sola: il turno che sta girando
                         adesso. Su ogni altra riga l'icona era rossa anche per
                         un turno di venerdi' prossimo, e a furia di essere
@@ -918,7 +927,9 @@ const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold" style={{ color:fg }}>{t.lavBreve} {b.mid[2]} · {s.start}–{s.end}</p>
                       <p className="text-[11px] font-mono" style={{ color: cur ? RED : sub }}>
-                        {cur ? t.inProgressNow : `${t.days[b.day]} ${DAYS_DATE[b.day]} ${monShort(b.day, t.mesiBrevi)}`}
+                        {cur ? t.inProgressNow : past
+                          ? `${t.days[b.day]} ${DAYS_DATE[b.day]} ${monShort(b.day, t.mesiBrevi)} · ${t.favPast}`
+                          : `${t.days[b.day]} ${DAYS_DATE[b.day]} ${monShort(b.day, t.mesiBrevi)}`}
                       </p>
                     </div>
                     {/* Lampeggia: e' l'unica cosa in tutta la schermata che sta
@@ -2268,7 +2279,7 @@ const facilitiesFor = (roomNumber: string | null) =>
 // controllo vero resta sul server: nascondere una voce non è un'autorizzazione.
 const ADMIN_SECTIONS: {
   id: AdminTab; icon: any;
-  chiave: "navMacchine" | "navSegnalazioni" | "navBici" | "navAccount" | "navRicorrenti" | "navManutenzione" | "navTema";
+  chiave: "navMacchine" | "navSegnalazioni" | "navBici" | "navAccount" | "navRicorrenti" | "navNotifiche" | "navManutenzione" | "navTema";
   sistemistaOnly?: boolean;
   // Macchine e segnalazioni restano affari di FDO e sistemista: lo staff
   // prenota per conto della Direzione come l'FDO, ma non deve vedere lo
@@ -2288,6 +2299,7 @@ const ADMIN_SECTIONS: {
   // "chi puo' cancellare tutto": resta al sistemista.
   { id: "account",        icon: UserCog,       chiave: "navAccount",      sistemistaOnly: true },
   { id: "ricorrenti",     icon: Repeat,        chiave: "navRicorrenti",   sistemistaOnly: true },
+  { id: "notifiche",      icon: Bell,          chiave: "navNotifiche",    sistemistaOnly: true },
   { id: "manutenzione",   icon: Eraser,        chiave: "navManutenzione", sistemistaOnly: true },
   // Decorazione dell'app (neve, pipistrelli...), acceso/spento a piacere:
   // stesso livello di privilegio di Account e Manutenzione, non perche' sia

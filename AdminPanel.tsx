@@ -10,7 +10,7 @@
 // Caricato in lazy da App.tsx: non pesa sul bundle dei residenti.
 
 import { useCallback, useEffect, useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Trash2, Shirt, Film, Music } from "lucide-react";
 import type { Occorrenza } from "./conferenzeApi";
 import { RuotaOrario } from "./RuotaPicker";
 import { PIANI, pianoDi, nomePiano, colorePiano } from "./piani";
@@ -47,7 +47,7 @@ type Recurring = {
 // `staff` ha gli stessi poteri di `fdo`; solo `sistemista` puo' di piu'.
 // Restano account distinti perche' l'audit log registra chi ha fatto cosa.
 export type Role = "fdo" | "staff" | "sistemista";
-export type Tab = "macchine" | "segnalazioni" | "bici" | "account" | "ricorrenti" | "manutenzione" | "tema";
+export type Tab = "macchine" | "segnalazioni" | "bici" | "account" | "ricorrenti" | "notifiche" | "manutenzione" | "tema";
 
 // ─── Chiamate ────────────────────────────────────────────────────────────────
 
@@ -1084,28 +1084,51 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
         <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>
       )}
 
-      {/* Nuova regola lavanderia */}
+      {/* Nuova regola lavanderia.
+          Ogni campo ha un'etichetta propria e i cinque vanno a coppie su due
+          colonne: prima erano select nude una sotto l'altra, senza dire cosa
+          fosse cosa ("07:00" e "W-A" si leggono solo dal contesto) e alte
+          quanto un modulo di sei righe per cinque scelte. */}
       <div style={{ ...S.card, padding: 18, marginBottom: 16 }}>
         <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Nuova regola · lavanderia</h2>
-        <div className="adm-form">
-          <select style={S.input} value={lid} onChange={(e) => setLid(Number(e.target.value))}>
-            {laundries.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
-          </select>
-          <select style={S.input} value={day} onChange={(e) => setDay(Number(e.target.value))}>
-            {DAYS.map((d, i) => <option key={i} value={i}>Ogni {d.toLowerCase()}</option>)}
-          </select>
-          <select style={S.input} value={slot} onChange={(e) => setSlot(Number(e.target.value))}>
-            {Array.from({ length: 19 }, (_, i) => <option key={i} value={i}>{slotLabel(i)}</option>)}
-          </select>
-          <select style={S.input} value={machine} onChange={(e) => setMachine(e.target.value)}>
-            {machines.map((m) => <option key={m.code} value={m.code}>{m.code}</option>)}
-          </select>
-          {/* Il numero ricorda a quale lavanderia appartiene la camera scelta
-              sopra: scrivere "215" per la Manica (camere 1-99) creava una
-              regola che si applicava alla Manica ma che nessuno, guardando la
-              camera 215 (Valentino), avrebbe mai visto. */}
-          <input style={S.input} placeholder={roomsHint ? `Camera (${roomsHint})` : "Camera"}
-                 value={room} onChange={(e) => setRoom(e.target.value)} />
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>Lavanderia</label>
+              <select style={S.input} value={lid} onChange={(e) => setLid(Number(e.target.value))}>
+                {laundries.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>Ripeti</label>
+              <select style={S.input} value={day} onChange={(e) => setDay(Number(e.target.value))}>
+                {DAYS.map((d, i) => <option key={i} value={i}>Ogni {d.toLowerCase()}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>Orario</label>
+              <select style={S.input} value={slot} onChange={(e) => setSlot(Number(e.target.value))}>
+                {Array.from({ length: 19 }, (_, i) => <option key={i} value={i}>{slotLabel(i)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>Macchina</label>
+              <select style={S.input} value={machine} onChange={(e) => setMachine(e.target.value)}>
+                {machines.map((m) => <option key={m.code} value={m.code}>{m.code}</option>)}
+              </select>
+            </div>
+          </div>
+          <div>
+            {/* Il numero ricorda a quale lavanderia appartiene la camera scelta
+                sopra: scrivere "215" per la Manica (camere 1-99) creava una
+                regola che si applicava alla Manica ma che nessuno, guardando la
+                camera 215 (Valentino), avrebbe mai visto. */}
+            <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>Camera</label>
+            <input style={S.input} placeholder={roomsHint ? `es. ${roomsHint}` : "Camera"}
+                   value={room} onChange={(e) => setRoom(e.target.value)} />
+          </div>
           <button style={{ ...S.btn, background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
                   disabled={busy} onClick={addLaundry}>Aggiungi</button>
         </div>
@@ -1114,19 +1137,35 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
       {/* Nuova regola sala */}
       <div style={{ ...S.card, padding: 18, marginBottom: 16 }}>
         <h2 style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>Nuova regola · sala</h2>
-        <div className="adm-form">
-          <select style={S.input} value={space} onChange={(e) => setSpace(e.target.value as any)}>
-            <option value="cinema">Cinema</option>
-            <option value="music">Musica</option>
-          </select>
-          <select style={S.input} value={sDay} onChange={(e) => setSDay(Number(e.target.value))}>
-            {DAYS.map((d, i) => <option key={i} value={i}>Ogni {d.toLowerCase()}</option>)}
-          </select>
-          {/* Ruote anche qui, per lo stesso motivo del modulo polivalente:
-              il pannello nativo su alcuni telefoni finisce fuori schermo. */}
-          <RuotaOrario valore={sStart} onCambia={setSStart} etichetta="Inizio" />
-          <RuotaOrario valore={sEnd}   onCambia={setSEnd}   etichetta="Fine" />
-          <input style={S.input} placeholder="Nome" value={sName} onChange={(e) => setSName(e.target.value)} />
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            <div>
+              <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>Sala</label>
+              <select style={S.input} value={space} onChange={(e) => setSpace(e.target.value as any)}>
+                <option value="cinema">Cinema</option>
+                <option value="music">Musica</option>
+              </select>
+            </div>
+            <div>
+              <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>Ripeti</label>
+              <select style={S.input} value={sDay} onChange={(e) => setSDay(Number(e.target.value))}>
+                {DAYS.map((d, i) => <option key={i} value={i}>Ogni {d.toLowerCase()}</option>)}
+              </select>
+            </div>
+          </div>
+          {/* Ruote anche qui, per lo stesso motivo del modulo polivalente: il
+              pannello nativo su alcuni telefoni finisce fuori schermo. La
+              classe è la stessa di Conferenze.tsx, per lo stesso motivo:
+              inizio e fine affiancati si leggono come un intervallo, uno
+              sotto l'altro si leggono come due numeri scollegati. */}
+          <div className="conf-incontro__orari">
+            <RuotaOrario valore={sStart} onCambia={setSStart} etichetta="Inizio" />
+            <RuotaOrario valore={sEnd}   onCambia={setSEnd}   etichetta="Fine" />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, ...S.sub, marginBottom: 4 }}>Nome</label>
+            <input style={S.input} placeholder="es. Serata cinema" value={sName} onChange={(e) => setSName(e.target.value)} />
+          </div>
           <button style={{ ...S.btn, background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
                   disabled={busy} onClick={addSpace}>Aggiungi</button>
         </div>
@@ -1144,7 +1183,13 @@ function Ricorrenti({ laundries }: { laundries: Laundry[] }) {
         <div style={{ display: "grid", gap: 6 }}>
           {items.map((r) => (
             <div key={r.id} className="adm-rule" style={{ opacity: r.active ? 1 : 0.5 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, ...S.sub }}>
+              {/* L'icona aiuta a distinguere le regole scorrendo l'elenco a
+                  colpo d'occhio, invece di dover leggere l'etichetta di ogni
+                  riga una per una. */}
+              <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, ...S.sub }}>
+                {r.kind === "laundry"
+                  ? <Shirt size={12} />
+                  : r.space?.toLowerCase().startsWith("cine") ? <Film size={12} /> : <Music size={12} />}
                 {r.kind === "laundry" ? "LAVANDERIA" : "SALA"}
               </span>
               <span style={{ fontSize: 13 }}>ogni {DAYS[r.day].toLowerCase()}</span>
@@ -1957,36 +2002,44 @@ function ListaIscrizioni({ titolo, riepilogo, righe, vuoto, onDelete }: {
   );
 }
 
-/** Notifica manuale a tutti i dispositivi/chat iscritti — push e Telegram, a
- *  prescindere da lavanderia o camera — per comunicazioni del sistemista
- *  (es. manutenzione programmata), non i promemoria automatici che restano
- *  affari del cron. */
+/** Notifica manuale — push e Telegram — a tutti gli iscritti o a una sola
+ *  camera (es. un pacco arrivato, un problema di quella stanza), per
+ *  comunicazioni del sistemista. Non sono i promemoria automatici, che
+ *  restano affari del cron. */
 function InvioNotifica() {
   const [titolo, setTitolo] = useState("");
   const [testo, setTesto] = useState("");
+  const [destinatario, setDestinatario] = useState<"tutti" | "camera">("tutti");
+  const [room, setRoom] = useState("");
   const [busy, setBusy] = useState(false);
   const [esito, setEsito] = useState<string | null>(null);
 
+  const perCamera = destinatario === "camera";
+  const cameraOk = !perCamera || room.trim().length > 0;
+
   async function invia() {
-    const t = titolo.trim(), b = testo.trim();
-    if (!t || !b) return;
-    if (!confirm(`Inviare questa notifica a tutti i dispositivi e chat iscritti?\n\n"${t}"\n${b}`)) return;
+    const t = titolo.trim(), b = testo.trim(), r = room.trim();
+    if (!t || !b || (perCamera && !r)) return;
+    const chi = perCamera ? `alla camera ${r}` : "a tutti i dispositivi e chat iscritti";
+    if (!confirm(`Inviare questa notifica ${chi}?\n\n"${t}"\n${b}`)) return;
 
     setBusy(true); setEsito(null);
     try {
-      const r = await call<{
+      const res = await call<{
         push: { totali: number; inviati: number; falliti: number };
         telegram: { totali: number; inviati: number; falliti: number };
-      }>("broadcastPush", { title: t, body: b });
+      }>("broadcastPush", { title: t, body: b, room: perCamera ? r : undefined });
 
       const parti: string[] = [];
-      if (r.push.totali > 0) {
-        parti.push(`push: ${r.push.inviati}/${r.push.totali}` + (r.push.falliti ? ` (${r.push.falliti} non raggiunti)` : ""));
+      if (res.push.totali > 0) {
+        parti.push(`push: ${res.push.inviati}/${res.push.totali}` + (res.push.falliti ? ` (${res.push.falliti} non raggiunti)` : ""));
       }
-      if (r.telegram.totali > 0) {
-        parti.push(`Telegram: ${r.telegram.inviati}/${r.telegram.totali}` + (r.telegram.falliti ? ` (${r.telegram.falliti} falliti)` : ""));
+      if (res.telegram.totali > 0) {
+        parti.push(`Telegram: ${res.telegram.inviati}/${res.telegram.totali}` + (res.telegram.falliti ? ` (${res.telegram.falliti} falliti)` : ""));
       }
-      setEsito(parti.length ? "Inviata — " + parti.join(" · ") : "Nessun dispositivo o chat ha le notifiche attive.");
+      setEsito(parti.length ? "Inviata — " + parti.join(" · ")
+        : perCamera ? "Quella camera non ha notifiche attive su nessun canale."
+        : "Nessun dispositivo o chat ha le notifiche attive.");
       setTitolo(""); setTesto("");
     } catch (e: any) {
       setEsito("Non è riuscito: " + e.message);
@@ -1998,12 +2051,33 @@ function InvioNotifica() {
   return (
     <div style={{ ...S.card, padding: 14, marginBottom: 16 }}>
       <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", ...S.sub, marginBottom: 12 }}>
-        Invia notifica a tutti i dispositivi
+        Invia notifica
       </p>
       <p style={{ fontSize: 13, ...S.sub, marginBottom: 12 }}>
         Arriva come notifica push a chi ha attivato le notifiche della web app e come
-        messaggio a chi ha collegato Telegram, indipendentemente da lavanderia o camera.
+        messaggio a chi ha collegato Telegram.
       </p>
+
+      {/* Tutti, o una camera sola: la scelta prima del testo, cosi' si sa
+          gia' chi la leggera' mentre la si scrive. */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+        {(["tutti", "camera"] as const).map((v) => (
+          <button key={v} type="button" disabled={busy} onClick={() => setDestinatario(v)}
+                  style={{
+                    ...S.btn, fontSize: 12, padding: "6px 12px",
+                    background: destinatario === v ? "var(--primary)" : "var(--secondary)",
+                    color: destinatario === v ? "var(--primary-foreground)" : "var(--foreground)",
+                    borderColor: destinatario === v ? "transparent" : "var(--border)",
+                  }}>
+            {v === "tutti" ? "Tutti" : "Una camera"}
+          </button>
+        ))}
+      </div>
+      {perCamera && (
+        <input style={{ ...S.input, marginBottom: 8 }} placeholder="Camera (es. 112, 21-b)" value={room}
+               maxLength={8} onChange={(e) => setRoom(e.target.value)} disabled={busy} />
+      )}
+
       <input style={{ ...S.input, marginBottom: 8 }} placeholder="Titolo" value={titolo}
              maxLength={80} onChange={(e) => setTitolo(e.target.value)} disabled={busy} />
       <textarea
@@ -2011,30 +2085,29 @@ function InvioNotifica() {
         placeholder="Testo del messaggio" value={testo} maxLength={500} disabled={busy}
         onChange={(e) => setTesto(e.target.value)}
       />
-      <button onClick={invia} disabled={busy || !titolo.trim() || !testo.trim()}
+      <button onClick={invia} disabled={busy || !titolo.trim() || !testo.trim() || !cameraOk}
               style={{ ...S.btn, background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent", opacity: busy ? 0.6 : 1 }}>
-        {busy ? "Invio…" : "Invia a tutti"}
+        {busy ? "Invio…" : perCamera ? "Invia alla camera" : "Invia a tutti"}
       </button>
       {esito && <p style={{ fontSize: 13, ...S.sub, marginTop: 10 }}>{esito}</p>}
     </div>
   );
 }
 
-function Manutenzione() {
-  const [busy, setBusy] = useState(false);
+// ─── Notifiche (sistemista) ──────────────────────────────────────────────────
+//
+// Chi ha le notifiche attive, canale per canale, e l'invio manuale — push e
+// Telegram, a tutti o a una sola camera. Era dentro Manutenzione, in mezzo
+// alle operazioni distruttive di pulizia: due scopi diversi (guardare/inviare
+// notifiche contro cancellare dati) nella stessa scheda rendevano difficile
+// trovare l'uno senza scorrere l'altro.
+function Notifiche() {
   const [msg, setMsg] = useState<string | null>(null);
-  const [chiesto, setChiesto] = useState<string | null>(null);   // ambito in attesa di conferma
-  const [parola, setParola] = useState("");
-  const [sala, setSala] = useState<SalaId | null>(null);         // null = tutte le sale
-  const [conteggi, setConteggi] = useState<Conteggi | null>(null);
-  const [scaduto, setScaduto] = useState(false);
   const [pushSubs, setPushSubs] = useState<PushSubs | null>(null);
   const [telegramSubs, setTelegramSubs] = useState<TelegramSubs | null>(null);
 
   const aggiorna = useCallback(async () => {
-    try { setConteggi(await call<Conteggi>("counts")); setScaduto(false); }
-    catch { setScaduto(true); }   // il contatore non e' l'operazione: non blocca niente
-    try { setPushSubs(await call<PushSubs>("pushSubs")); } catch { /* stessa logica: solo una fotografia */ }
+    try { setPushSubs(await call<PushSubs>("pushSubs")); } catch { /* solo una fotografia, non blocca niente */ }
     try { setTelegramSubs(await call<TelegramSubs>("telegramSubs")); } catch { /* idem */ }
   }, []);
 
@@ -2049,6 +2122,52 @@ function Manutenzione() {
     try { await call("deleteTelegramSub", { id }); aggiorna(); }
     catch (e: any) { setMsg(e.message); }
   }
+
+  // Stesso motivo di Manutenzione: si rilegge da solo, cosi' resta vero anche
+  // mentre qualcuno si iscrive o si disiscrive altrove.
+  useEffect(() => {
+    aggiorna();
+    const t = setInterval(() => { if (!document.hidden) aggiorna(); }, 10_000);
+    const alRitorno = () => { if (!document.hidden) aggiorna(); };
+    document.addEventListener("visibilitychange", alRitorno);
+    return () => { clearInterval(t); document.removeEventListener("visibilitychange", alRitorno); };
+  }, [aggiorna]);
+
+  return (
+    <>
+      {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
+      <ListaIscrizioni
+        titolo="Notifiche push (web app)"
+        riepilogo={pushSubs ? `${pushSubs.camere_totali} camere · ${pushSubs.dispositivi_totali} dispositivi` : null}
+        righe={pushSubs?.iscrizioni ?? null}
+        vuoto="Nessun dispositivo ha le notifiche push attive."
+        onDelete={eliminaPush}
+      />
+      <ListaIscrizioni
+        titolo="Notifiche Telegram"
+        riepilogo={telegramSubs ? `${telegramSubs.camere_totali} camere · ${telegramSubs.chat_totali} chat` : null}
+        righe={telegramSubs?.iscrizioni ?? null}
+        vuoto="Nessuna chat Telegram collegata."
+        onDelete={eliminaTelegram}
+      />
+      <InvioNotifica />
+    </>
+  );
+}
+
+function Manutenzione() {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [chiesto, setChiesto] = useState<string | null>(null);   // ambito in attesa di conferma
+  const [parola, setParola] = useState("");
+  const [sala, setSala] = useState<SalaId | null>(null);         // null = tutte le sale
+  const [conteggi, setConteggi] = useState<Conteggi | null>(null);
+  const [scaduto, setScaduto] = useState(false);
+
+  const aggiorna = useCallback(async () => {
+    try { setConteggi(await call<Conteggi>("counts")); setScaduto(false); }
+    catch { setScaduto(true); }   // il contatore non e' l'operazione: non blocca niente
+  }, []);
 
   // Il cestino su una sala del contatore salta dritto alla conferma della
   // scheda "Svuota la settimana corrente", gia' con quella sala scelta: la
@@ -2103,22 +2222,6 @@ function Manutenzione() {
       </p>
 
       <Contatore dati={conteggi} scaduto={scaduto} onPulisci={pulisciSala} />
-      <ListaIscrizioni
-        titolo="Notifiche push (web app)"
-        riepilogo={pushSubs ? `${pushSubs.camere_totali} camere · ${pushSubs.dispositivi_totali} dispositivi` : null}
-        righe={pushSubs?.iscrizioni ?? null}
-        vuoto="Nessun dispositivo ha le notifiche push attive."
-        onDelete={eliminaPush}
-      />
-      <ListaIscrizioni
-        titolo="Notifiche Telegram"
-        riepilogo={telegramSubs ? `${telegramSubs.camere_totali} camere · ${telegramSubs.chat_totali} chat` : null}
-        righe={telegramSubs?.iscrizioni ?? null}
-        vuoto="Nessuna chat Telegram collegata."
-        onDelete={eliminaTelegram}
-      />
-
-      <InvioNotifica />
 
       {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
 
@@ -2518,6 +2621,9 @@ export function AdminScreens({ tab, onSession }: {
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata al sistemista.</p>)}
       {tab === "ricorrenti" && (sistemista
         ? laundries.length > 0 && <Ricorrenti laundries={laundries} />
+        : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata al sistemista.</p>)}
+      {tab === "notifiche" && (sistemista
+        ? <Notifiche />
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata al sistemista.</p>)}
       {tab === "manutenzione" && (sistemista
         ? <Manutenzione />

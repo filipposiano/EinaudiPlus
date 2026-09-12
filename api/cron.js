@@ -11,6 +11,23 @@ import { sendWebPush, pushConfigured } from "./_lib/push.js";
 import { sendTelegram } from "./_lib/telegram.js";
 import { json, methodOk } from "./_lib/http.js";
 
+// Una stanza puo' avere piu' promemoria dovuti nello stesso tick: piu'
+// lavatrici nello stesso turno, o un turno il cui "sposta il bucato"
+// coincide con il "il tuo turno inizia" di quello successivo. Senza questo
+// raggruppamento arriverebbero N notifiche push separate sullo stesso
+// dispositivo (o N messaggi Telegram) invece di una sola.
+function combineReminders(rows) {
+  if (rows.length === 1) {
+    return { title: rows[0].title, body: rows[0].body, tag: rows[0].tag };
+  }
+  const sameTitle = rows.every((r) => r.title === rows[0].title);
+  return {
+    title: sameTitle ? rows[0].title : "Bucato: piu' aggiornamenti",
+    body: rows.map((r) => (sameTitle ? r.body : `${r.title} ${r.body}`)).join("\n"),
+    tag: rows.map((r) => r.tag).join("+"),
+  };
+}
+
 export default async function handler(req, res) {
   if (!methodOk(req, res, ["POST", "GET"])) return;
 
@@ -40,25 +57,44 @@ export default async function handler(req, res) {
     };
 
     if (rows.length && pushConfigured()) {
+      // Raggruppa per destinatario (endpoint push / chat Telegram) prima di
+      // spedire: piu' righe con lo stesso destinatario diventano una sola
+      // notifica invece di una a testa. bump() resta per-riga cosi' il log
+      // (reminder_log/report_reminder_results) continua a tracciare ogni
+      // singolo promemoria, anche quando e' stato spedito in un gruppo.
+      const pushGroups = new Map();
+      const tgGroups = new Map();
+      for (const r of rows) {
+        if (r.endpoint) {
+          const g = pushGroups.get(r.endpoint) || [];
+          g.push(r);
+          pushGroups.set(r.endpoint, g);
+        }
+        if (r.chat_id) {
+          const g = tgGroups.get(r.chat_id) || [];
+          g.push(r);
+          tgGroups.set(r.chat_id, g);
+        }
+      }
+
       // In parallelo: sono richieste indipendenti verso servizi esterni, e il
       // tempo di esecuzione di una funzione serverless e' limitato.
-      await Promise.all(
-        rows.map(async (r) => {
-          if (r.endpoint) {
-            const outcome = await sendWebPush(
-              { endpoint: r.endpoint, keys: { p256dh: r.p256dh, auth: r.auth } },
-              { title: r.title, body: r.body, url: "/", tag: r.tag, kind: r.kind }
-            );
-            if (outcome === "gone") gone.add(r.endpoint);
-            bump(r, outcome === "ok" ? "ok" : "fail");
-          }
-
-          if (r.chat_id) {
-            const t = await sendTelegram(r.chat_id, r.title, r.body);
-            bump(r, t === "ok" ? "ok" : "fail");
-          }
-        })
-      );
+      await Promise.all([
+        ...[...pushGroups.entries()].map(async ([endpoint, group]) => {
+          const { title, body, tag } = combineReminders(group);
+          const outcome = await sendWebPush(
+            { endpoint, keys: { p256dh: group[0].p256dh, auth: group[0].auth } },
+            { title, body, url: "/", tag, kind: group.length === 1 ? group[0].kind : "combo" }
+          );
+          if (outcome === "gone") gone.add(endpoint);
+          for (const r of group) bump(r, outcome === "ok" ? "ok" : "fail");
+        }),
+        ...[...tgGroups.entries()].map(async ([chatId, group]) => {
+          const { title, body } = combineReminders(group);
+          const t = await sendTelegram(chatId, title, body);
+          for (const r of group) bump(r, t === "ok" ? "ok" : "fail");
+        }),
+      ]);
     }
 
     await rpc("report_reminder_results", {

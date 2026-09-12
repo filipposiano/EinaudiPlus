@@ -120,7 +120,7 @@ const es: Testi = {
   soloDirezione:  "Este turno es de la Dirección: solo un administrador puede liberarlo.",
   navLavanderia: "Lavandería", navCinema: "Cine", navMusica: "Música",
   navMacchine: "Máquinas", navSegnalazioni: "Avisos",
-  navRicorrenti: "Recurrentes", navManutenzione: "Mantenimiento", navTema: "Tema",
+  navRicorrenti: "Recurrentes", navNotifiche: "Notificaciones", navManutenzione: "Mantenimiento", navTema: "Tema",
   amministrazione: "Administración",
   mesiBrevi: ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"],
   navLingua: "Idioma",
