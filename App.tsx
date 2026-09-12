@@ -1307,8 +1307,12 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
                 return (
                   <div key={mid} className="flex-1 px-1 py-1.5">
                     {room ? (
+                      // A differenza della cella vuota (sotto), quella occupata
+                      // resta cliccabile anche nel passato: e' l'unico modo di
+                      // cancellare un turno gia' passato dalla vista giornaliera,
+                      // non solo dall'elenco "Le tue prenotazioni" in Dashboard.
                       <button
-                        onClick={()=>!isPast && setModTarget({ dayIdx:selDay, slotIdx:si, machineId:mid, currentRoom:room })}
+                        onClick={()=>setModTarget({ dayIdx:selDay, slotIdx:si, machineId:mid, currentRoom:room })}
                         className="w-full h-9 rounded-xl flex items-center justify-center transition-all active:scale-95"
                         style={{
                           // Mescolato col bianco, non con var(--secondary): in
@@ -1321,7 +1325,7 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
                           background: piano ? `color-mix(in srgb, ${colorePiano(piano)} ${isMe?72:32}%, white)` : isMe ? RED : "var(--secondary)",
                           border: `1px solid ${piano ? colorePiano(piano) : isMe ? RED : "var(--border)"}`,
                           boxShadow: isMe && !piano ? "0 2px 8px color-mix(in srgb, var(--primary) 35%, transparent)" : "none",
-                          cursor:isPast?"default":"pointer"
+                          opacity: isPast ? 0.6 : 1,
                         }}>
                         {/* Il numero resta nero: colorato si leggeva male
                             proprio sui piani chiari (il giallo su se stesso).
@@ -1351,12 +1355,17 @@ const DaySchedule = memo(function DaySchedule({ lang, week, status, roomNumber: 
 
 interface SlotDetailTarget { dayIdx: number; slotIdx: number; }
 
-function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify, onDelete, onClose }: {
+function SlotDetailSheet({ target, bookings, lang, roomNumber, isPast, onBook, onModify, onDelete, onClose }: {
   target: SlotDetailTarget;
   bookings: WeekData;
   isDark: boolean;
   lang: Lang;
   roomNumber: string | null;
+  // Un turno passato resta apribile per poter cancellare chi lo occupa (vedi
+  // WeekOverview), ma le macchine ancora libere in quel turno non diventano
+  // prenotabili solo perche' il foglio e' aperto: si potrebbe altrimenti
+  // creare una prenotazione nel passato da qui, l'unico varco rimasto aperto.
+  isPast?: boolean;
   onBook: (machineId: string) => void;
   onModify: (machineId: string, currentRoom: string) => void;
   onDelete: (machineId: string) => void;
@@ -1408,7 +1417,7 @@ function SlotDetailSheet({ target, bookings, lang, roomNumber, onBook, onModify,
                       {room ? `${t.room} ${room}` : t.free}
                     </p>
                   </div>
-                  {!room && (
+                  {!room && !isPast && (
                     <button
                       onClick={()=>onBook(mid)}
                       className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold transition-all active:scale-95 shrink-0"
@@ -1546,6 +1555,7 @@ const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber
           isDark={false}
           lang={lang}
           roomNumber={sessionRoom}
+          isPast={isPastBooking({ day: slotDetail.dayIdx, slot: slotDetail.slotIdx, mid: "" })}
           onBook={(mid)=>{ setTarget({ dayIdx:slotDetail.dayIdx, slotIdx:slotDetail.slotIdx, machineId:mid }); setSlotDetail(null); }}
           onModify={(mid, room)=>{ setModTarget({ dayIdx:slotDetail.dayIdx, slotIdx:slotDetail.slotIdx, machineId:mid, currentRoom:room }); setSlotDetail(null); }}
           onDelete={(mid)=>{ deleteFromDetail(slotDetail.dayIdx, slotDetail.slotIdx, mid); }}
@@ -1609,12 +1619,18 @@ const WeekOverview = memo(function WeekOverview({ lang, week, status, roomNumber
                 const isCur    = isToday && si===CUR_SLOT;
                 const isPrevSl = isToday && si===PREV_SLOT;
                 const isPast   = isPastDay || (isToday && si<CUR_SLOT);
+                // Un turno passato resta apribile solo se c'e' gia' qualcuno
+                // dentro: e' l'unico modo di raggiungere "Elimina" da questa
+                // vista per un turno che non c'e' piu' nell'elenco attivo
+                // della Dashboard. Una cella passata e vuota invece non porta
+                // a niente: non si puo' prenotare nel passato.
+                const apribile = !isPast || rooms.length > 0;
 
                 return (
                   <button key={dayIdx}
-                    onClick={()=>{ if(!isPast) setSlotDetail({ dayIdx, slotIdx:si }); }}
+                    onClick={()=>{ if(apribile) setSlotDetail({ dayIdx, slotIdx:si }); }}
                     className={`relative flex flex-col justify-start pt-1 gap-0.5 text-left transition-colors border-l ${isDesktop ? "px-1.5 hover:brightness-95" : "px-1"}`}
-                    style={{ ...dayCol, minHeight:ROW_H, background:isCur?`color-mix(in srgb, var(--primary) 8%, transparent)`:isPrevSl?`color-mix(in srgb, var(--chart-4) 5%, transparent)`:"transparent", borderColor:div, opacity:isPast?0.38:1, cursor:isPast?"default":"pointer" }}>
+                    style={{ ...dayCol, minHeight:ROW_H, background:isCur?`color-mix(in srgb, var(--primary) 8%, transparent)`:isPrevSl?`color-mix(in srgb, var(--chart-4) 5%, transparent)`:"transparent", borderColor:div, opacity:isPast?0.38:1, cursor:apribile?"pointer":"default" }}>
                     {isCur    && <div className="absolute left-0 top-0 bottom-0 w-0.5" style={{ background:RED }}/>}
                     {isPrevSl && <div className="absolute left-0 top-0 bottom-0 w-0.5" style={{ background:ORANGE }}/>}
                     {rooms.map(([mid, room]) => {
