@@ -105,13 +105,31 @@ npm run lint        # regola di confine fra moduli
 
 Quando un modulo viene migrato da codice esistente, il comportamento originale si replica **esattamente**, incluse le sue asimmetrie — e quelle asimmetrie si documentano nel codice invece di "correggerle" silenziosamente. Se decidi di irrobustire qualcosa (aggiungere una validazione che prima non c'era), fallo in un passo dichiarato, con la sua motivazione nel commento e verificato che non rompa la suite esistente — non mescolato dentro un refactor "di forma".
 
-## Frontend: riorganizzazione in corso (multi-sessione)
+## Frontend: riorganizzazione completata
 
-`App.tsx` (~3000 righe) e `AdminPanel.tsx` (~2600 righe) restano i due file grandi, non ancora spezzati — è un lavoro paragonabile per dimensione a tutto il backend, con una differenza importante: qui la verifica richiede il browser (visiva/interattiva), non solo test automatici.
+`App.tsx` e `AdminPanel.tsx` erano i due file grandi (~3000 e ~2600 righe): entrambi sono stati spezzati in `features/<dominio>/`, speculari ai moduli backend. La verifica di questo lavoro ha richiesto il browser (visiva/interattiva) oltre a `tsc`/`vite build`, non solo test automatici — a differenza del backend.
 
-Primo passo fatto: i componenti che erano **già file a sé** (non dentro App.tsx/AdminPanel.tsx) sono stati spostati in `features/<nome>/`, speculari ai moduli backend — `features/common-spaces/Rooms.tsx`, `features/bikes/Bici.tsx`, `features/conference-room/Conferenze.tsx`, `features/accessibility/AccessibilityPanel.tsx`. Nessuna riga di logica toccata, solo percorsi. `RuotaPicker.tsx` e `pannelli.tsx` restano alla radice: sono condivisi da più feature, non appartengono a una sola.
+Struttura per dominio, lato residenti e lato admin:
 
-Prossimo passo (non ancora fatto): estrarre da `App.tsx` i componenti specifici della lavanderia (la maggior parte del file) in `features/laundry/`, lasciando in `App.tsx` solo la shell (routing fra facility, login, sidebar, tema stagionale). Poi lo stesso per `AdminPanel.tsx`, verosimilmente spezzato per dominio (account, macchine, sale, bici, notifiche...) rispecchiando i moduli backend.
+```
+features/
+  <dominio>/
+    <Componenti residenti>.tsx     # es. Dashboard.tsx, Rooms.tsx, Bici.tsx
+    admin/
+      <Componenti admin>.tsx       # es. MacchineTab.tsx, BiciTab.tsx
+
+  admin-shared/       # kernel condiviso SOLO dal pannello admin
+    adminApi.ts         # call() — fetch verso /api/admin/data
+    adminStyles.ts       # S — stili condivisi da ogni scheda
+    adminHelpers.ts       # DAYS — usato da più di una scheda
+    types.ts               # Role, Tab
+```
+
+Nove domini lato admin: **Identity** (Login, Accounts, Session/AdminLoginSheet), **Laundry** (MacchineTab), **Feedback** (Segnalazioni), **Bikes** (BiciTab), **Ops** (Ricorrenti, Manutenzione — le due schede riservate al sistemista che toccano più domini insieme), **Notifications** (NotificheTab), **Theme** (Tema), **Conference Room** (GiornoSheetAdmin). `App.tsx` e `AdminPanel.tsx` restano solo il guscio: routing fra facility/schede, login, sidebar, sessione, tema stagionale — più i re-export che tengono invariata la superficie pubblica per chi importa da loro (`App.tsx`: `LoginScreen`/`DesktopSidebar`/... restano lì; `AdminPanel.tsx`: `Role`, `Tab`, `AdminScreens`, `AdminLoginSheet`, `adminLogout`, `CambiaPasswordObbligata`, `GiornoSheetAdmin`).
+
+`RuotaPicker.tsx` e `pannelli.tsx` restano alla radice: sono condivisi da più feature, non appartengono a una sola. Stessa cosa per `hooks.ts`/`icons.tsx` (condivisi fra la shell di `App.tsx` e `features/laundry/`).
+
+Un dominio admin può importare tipi da un altro (es. Segnalazioni importa `Laundry`/`Machine` da `features/laundry/admin/types.ts` per risolvere `setMachineStatus`) — rispecchia il fatto che anche il backend lo fa (Bikes → Notifications). Non c'è una regola ESLint di confine per il frontend come per `src/modules` (quella resta specifica al backend).
 
 ### ⚠️ `npm run dev` parla con la produzione
 
@@ -119,6 +137,5 @@ Prossimo passo (non ancora fatto): estrarre da `App.tsx` i componenti specifici 
 
 ## Cosa NON è ancora vero
 
-- Il frontend non è stato riorganizzato oltre al primo passo sopra: `App.tsx` e `AdminPanel.tsx` restano grandi.
 - Nessuna osservabilità oltre ai log strutturati (niente alerting automatico su errori ripetuti).
 - `npm test` non gira in CI (richiederebbe segreti di produzione in GitHub Actions — decisione operativa non presa).
