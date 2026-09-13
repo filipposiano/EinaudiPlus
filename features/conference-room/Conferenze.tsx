@@ -13,14 +13,14 @@
 // stragrande maggioranza di chi apre questa pagina) non lo scarica.
 import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { Loader2, AlertTriangle, ChevronLeft, ChevronRight, X, Printer, Download } from "lucide-react";
-import * as conferenze from "./conferenzeApi";
-import type { Occorrenza, Agenda } from "./conferenzeApi";
-import { T, type Lang } from "./i18n";
-import { RED, GREEN, GREEN_T, OOS_C, OOS_T, FG, SUB, DIV, SURF, CHIP } from "./tema";
-import type { Role as AdminRole } from "./AdminPanel";
+import * as conferenze from "../../conferenzeApi";
+import type { Occorrenza, Agenda } from "../../conferenzeApi";
+import { T, type Lang } from "../../i18n";
+import { RED, GREEN, GREEN_T, OOS_C, OOS_T, FG, SUB, DIV, SURF, CHIP } from "../../tema";
+import type { Role as AdminRole } from "../../AdminPanel";
 
-const GiornoSheetAdmin = lazy(() => import("./AdminPanel").then((m) => ({ default: m.GiornoSheetAdmin })));
-const CambiaPasswordObbligata = lazy(() => import("./AdminPanel").then((m) => ({ default: m.CambiaPasswordObbligata })));
+const GiornoSheetAdmin = lazy(() => import("../../AdminPanel").then((m) => ({ default: m.GiornoSheetAdmin })));
+const CambiaPasswordObbligata = lazy(() => import("../../AdminPanel").then((m) => ({ default: m.CambiaPasswordObbligata })));
 
 const oggiISO = () => new Date().toLocaleDateString("sv-SE");   // "2026-10-07"
 

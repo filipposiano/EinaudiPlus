@@ -12,10 +12,10 @@ import { useState, useEffect, useCallback } from "react";
 import {
   Film, Music, X, Plus, Trash2, Info, Loader2, AlertTriangle,
 } from "lucide-react";
-import * as roomsApi from "./roomsApi";
-import type { RoomKind, RoomBooking, CinemaType } from "./roomsApi";
-import RuotaPicker from "./RuotaPicker";
-import { Toast } from "./pannelli";
+import * as roomsApi from "../../roomsApi";
+import type { RoomKind, RoomBooking, CinemaType } from "../../roomsApi";
+import RuotaPicker from "../../RuotaPicker";
+import { Toast } from "../../pannelli";
 
 // Le stesse sei lingue dell'app: il tipo arriva da i18n, cosi' non si puo'
 // aggiungere una lingua di la' e dimenticarla di qua.
@@ -24,7 +24,7 @@ import { Toast } from "./pannelli";
 // piu' un testo suo, tradotto qui una seconda volta — arriva dallo stesso
 // dizionario che usa la lavanderia, cosi' il testo e' letteralmente lo
 // stesso in ogni sala, non solo tradotto allo stesso modo per coincidenza.
-import { T as T_APP, type Lang } from "./i18n";
+import { T as T_APP, type Lang } from "../../i18n";
 
 const RED = "var(--primary)", RED_FG = "var(--primary-foreground)";
 const OOS = "var(--destructive)";

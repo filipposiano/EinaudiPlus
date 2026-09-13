@@ -17,10 +17,10 @@ import {
   COLORBLIND_PRESETS,
   type StatusKey,
   type AccessibilityPrefs,
-} from "./statusConfig";
+} from "../../statusConfig";
 
 // Le stesse lingue dell'app: il tipo arriva da i18n.
-import type { Lang } from "./i18n";
+import type { Lang } from "../../i18n";
 
 const T = {
   it: {

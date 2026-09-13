@@ -7,8 +7,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { Bike, Loader2, AlertTriangle, Check } from "lucide-react";
-import * as api from "./api";
-import type { Lang } from "./i18n";
+import * as api from "../../api";
+import type { Lang } from "../../i18n";
 
 const RED = "var(--primary)", RED_FG = "var(--primary-foreground)";
 const fg = "var(--foreground)", sub = "var(--muted-foreground)";

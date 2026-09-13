@@ -105,8 +105,20 @@ npm run lint        # regola di confine fra moduli
 
 Quando un modulo viene migrato da codice esistente, il comportamento originale si replica **esattamente**, incluse le sue asimmetrie — e quelle asimmetrie si documentano nel codice invece di "correggerle" silenziosamente. Se decidi di irrobustire qualcosa (aggiungere una validazione che prima non c'era), fallo in un passo dichiarato, con la sua motivazione nel commento e verificato che non rompa la suite esistente — non mescolato dentro un refactor "di forma".
 
+## Frontend: riorganizzazione in corso (multi-sessione)
+
+`App.tsx` (~3000 righe) e `AdminPanel.tsx` (~2600 righe) restano i due file grandi, non ancora spezzati — è un lavoro paragonabile per dimensione a tutto il backend, con una differenza importante: qui la verifica richiede il browser (visiva/interattiva), non solo test automatici.
+
+Primo passo fatto: i componenti che erano **già file a sé** (non dentro App.tsx/AdminPanel.tsx) sono stati spostati in `features/<nome>/`, speculari ai moduli backend — `features/common-spaces/Rooms.tsx`, `features/bikes/Bici.tsx`, `features/conference-room/Conferenze.tsx`, `features/accessibility/AccessibilityPanel.tsx`. Nessuna riga di logica toccata, solo percorsi. `RuotaPicker.tsx` e `pannelli.tsx` restano alla radice: sono condivisi da più feature, non appartengono a una sola.
+
+Prossimo passo (non ancora fatto): estrarre da `App.tsx` i componenti specifici della lavanderia (la maggior parte del file) in `features/laundry/`, lasciando in `App.tsx` solo la shell (routing fra facility, login, sidebar, tema stagionale). Poi lo stesso per `AdminPanel.tsx`, verosimilmente spezzato per dominio (account, macchine, sale, bici, notifiche...) rispecchiando i moduli backend.
+
+### ⚠️ `npm run dev` parla con la produzione
+
+`vite.config.ts` fa da proxy di `/api/*` verso `https://einaudi-plus.vercel.app` — **il database vero**, non uno di prova (non esiste uno staging, stessa situazione del backend). Verificando nel browser durante `npm run dev`: naviga e leggi liberamente, ma non inviare prenotazioni, segnalazioni o azioni admin a meno di volerlo fare davvero e ripulire dopo.
+
 ## Cosa NON è ancora vero
 
-- Il frontend (`App.tsx`, `AdminPanel.tsx`) non è stato toccato da questo refactor: resta un flat di file grandi, stesso problema architetturale del backend prima di questo lavoro.
+- Il frontend non è stato riorganizzato oltre al primo passo sopra: `App.tsx` e `AdminPanel.tsx` restano grandi.
 - Nessuna osservabilità oltre ai log strutturati (niente alerting automatico su errori ripetuti).
 - `npm test` non gira in CI (richiederebbe segreti di produzione in GitHub Actions — decisione operativa non presa).

@@ -9,12 +9,12 @@ import {
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
-import RoomView from "./Rooms";
-import BiciView from "./Bici";
+import RoomView from "./features/common-spaces/Rooms";
+import BiciView from "./features/bikes/Bici";
 // La ruota la usa ancora il popup dei preferiti (giorno + fascia oraria).
 import RuotaPicker from "./RuotaPicker";
-import Conferenze from "./Conferenze";
-import AccessibilityPanel from "./AccessibilityPanel";
+import Conferenze from "./features/conference-room/Conferenze";
+import AccessibilityPanel from "./features/accessibility/AccessibilityPanel";
 import { loadPrefs, savePrefs, applyToDOM, type AccessibilityPrefs } from "./statusConfig";
 import type { Role as AdminRole, Tab as AdminTab } from "./AdminPanel";
 
