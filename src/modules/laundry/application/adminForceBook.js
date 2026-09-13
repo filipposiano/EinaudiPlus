@@ -1,11 +1,15 @@
 // Use-case: forza una prenotazione da pannello, scavalcando i conflitti
 // ordinari (uso raro, es. per sbloccare una situazione anomala).
 //
-// Fedele all'originale: `room` non è validato nella forma "numero di stanza"
-// (a differenza del percorso pubblico bookSlot) — passa come stringa grezza.
+// `room` è ora validato nella stessa forma del percorso pubblico bookSlot
+// (numero di camera, o DIREZIONE) — chiusura di un'asimmetria segnalata
+// nell'audit: l'originale non lo validava affatto, per nessuna delle due
+// ragioni buone che di solito lo giustificano (qui l'admin digita il valore
+// a mano, non è un campo derivato).
 
 import { ValidationError } from "../../../shared/errors/AppError.js";
 import { parseIntInRange } from "../../../shared/validation/number.js";
+import { parseRoomNumber } from "../../../shared/validation/room.js";
 import { LAUNDRY_ID_MIN, LAUNDRY_ID_MAX, DAY_MIN, DAY_MAX, SLOT_MIN, SLOT_MAX } from "../domain/slots.js";
 
 export async function adminForceBook({ laundryId, day, slot, machine, room }, { laundryRepository }) {
@@ -16,7 +20,10 @@ export async function adminForceBook({ laundryId, day, slot, machine, room }, { 
   const s = parseIntInRange(slot, SLOT_MIN, SLOT_MAX);
   if (s === null) throw new ValidationError('campo "slot" non valido');
 
+  const parsedRoom = parseRoomNumber(room);
+  if (!parsedRoom && room !== "DIREZIONE") throw new ValidationError("camera non valida");
+
   return laundryRepository.forceBook({
-    laundryId: lid, day: d, slot: s, machine: String(machine || ""), room: String(room || ""),
+    laundryId: lid, day: d, slot: s, machine: String(machine || ""), room: parsedRoom || room,
   });
 }

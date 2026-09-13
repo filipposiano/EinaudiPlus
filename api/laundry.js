@@ -15,7 +15,7 @@
 // bici/notifiche/segnalazioni vivono ancora qui accanto alla lavanderia pur
 // appartenendo ad altri domini.
 
-import { readBody, json, fail, tokenOk, methodOk } from "./_lib/http.js";
+import { readBody, json, fail, botFilterTokenOk, methodOk } from "./_lib/http.js";
 import { checkRateLimit, clientIp } from "../src/shared/http/rateLimit.js";
 import { getSnapshot, bookSlot, clearSlot } from "../src/modules/laundry/index.js";
 import { subscribePush, unsubscribePush, createTelegramCode } from "../src/modules/notifications/index.js";
@@ -28,7 +28,7 @@ export default wrapHandler("laundry", async (req, res) => {
 
   const body = req.method === "POST" ? readBody(req) : {};
 
-  if (!tokenOk(req, body)) return fail(res, "unauthorized", {}, 401);
+  if (!botFilterTokenOk(req, body)) return fail(res, "unauthorized", {}, 401);
 
   // ── Lettura ──────────────────────────────────────────────────────────────
   if (req.method === "GET") {

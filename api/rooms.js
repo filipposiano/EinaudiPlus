@@ -11,7 +11,7 @@
 // comportamento nei percorsi esistenti: era già lo stesso pattern, solo
 // duplicato a mano in ogni file).
 
-import { readBody, json, fail, tokenOk, methodOk } from "./_lib/http.js";
+import { readBody, json, fail, botFilterTokenOk, methodOk } from "./_lib/http.js";
 import { checkRateLimit, clientIp } from "../src/shared/http/rateLimit.js";
 import { getBookings, bookSpace, clearBooking, SPACES } from "../src/modules/common-spaces/index.js";
 import { wrapHandler } from "../src/shared/errors/wrapHandler.js";
@@ -20,7 +20,7 @@ export default wrapHandler("rooms", async (req, res) => {
   if (!methodOk(req, res, ["GET", "POST"])) return;
 
   const body = req.method === "POST" ? readBody(req) : {};
-  if (!tokenOk(req, body)) return fail(res, "unauthorized", {}, 401);
+  if (!botFilterTokenOk(req, body)) return fail(res, "unauthorized", {}, 401);
 
   const space = String(req.query.space || body.space || "").trim();
   if (!SPACES.has(space)) return fail(res, "sala non valida");

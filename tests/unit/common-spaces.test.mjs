@@ -118,11 +118,9 @@ section("adminBookAsDirezione()");
   await adminBookAsDirezione({ space: "cinema", day: 1, start: 60, end: 120 }, { commonSpacesRepository: repo });
   check("prenotazione Direzione valida riesce", repo.calls[0].name === "bookAsDirezione");
 
-  const repoSalaInventata = fakeRepository();
-  const errFedele = await throws(() =>
-    adminBookAsDirezione({ space: "piscina", day: 1, start: 60, end: 120 }, { commonSpacesRepository: repoSalaInventata }));
-  check("fedele all'originale: lo slug non è validato qui, decide il database",
-    errFedele === null && repoSalaInventata.calls[0]?.args.space === "piscina");
+  const errSalaInventata = await throws(() =>
+    adminBookAsDirezione({ space: "piscina", day: 1, start: 60, end: 120 }, { commonSpacesRepository: fakeRepository() }));
+  check("sala inventata respinta (come il percorso pubblico)", errSalaInventata?.message === "sala non valida");
 
   const err = await throws(() => adminBookAsDirezione({ space: "cinema", day: 9, start: 60, end: 120 }, { commonSpacesRepository: fakeRepository() }));
   check("giorno fuori range respinto", /day/.test(err?.message || ""));

@@ -1,10 +1,10 @@
 # refactor-enterprise — analisi e stato della migrazione
 
-Questa cartella contiene solo l'analisi e il piano ([ARCHITETTURA-ENTERPRISE.md](./ARCHITETTURA-ENTERPRISE.md)). Il codice vive nella sua posizione definitiva, quella descritta nell'alberatura del documento: `src/shared/`, `src/modules/*`.
+Questa cartella contiene l'analisi tecnica ([ARCHITETTURA-ENTERPRISE.md](./ARCHITETTURA-ENTERPRISE.md)) e una presentazione narrativa del lavoro ([PRESENTAZIONE.md](./PRESENTAZIONE.md)). Le convenzioni operative per chi lavora sul codice sono in [CLAUDE.md](../CLAUDE.md), alla radice del progetto. Il codice vive nella sua posizione definitiva: `src/shared/`, `src/modules/*`.
 
-## Stato: migrazione completa
+## Stato: migrazione completa + secondo giro di irrobustimento
 
-Tutti e nove i domini individuati nell'analisi iniziale sono ora moduli (`domain/application/infrastructure/index.js`), collegati agli adapter Vercel e verificati contro il database di produzione:
+Tutti e nove i domini individuati nell'analisi iniziale sono moduli, collegati agli adapter Vercel e verificati contro il database di produzione:
 
 | Modulo | Cosa possiede |
 |---|---|
@@ -18,41 +18,49 @@ Tutti e nove i domini individuati nell'analisi iniziale sono ora moduli (`domain
 | **Conference Room** | Sala conferenze: agenda pubblica + regole/eccezioni amministrative |
 | **Ops** | Regole ricorrenti generiche (trasversali a Laundry e Common Spaces), pulizia, conteggi, panoramica |
 
-**242 unit test** (`npm run test:unit`), nessuna rete/database richiesti — mai esistiti prima di questo lavoro per nessuno di questi domini.
+**247 unit test** (`npm run test:unit`), nessuna rete/database richiesti.
 
-## Cosa è cambiato nel kernel condiviso (oltre ai moduli)
+## Primo giro — kernel condiviso e migrazione dei domini
 
-Tre richieste esplicite, tutte chiuse in questo giro:
+- **Logging centralizzato**: `wrapHandler()` avvolge ogni adapter con un contratto di risposta standard, logga in JSON strutturato invece di `console.error` sparso. `api/telegram.js` fa eccezione (risponde sempre 200 a Telegram), usa comunque il logger direttamente.
+- **Rate limiting centralizzato**: `checkRateLimit(bucket, identificatore, limite, finestra)` in `src/shared/http/rateLimit.js`, sostituisce il vecchio `allow()` richiamato a mano e diversamente in ogni endpoint.
+- **`LIMITI` (dizionario di validazione condiviso fra domini migrati e non) rimosso del tutto.** Ogni modulo valida i propri campi.
+- **Autorizzazione per-modulo**: le due `Set()` centrali (`SOLO_SISTEMISTA`, `VIETATE_A_STAFF`) sono sparite, sostituite da un `authorize(claims, action)` per modulo.
+- **File morti rimossi**: `api/_lib/{auth,db,push,telegram}.js`.
 
-- **Logging centralizzato**: ogni adapter con un contratto di risposta standard (`admin/auth`, `admin/data`, `laundry`, `rooms`, `conferenze`, `cron`) è avvolto in `wrapHandler()`, che logga in modo strutturato (JSON, un campo per richiesta) invece del vecchio `console.error("[tag]", ...)` sparso e diverso in ogni file. `api/telegram.js` fa eccezione apposta: risponde sempre 200 a Telegram anche in caso di errore (per non farlo ritentare in loop), un contratto diverso da tutti gli altri — usa comunque il logger strutturato, solo non `wrapHandler`.
-- **Rate limiting centralizzato**: `src/shared/http/rateLimit.js` sostituisce il vecchio `allow()` di `api/_lib/http.js`, richiamato a mano e diversamente in ogni endpoint. Un'unica funzione (`checkRateLimit(bucket, identificatore, limite, finestra)`), usata sia per i limiti per-IP (lavanderia, sale, conferenze, login) sia per quello per-account del broadcast — quest'ultimo iniettato come dipendenza nel modulo Notifications, non importato a mano, per restare testabile senza rete.
-- **`LIMITI` (il dizionario di validazione condiviso fra domini migrati e non) è stato rimosso del tutto** da `api/admin/data.js`. Ogni campo che validava (`id`, `laundry_id`, `space_id`, `day`, `slot`, `offset`, `limit`, `start`, `end`, `giorno`) è ora validato dal modulo che possiede l'azione corrispondente — compreso un buco chiuso in Identity, che non validava i propri `id` prima di questo giro.
+## Secondo giro — irrobustimenti
 
-L'autorizzazione per-azione ha seguito lo stesso principio: le due `Set()` centrali (`SOLO_SISTEMISTA`, `VIETATE_A_STAFF`) in `api/admin/data.js` sono sparite, sostituite da una `authorize(claims, action)` per modulo, provate in sequenza finché una non riconosce l'azione come propria.
+- **`npm audit fix`**: chiuse 5 vulnerabilità su 6 nelle devDependencies (toolchain di build, mai nel bundle di produzione). Resta solo esbuild/vite, che richiederebbe un salto di major version (Vite 8) con `--force` — non fatto, da decidere a parte.
+- **Le quattro asimmetrie di validazione segnalate nel primo giro sono state chiuse**: `adminForceBook`, `adminClearAsDirezione` (Laundry) e `adminSetMachineStatus` (Laundry) ora validano la camera con `parseRoomNumber` (le prime due ammettono anche `"DIREZIONE"`, coerente con l'uso reale di quelle azioni); `adminBookAsDirezione` (Common Spaces, azione `bookSpaceDirezione`) valida lo slug della sala con `isValidSpace`. Unit test aggiornati per riflettere il nuovo comportamento invece del vecchio "fedele all'originale, non validato".
+- **`tokenOk` rinominato in `botFilterTokenOk`**: il nome ora dice da solo cosa fa (filtro anti-scanner, non autorizzazione) invece di rischiare di essere scambiato per un controllo di sicurezza vero. La variabile d'ambiente `APP_TOKEN` resta invariata di proposito: rinominarla è un intervento sulla configurazione Vercel, separato da questo.
+- **Audit log centralizzato**: `src/shared/audit/auditLog.js` (`logAdminAction`) sostituisce due chiamate `rpc("admin_log", ...)` duplicate (login/logout in `admin/auth.js`, mutazioni in `admin/data.js`), ognuna con la propria gestione d'errore leggermente diversa — ora un solo punto, stesso comportamento (sempre best-effort, mai far fallire l'azione vera).
+- **Regola di confine imposta da ESLint**: `eslint-plugin-boundaries` (config in `eslint.config.js`, root del progetto) blocca alla build un modulo che importa i file interni di un altro invece del suo `index.js`. Verificato empiricamente creando un import scorretto di prova (bloccato correttamente) prima di confermare che l'intero `src/modules/` passa pulito. `npm run lint`.
+- **CI** (`.github/workflows/ci.yml`): a ogni push/PR gira `npm run test:unit`, `tsc --noEmit`, `npm run lint`, `npx vite build`. Deliberatamente **non** include `npm test` (la suite contro produzione): non esiste uno staging, e farla girare in CI vorrebbe dire mettere segreti di produzione veri in GitHub Actions — decisione operativa non presa qui.
+- **`CLAUDE.md`** (root del progetto): convenzioni per chi lavora sul codice — pattern di un modulo, regola di confine, error handling, come testare, l'avviso su `npm test` contro produzione.
+- **`PRESENTAZIONE.md`**: sintesi narrativa del lavoro, senza dettagli tecnici — per chi deve capire cosa è cambiato senza leggere il codice.
 
-## File rimossi (morti dopo la migrazione)
+## Scelte di fedeltà deliberate rimaste (non ovvie, documentate invece di "corrette" silenziosamente)
 
-`api/_lib/auth.js`, `api/_lib/db.js`, `api/_lib/push.js`, `api/_lib/telegram.js` — tutti sostituiti dal kernel condiviso e dai moduli. `api/_lib/http.js` resta, ma ridotto a ciò che è puro HTTP (lettura corpo, risposta, metodi ammessi): rate limiting e validazione non ci vivono più.
+- **Irrigidimento deliberato**: diversi campi (`laundry_id`, `day`, `slot`, `start`, `end`, `space_id`, `giorno`, `limit`) devono essere *presenti*, non solo validi se presenti — il vecchio `LIMITI` saltava il controllo su un campo del tutto assente. Verificato che nessuna azione della suite di test manda questi campi come assenti.
+- **`getAgenda`** (sala conferenze pubblica) fa eccezione: un valore mancante o malformato ricade sul default (30 giorni), non viene rifiutato — fedele all'originale, endpoint di sola lettura senza nulla da proteggere.
+- **Status HTTP delle validazioni**: rispondono con lo status che l'errore porta (400/429) invece del 200 di sempre — verificato che il client non lo nota.
+- **Messaggio di autorizzazione unificato**: "permesso negato" al posto dei due messaggi originali diversi — conseguenza di avere un `authorize()` per modulo invece di due liste con messaggi diversi.
+- **`sendDueReminders`** (cron): l'intero invio (push E Telegram) resta condizionato alla sola configurazione di push — comportamento preesistente, non introdotto qui.
+- **`machine`** (nome macchina, es. "W-A") non è validato in nessuna azione, pubblica o admin — fedele all'originale ovunque, non un'asimmetria: il database filtra da sé sulle macchine "bookable" esistenti.
 
-## Scelte di fedeltà deliberate (non ovvie, documentate invece di "corrette" silenziosamente)
+## Verifica fatta (entrambi i giri)
 
-- **`forceBook`, `clearDirezione`, `adminSetMachineStatus`, `bookSpaceDirezione`** non validano il formato di camera/sala — fedeli all'originale, che non lo faceva neppure lui (si affida al filtro lato SQL). Candidati naturali per un piccolo hardening futuro.
-- **Irrigidimento deliberato**: diversi campi (`laundry_id`, `day`, `slot`, `start`, `end`, `space_id`, `giorno`, `limit`) ora devono essere *presenti*, non solo validi se presenti — il vecchio `LIMITI` saltava il controllo su un campo del tutto assente. Un campo mancante prima produceva un errore Postgres grezzo più a valle; ora un rifiuto pulito 400. Verificato che nessuna azione della suite di test manda questi campi come assenti.
-- **`getAgenda`** (sala conferenze pubblica) fa eccezione all'irrigidimento: un valore mancante o malformato ricade sul default (30 giorni), non viene rifiutato — fedele all'originale (`intero(...) ?? 30`), perché è un endpoint di sola lettura senza nulla da proteggere.
-- **Status HTTP delle validazioni**: gli errori di validazione dei moduli rispondono con lo status che l'errore stesso porta (400 per input malformato, 429 per rate limit) invece del 200 di sempre — verificato che né `api.ts` né `AdminPanel.tsx` controllano lo status HTTP (solo il caso speciale 401), quindi nessun impatto sul client. Un solo assert nella suite esistente lo notava ed è stato aggiornato su richiesta esplicita.
-- **Messaggio di autorizzazione unificato**: i due messaggi originali ("riservato al sistemista" / "riservato a FDO e sistemista") sono diventati un unico "permesso negato", conseguenza naturale di avere ogni modulo con la propria `authorize()` invece di due liste centrali con messaggi diversi. Cambio di testo minimo, mai verificato dai test, ma vale la pena saperlo.
-- **`sendDueReminders`** (cron): l'intero invio — push E Telegram — resta condizionato alla sola configurazione di push (`pushSender.configured()`), un comportamento preesistente non introdotto qui.
-
-## Verifica fatta
-
-- `node --check` su ogni file toccato, `npx tsc --noEmit` pulito.
-- **242/242 unit test**, nessuna rete.
+- `node --check` su ogni file toccato, `npx tsc --noEmit` pulito, `npx vite build` pulita.
+- **247/247 unit test**, nessuna rete.
 - Smoke test offline: caricamento di tutti gli adapter (nessun errore di import/dipendenza circolare) + percorsi non autenticati.
-- **`npm test` contro il database di produzione** (non esiste uno staging): **122/123**, stabile su più run consecutivi in questa sessione. L'unico residuo è una flakiness pre-esistente e documentata nel file stesso (collisione su dati di prenotazione reali), verificata più volte come indipendente da queste modifiche.
-- **Verifica mirata aggiuntiva e auto-pulente** per i due domini che la suite esistente non copriva affatto (sala conferenze, flusso reale delle bici — solo il rifiuto di autorizzazione era testato prima): 12/12, contro produzione, ogni riga creata cancellata a fine prova.
+- **`npm test` contro il database di produzione**: **122/123**, stabile su più run consecutivi in questa sessione (anche dopo il secondo giro di hardening). L'unico residuo è una flakiness pre-esistente e documentata nel file stesso, verificata più volte come indipendente da queste modifiche.
+- **Verifica mirata e auto-pulente** per sala conferenze e flusso reale delle bici (la suite esistente non li copriva affatto): 12/12.
+- **Regola di confine ESLint**: verificata empiricamente con un import scorretto di prova, poi rimosso.
 
 ## Non fatto (fuori scope, deliberatamente)
 
 - Nessuna modifica alle funzioni SQL/migrazioni: restano l'autorità sui vincoli.
-- Nessun hardening aggiuntivo sulle asimmetrie di validazione elencate sopra.
-- Nessuna CI: la verifica resta manuale (`npm run test:unit` + `npm test`), come per tutta questa sessione.
+- Salto di major version Vite/esbuild (l'unica vulnerabilità rimasta) — richiede test più ampi del solo `npm audit fix`.
+- `npm test` non gira in CI (richiederebbe segreti di produzione in GitHub Actions).
+- Frontend (`App.tsx`, `AdminPanel.tsx`) non toccato: stesso problema di struttura del backend prima di questo lavoro, ma è un progetto a sé.
+- Nessuna osservabilità/alerting oltre ai log strutturati.

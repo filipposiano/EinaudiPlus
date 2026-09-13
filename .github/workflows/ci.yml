@@ -1,0 +1,36 @@
+name: CI
+
+# Gira su ogni push e ogni PR verso main. Deliberatamente NON esegue
+# `npm test` (la suite contro il database di produzione): non esiste un
+# ambiente di staging, e farla girare in CI richiederebbe segreti reali di
+# produzione in GitHub Actions — una decisione operativa a parte, non presa
+# qui. Questi tre controlli non toccano rete né database.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Unit test (nessuna rete)
+        run: npm run test:unit
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Regola di confine fra moduli
+        run: npm run lint
+
+      - name: Build di produzione
+        run: npx vite build

@@ -7,14 +7,14 @@
 //
 // Delega al modulo Conference Room — vedi refactor-enterprise/ARCHITETTURA-ENTERPRISE.md.
 
-import { json, fail, tokenOk, methodOk } from "./_lib/http.js";
+import { json, fail, botFilterTokenOk, methodOk } from "./_lib/http.js";
 import { checkRateLimit, clientIp } from "../src/shared/http/rateLimit.js";
 import { getAgenda } from "../src/modules/conference-room/index.js";
 import { wrapHandler } from "../src/shared/errors/wrapHandler.js";
 
 export default wrapHandler("conferenze", async (req, res) => {
   if (!methodOk(req, res, ["GET"])) return;
-  if (!tokenOk(req, {})) return fail(res, "unauthorized", {}, 401);
+  if (!botFilterTokenOk(req, {})) return fail(res, "unauthorized", {}, 401);
 
   if (!(await checkRateLimit("conferenze", clientIp(req), 60, 600))) {
     return fail(res, "troppe richieste, riprova fra poco", {}, 429);

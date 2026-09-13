@@ -49,14 +49,18 @@ export function fail(res, error, extra = {}, status = 200) {
 }
 
 /**
- * Il token condiviso col frontend.
+ * Filtro anti-scanner, NON un controllo di sicurezza.
  *
- * Attenzione a cosa e': viene compilato dentro il bundle JS, quindi chiunque
- * apra i devtools lo legge. Non e' autorizzazione, e' un filtro contro gli
- * scanner automatici. Le difese vere sono la validazione lato SQL e il rate
- * limit di ogni endpoint.
+ * Il valore atteso (env var APP_TOKEN) viene compilato dentro il bundle JS
+ * pubblico (VITE_SECRET_TOKEN), quindi chiunque apra i devtools lo legge.
+ * Il nome della funzione lo dice esplicitamente per non farlo scambiare in
+ * futuro per una vera autorizzazione — quella la fanno la validazione lato
+ * SQL e il rate limit di ogni endpoint, non questo controllo.
+ *
+ * (Il nome della variabile d'ambiente resta APP_TOKEN: è configurata su
+ * Vercel, e rinominarla lì è un intervento operativo separato da questo.)
  */
-export function tokenOk(req, body) {
+export function botFilterTokenOk(req, body) {
   const expected = process.env.APP_TOKEN;
   if (!expected) return true; // non configurato: non blocchiamo nulla
   const got = (body && body.token) || (req.query && req.query.token) || "";

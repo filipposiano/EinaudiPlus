@@ -120,8 +120,11 @@ section("adminSetMachineStatus()");
 {
   const repo = fakeRepository();
   await adminSetMachineStatus({ room: "100", machine: "W-C", oos: true }, { laundryRepository: repo });
-  check("nessuna validazione di formato su room/machine (fedele all'originale)",
+  check("camera valida passa, machine resta libero (decide il database)",
     repo.calls[0].args.room === "100" && repo.calls[0].args.machine === "W-C" && repo.calls[0].args.oos === true);
+
+  const err = await throws(() => adminSetMachineStatus({ room: "xyz", machine: "W-C", oos: true }, { laundryRepository: fakeRepository() }));
+  check("camera malformata respinta", err?.message === "camera non valida");
 }
 
 // ─── adminDeleteBooking() ─────────────────────────────────────────────────────
@@ -145,7 +148,14 @@ section("adminForceBook() / adminBookAsDirezione() / adminClearAsDirezione()");
 
   const repoFB = fakeRepository();
   await adminForceBook({ laundryId: 1, day: 1, slot: 5, machine: "W-A", room: "100" }, { laundryRepository: repoFB });
-  check("forceBook: room passato come stringa grezza (fedele all'originale)", repoFB.calls[0].args.room === "100");
+  check("forceBook: camera valida passa", repoFB.calls[0].args.room === "100");
+
+  const errFBRoom = await throws(() => adminForceBook({ laundryId: 1, day: 1, slot: 5, machine: "W-A", room: "../etc" }, { laundryRepository: fakeRepository() }));
+  check("forceBook: camera malformata respinta", errFBRoom?.message === "camera non valida");
+
+  const repoFBDirezione = fakeRepository();
+  await adminForceBook({ laundryId: 1, day: 1, slot: 5, machine: "W-A", room: "DIREZIONE" }, { laundryRepository: repoFBDirezione });
+  check("forceBook: DIREZIONE ammessa", repoFBDirezione.calls[0].args.room === "DIREZIONE");
 
   const errBD = await throws(() => adminBookAsDirezione({ laundryId: 1, day: 1, slot: 5, machine: "W-A" }, { laundryRepository: fakeRepository() }));
   check("bookAsDirezione con input validi riesce", errBD === null);
@@ -153,6 +163,10 @@ section("adminForceBook() / adminBookAsDirezione() / adminClearAsDirezione()");
   const repoCD = fakeRepository();
   await adminClearAsDirezione({ room: "DIREZIONE", day: 1, slot: 5, machine: "W-A" }, { laundryRepository: repoCD });
   check("clearAsDirezione chiama clearAsAdmin (as_admin implicito)", repoCD.calls[0].name === "clearAsAdmin");
+  check("clearAsDirezione: DIREZIONE ammessa", repoCD.calls[0].args.room === "DIREZIONE");
+
+  const errCDRoom = await throws(() => adminClearAsDirezione({ room: "xyz", day: 1, slot: 5, machine: "W-A" }, { laundryRepository: fakeRepository() }));
+  check("clearAsDirezione: camera malformata (e non DIREZIONE) respinta", errCDRoom?.message === "camera non valida");
 }
 
 // ─── adminAddRecurringRule() ──────────────────────────────────────────────────

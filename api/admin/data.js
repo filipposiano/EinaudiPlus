@@ -18,7 +18,7 @@
 // Spaces, giorno in Conference Room, id ovunque serva...).
 
 import { readBody, json, fail, methodOk } from "../_lib/http.js";
-import { rpc } from "../../src/shared/db/rpcClient.js";
+import { logAdminAction } from "../../src/shared/audit/auditLog.js";
 import { wrapHandler } from "../../src/shared/errors/wrapHandler.js";
 
 import {
@@ -426,12 +426,12 @@ export default wrapHandler("admin/data", async (req, res) => {
   // come sempre: se si perde un tentativo non e' diverso da un log che
   // fallisce per un errore di rete, gia' ignorato qui sotto.
   if (MUTATIONS.has(action)) {
-    rpc("admin_log", {
-      p_actor: me.u, p_action: action,
-      p_detail: Object.fromEntries(
+    logAdminAction({
+      actor: me.u, action,
+      detail: Object.fromEntries(
         Object.entries(body).filter(([k]) => k !== "action" && !k.toLowerCase().includes("password")),
       ),
-    }).catch(() => { /* il log non deve far fallire l'operazione */ });
+    }); // fire-and-forget, di proposito — vedi commento sopra
   }
 
   return json(res, 200, result);

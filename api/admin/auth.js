@@ -2,11 +2,7 @@
 //
 // Autenticazione, sessioni, ruoli e account vivono ora in src/modules/identity
 // (vedi refactor-enterprise/ARCHITETTURA-ENTERPRISE.md): qui resta solo
-// l'istradamento HTTP — corpo, rate limit, audit log, risposta. L'audit log
-// (admin_log) è un affare del modulo "ops", non ancora migrato: continua a
-// passare dal client RPC storico invece che da quello nuovo del kernel
-// condiviso, per non far dipendere questo file da due client diversi per la
-// stessa cosa.
+// l'istradamento HTTP — corpo, rate limit, audit log, risposta.
 //
 // wrapHandler() è una rete di sicurezza in più, non un cambio di
 // comportamento: nessun percorso qui sotto lanciava eccezioni non gestite
@@ -15,7 +11,7 @@
 // mai in uno stack trace esposto.
 
 import { readBody, json, methodOk } from "../_lib/http.js";
-import { rpc } from "../../src/shared/db/rpcClient.js";
+import { logAdminAction } from "../../src/shared/audit/auditLog.js";
 import {
   authenticate, issueToken, setSessionCookie, clearSessionCookie,
   currentAdmin, adminConfigured, accountByUsername,
@@ -70,21 +66,13 @@ export default wrapHandler("admin/auth", async (req, res) => {
   const role = await authenticate(username, password);
 
   if (!role) {
-    try {
-      await rpc("admin_log", {
-        p_actor: username || "(vuoto)",
-        p_action: "login_fallito",
-        p_detail: { ip: clientIp(req) },
-      });
-    } catch { /* il log non deve impedire la risposta */ }
+    await logAdminAction({ actor: username || "(vuoto)", action: "login_fallito", detail: { ip: clientIp(req) } });
     // Messaggio unico: non diciamo se ha sbagliato utente o password.
     return json(res, 401, { ok: false, error: "credenziali non valide" });
   }
 
   setSessionCookie(res, issueToken(username, role));
-  try {
-    await rpc("admin_log", { p_actor: username, p_action: "login", p_detail: { ip: clientIp(req), role } });
-  } catch { /* idem */ }
+  await logAdminAction({ actor: username, action: "login", detail: { ip: clientIp(req), role } });
 
   return json(res, 200, { ok: true, user: username, role });
 });
