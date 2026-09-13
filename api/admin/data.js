@@ -5,9 +5,29 @@
 
 import { rpc } from "../_lib/db.js";
 import { readBody, json, fail, methodOk, intero, camera } from "../_lib/http.js";
-import { currentAdmin, isSysadmin, isStaff, hashPassword, verifyPassword } from "../_lib/auth.js";
 import { sendWebPush, pushConfigured } from "../_lib/push.js";
 import { sendTelegram, telegramConfigured } from "../_lib/telegram.js";
+
+// Identity (sessioni, ruoli, account) vive per intero in src/modules/identity
+// -- vedi refactor-enterprise/ARCHITETTURA-ENTERPRISE.md. Il resto delle
+// azioni di questo file (macchine, sale, conferenze, bici...) appartiene ad
+// altri domini non ancora migrati, e resta invariato.
+import {
+  currentAdmin, isSysadmin, isStaff,
+  listAccounts, createAccount, resetAccountPassword, setAccountActive, deleteAccount,
+  changeOwnPassword,
+} from "../../src/modules/identity/index.js";
+import {
+  adminWeek, adminSetMachineStatus, adminDeleteBooking, adminForceBook,
+  adminBookAsDirezione, adminClearAsDirezione, adminAddRecurringRule,
+} from "../../src/modules/laundry/index.js";
+import {
+  adminGetSpacesOverview, adminDeleteSpaceBooking,
+  adminBookAsDirezione as adminBookSpaceAsDirezione,
+  adminAddRecurringRule as adminAddSpaceRecurringRule,
+} from "../../src/modules/common-spaces/index.js";
+import { getTheme, setTheme } from "../../src/modules/theme/index.js";
+import { AppError } from "../../src/shared/errors/AppError.js";
 
 // Le azioni che modificano qualcosa finiscono nell'audit log. Le letture no,
 // sarebbero solo rumore.
@@ -141,10 +161,7 @@ export default async function handler(req, res) {
         break;
 
       case "week":
-        result = await rpc("admin_week", {
-          p_laundry_id: Number(body.laundry_id),
-          p_offset: Number(body.offset || 0),
-        });
+        result = await adminWeek({ laundryId: body.laundry_id, offset: body.offset });
         break;
 
       case "feedback":
@@ -155,31 +172,24 @@ export default async function handler(req, res) {
         break;
 
       case "spaces":
-        result = await rpc("admin_spaces");
+        result = await adminGetSpacesOverview();
         break;
 
       // ── Scritture ────────────────────────────────────────────────────────
       case "setMachineStatus":
         // Il fuori servizio rende lo stato visibile a tutti, ma NON blocca le
         // prenotazioni: chi prenota vede un avviso e decide.
-        result = await rpc("set_machine_status", {
-          p_room: String(body.room || ""),
-          p_machine: String(body.machine || ""),
-          p_oos: Boolean(body.oos),
-        });
+        result = await adminSetMachineStatus({ room: body.room, machine: body.machine, oos: body.oos });
         break;
 
       case "deleteBooking":
-        result = await rpc("admin_delete_booking", { p_id: Number(body.id) });
+        result = await adminDeleteBooking({ id: body.id });
         break;
 
       case "forceBook":
-        result = await rpc("admin_force_book", {
-          p_laundry_id: Number(body.laundry_id),
-          p_day: Number(body.day),
-          p_slot: Number(body.slot),
-          p_machine: String(body.machine || ""),
-          p_room: String(body.room || ""),
+        result = await adminForceBook({
+          laundryId: body.laundry_id, day: body.day, slot: body.slot,
+          machine: body.machine, room: body.room,
         });
         break;
 
@@ -191,26 +201,17 @@ export default async function handler(req, res) {
         break;
 
       case "deleteSpaceBooking":
-        result = await rpc("admin_delete_space_booking", { p_id: Number(body.id) });
+        result = await adminDeleteSpaceBooking({ id: body.id });
         break;
 
       // ── Azioni a nome della DIREZIONE, usate dall'app principale ─────────
       case "bookDirezione":
-        result = await rpc("book_as_direzione", {
-          p_laundry_id: Number(body.laundry_id),
-          p_day: Number(body.day),
-          p_slot: Number(body.slot),
-          p_machine: String(body.machine || ""),
-        });
+        result = await adminBookAsDirezione({ laundryId: body.laundry_id, day: body.day, slot: body.slot, machine: body.machine });
         break;
 
       case "bookSpaceDirezione":
-        result = await rpc("book_space_as_direzione", {
-          p_slug: String(body.space || ""),
-          p_day: Number(body.day),
-          p_start: Number(body.start),
-          p_end: Number(body.end),
-          p_type: body.type ? String(body.type) : null,
+        result = await adminBookSpaceAsDirezione({
+          space: body.space, day: body.day, start: body.start, end: body.end, type: body.type,
         });
         break;
 
@@ -218,13 +219,7 @@ export default async function handler(req, res) {
       // pubblico sono protetti. `p_as_admin: true` si può scrivere qui e solo
       // qui: currentAdmin() ha già verificato il cookie in cima all'handler.
       case "clearDirezione":
-        result = await rpc("clear_laundry", {
-          p_room: String(body.room || ""),
-          p_day: Number(body.day),
-          p_slot: Number(body.slot),
-          p_machine: String(body.machine || ""),
-          p_as_admin: true,
-        });
+        result = await adminClearAsDirezione({ room: body.room, day: body.day, slot: body.slot, machine: body.machine });
         break;
 
       // ── Sala conferenze ─────────────────────────────────────────────────
@@ -307,39 +302,29 @@ export default async function handler(req, res) {
       // password non toccano mai il database in chiaro: si cifrano subito,
       // esattamente come per gli account storici.
       case "accountList":
-        result = await rpc("account_list");
+        result = await listAccounts();
         break;
 
       case "accountCreate": {
         const password = String(body.password || "");
         if (password.length < 8) return fail(res, "la password deve avere almeno 8 caratteri");
-        result = await rpc("account_create", {
-          p_username: String(body.username || "").trim(),
-          p_password_hash: hashPassword(password),
-          p_ruolo: String(body.ruolo || ""),
-          p_attore: me.u,
-        });
+        result = await createAccount(String(body.username || "").trim(), password, String(body.ruolo || ""), me.u);
         break;
       }
 
       case "accountSetPassword": {
         const password = String(body.password || "");
         if (password.length < 8) return fail(res, "la password deve avere almeno 8 caratteri");
-        result = await rpc("account_set_password", {
-          p_id: Number(body.id),
-          p_password_hash: hashPassword(password),
-        });
+        result = await resetAccountPassword(Number(body.id), password);
         break;
       }
 
       case "accountSetActive":
-        result = await rpc("account_set_active", {
-          p_id: Number(body.id), p_attivo: body.attivo !== false,
-        });
+        result = await setAccountActive(Number(body.id), body.attivo !== false);
         break;
 
       case "accountDelete":
-        result = await rpc("account_delete", { p_id: Number(body.id) });
+        result = await deleteAccount(Number(body.id));
         break;
 
       // Cambio password fatto dal titolare per se' stesso: nessuna sessione
@@ -351,14 +336,11 @@ export default async function handler(req, res) {
       case "accountChangeOwnPassword": {
         const attuale = String(body.password_attuale || "");
         const nuova = String(body.password_nuova || "");
-        if (nuova.length < 8) return fail(res, "la nuova password deve avere almeno 8 caratteri");
-        const row = await rpc("account_by_username", { p_username: me.u });
-        if (!row?.id) return fail(res, "account non trovato");
-        if (!verifyPassword(attuale, row.password_hash)) return fail(res, "password attuale non corretta");
-        result = await rpc("account_set_own_password", {
-          p_username: me.u,
-          p_password_hash: hashPassword(nuova),
-        });
+        // Le tre validazioni (password corta, account non trovato, password
+        // attuale sbagliata) vivono ora dentro changeOwnPassword() e arrivano
+        // qui come AppError — il catch in fondo a questo handler le traduce
+        // nella stessa forma { ok:false, error } di sempre (vedi sotto).
+        result = await changeOwnPassword(me.u, attuale, nuova);
         break;
       }
 
@@ -372,25 +354,16 @@ export default async function handler(req, res) {
         // lunedì, quando il cron la materializza per la settimana che sta per
         // iniziare. Vale anche per il resto della settimana in corso: niente
         // occupazioni a sorpresa a metà settimana.
-        result = await rpc("recurring_add_laundry", {
-          p_laundry_id: Number(body.laundry_id),
-          p_day: Number(body.day),
-          p_slot: Number(body.slot),
-          p_machine: String(body.machine || ""),
-          p_room: String(body.room || ""),
-          p_note: body.note ? String(body.note) : null,
+        result = await adminAddRecurringRule({
+          laundryId: body.laundry_id, day: body.day, slot: body.slot,
+          machine: body.machine, room: body.room, note: body.note,
         });
         break;
 
       case "recurringAddSpace":
-        result = await rpc("recurring_add_space", {
-          p_space_id: Number(body.space_id),
-          p_day: Number(body.day),
-          p_start: Number(body.start),
-          p_end: Number(body.end),
-          p_name: String(body.name || ""),
-          p_type: body.type ? String(body.type) : null,
-          p_note: body.note ? String(body.note) : null,
+        result = await adminAddSpaceRecurringRule({
+          spaceId: body.space_id, day: body.day, start: body.start, end: body.end,
+          name: body.name, type: body.type, note: body.note,
         });
         break;
 
@@ -534,17 +507,12 @@ export default async function handler(req, res) {
       // una riga sola nel database (app_theme): la legge laundry_snapshot a
       // ogni avvio dell'app, non serve un canale a parte.
       case "temaGet":
-        result = { ok: true, tema: await rpc("app_theme_get") };
+        result = await getTheme();
         break;
 
-      case "temaSet": {
-        const tema = String(body.tema || "");
-        if (!["nessuno", "halloween", "natale"].includes(tema)) {
-          return fail(res, "tema non valido");
-        }
-        result = await rpc("sysadmin_set_theme", { p_tema: tema });
+      case "temaSet":
+        result = await setTheme(body.tema);
         break;
-      }
 
       // ── Bici ──────────────────────────────────────────────────────────────
       // Lettura: FDO e sistemista (vedi VIETATE_A_STAFF). Cancellazione totale,
@@ -652,6 +620,14 @@ export default async function handler(req, res) {
 
     return json(res, 200, result);
   } catch (err) {
+    // Un errore tipizzato da un modulo già migrato (oggi solo Identity): il
+    // suo messaggio è già pensato per il client ("password attuale non
+    // corretta", non un dettaglio interno), quindi si restituisce così com'è,
+    // con lo status che l'errore stesso porta — non 500 automatico.
+    if (err instanceof AppError && err.expose) {
+      return fail(res, err.message, err.extra || {}, err.status);
+    }
+
     console.error("[admin]", err.rpc || "", err.message);
 
     // Qui l'errore vero si restituisce, a differenza degli endpoint pubblici.

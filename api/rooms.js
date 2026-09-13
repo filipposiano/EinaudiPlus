@@ -4,11 +4,13 @@
 // Differenza dal client lavanderia: qui l'action viaggia nella query string e
 // il corpo contiene solo i dati. Manteniamo quella convenzione perche' e'
 // quella che il client gia' installato usa.
+//
+// Lettura, prenotazione e cancellazione passano ora dal modulo Common Spaces
+// (src/modules/common-spaces) — vedi refactor-enterprise/ARCHITETTURA-ENTERPRISE.md.
 
-import { rpc } from "./_lib/db.js";
-import { readBody, json, fail, tokenOk, allow, methodOk, intero } from "./_lib/http.js";
-
-const SPACES = new Set(["cinema", "music"]);
+import { readBody, json, fail, tokenOk, allow, methodOk } from "./_lib/http.js";
+import { getBookings, bookSpace, clearBooking, SPACES } from "../src/modules/common-spaces/index.js";
+import { AppError } from "../src/shared/errors/AppError.js";
 
 export default async function handler(req, res) {
   if (!methodOk(req, res, ["GET", "POST"])) return;
@@ -21,7 +23,7 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === "GET") {
-      return json(res, 200, await rpc("space_bookings", { p_slug: space }));
+      return json(res, 200, await getBookings(space));
     }
 
     if (!(await allow(req, "rooms", 40, 600))) {
@@ -32,42 +34,28 @@ export default async function handler(req, res) {
     const action = String(req.query.action || body.action || "");
 
     switch (action) {
-      case "book": {
-        // start sta dentro la giornata; end puo' arrivare a 2880 perche' una
-        // fascia che scavalca la mezzanotte si esprime come "oltre le 24:00"
-        // (vedi 004-oltre-mezzanotte). Il database ricontrolla comunque
-        // durata e sovrapposizioni.
-        const day   = intero(body.day, 0, 6);
-        const start = intero(body.start, 0, 1439);
-        const end   = intero(body.end, 1, 2880);
-        if (day === null || start === null || end === null) {
-          return fail(res, "giorno o orario non valido");
-        }
-        return json(res, 200, await rpc("book_space", {
-          p_slug: space,
-          p_day: day,
-          p_start: start,
-          p_end: end,
-          p_name: String(body.name || ""),
-          // `type` esiste solo per il cinema; per la musica il database lo ignora.
-          p_type: body.type === "private" || body.type === "open" ? body.type : null,
+      case "book":
+        return json(res, 200, await bookSpace({
+          space, day: body.day, start: body.start, end: body.end, name: body.name, type: body.type,
         }));
-      }
 
       // 'clear' e' la grafia usata dal client; 'delete' compariva nel refactor
       // non ancora integrato. Le accettiamo entrambe per non creare un bug
       // di allineamento quando quel lavoro rientrera'.
       case "clear":
       case "delete":
-        return json(res, 200, await rpc("delete_space_booking", {
-          p_slug: space,
-          p_id: String(body.id || ""),
-        }));
+        return json(res, 200, await clearBooking({ space, id: body.id }));
 
       default:
         return fail(res, "azione sconosciuta");
     }
   } catch (err) {
+    // Un errore tipizzato dal modulo (validazione di giorno/orario): stesso
+    // messaggio che il client leggeva già prima, non un dettaglio interno.
+    // Qualunque altro errore resta dietro il messaggio neutro di sempre.
+    if (err instanceof AppError && err.expose) {
+      return fail(res, err.message, err.extra || {}, err.status);
+    }
     console.error("[rooms]", err.rpc || "", err.message);
     return fail(res, "errore del server, riprova", {}, 500);
   }

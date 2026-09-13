@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "test": "node tests/run.mjs"
+    "test": "node tests/run.mjs",
+    "test:unit": "node tests/unit/identity.test.mjs && node tests/unit/laundry.test.mjs && node tests/unit/common-spaces.test.mjs && node tests/unit/theme.test.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.300.0",

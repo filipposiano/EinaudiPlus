@@ -10,13 +10,16 @@
 // funzionare senza aggiornarsi.
 
 import { rpc } from "./_lib/db.js";
-import { readBody, json, fail, tokenOk, allow, methodOk, intero, camera } from "./_lib/http.js";
+import { readBody, json, fail, tokenOk, allow, methodOk, camera } from "./_lib/http.js";
 import { endpointAllowed } from "./_lib/push.js";
 
-// 19 turni al giorno, 7 giorni. Il numero vero sta in laundry.n_slots e lo
-// ricontrolla il database: qui serve solo un limite superiore per scartare
-// l'assurdo prima di fare il giro.
-const MAX_SLOT = 18;
+// Griglia, prenotazione e liberazione turno passano ora dal modulo Laundry
+// (src/modules/laundry) — vedi refactor-enterprise/ARCHITETTURA-ENTERPRISE.md.
+// Bici, segnalazioni e iscrizioni push restano qui sotto: appartengono ad
+// altri domini non ancora migrati, e questo endpoint resta - per ora - l'unico
+// posto pubblico già legato a una camera per loro.
+import { getSnapshot, bookSlot, clearSlot } from "../src/modules/laundry/index.js";
+import { AppError } from "../src/shared/errors/AppError.js";
 
 export default async function handler(req, res) {
   if (!methodOk(req, res, ["GET", "POST"])) return;
@@ -30,8 +33,9 @@ export default async function handler(req, res) {
     if (req.method === "GET") {
       const room = (req.query.room || "").toString().trim();
       // Senza camera si ricade sulla lavanderia principale, come faceva
-      // getApiUrl() con il suo "return API_URL".
-      return json(res, 200, await rpc("laundry_snapshot", { p_room: room || null }));
+      // getApiUrl() con il suo "return API_URL" — invariato, decide
+      // laundry_for_room() in SQL, non questo file.
+      return json(res, 200, await getSnapshot(room));
     }
 
     // ── Scrittura ────────────────────────────────────────────────────────────
@@ -42,44 +46,22 @@ export default async function handler(req, res) {
       return fail(res, "troppe richieste, riprova fra poco", {}, 429);
     }
 
-    // day e slot valgono per book e clear: si validano una volta sola.
-    const day  = intero(body.day, 0, 6);
-    const slot = intero(body.slot, 0, MAX_SLOT);
-    if ((action === "book" || action === "clear") && (day === null || slot === null)) {
-      return fail(res, "giorno o turno non valido");
-    }
-
     switch (action) {
-      case "book": {
-        if (!camera(room)) return fail(res, "camera non valida");
-        return json(res, 200, await rpc("book_laundry", {
-          p_room: room,
-          p_day: day,
-          p_slot: slot,
-          p_machine: String(body.machine || ""),
-          // Da dove si sta agendo, distinto dall'intestatario: serve a impedire
-          // che dalla Manica si prenoti una macchina del Valentino (e
-          // viceversa). Assente nei client vecchi, e li' il controllo si
-          // disattiva invece di rifiutare prenotazioni valide.
-          p_actor_room: camera(body.actor_room),
+      // Validazione di giorno/turno/camera fatta ora dal modulo, con gli
+      // stessi messaggi e gli stessi limiti (vedi src/modules/laundry/application/).
+      case "book":
+        return json(res, 200, await bookSlot({
+          room, day: body.day, slot: body.slot, machine: body.machine, actorRoom: body.actor_room,
         }));
-      }
 
       case "clear":
         // `p_as_admin` NON si manda da qui, e non è una svista: questo è il
         // percorso pubblico e il valore di default nella funzione SQL è già
-        // `false`. Ometterlo ha due effetti buoni: un client non può alzarsi i
-        // poteri mandando un campo in più, e la chiamata funziona anche prima
-        // che la migrazione 006 sia applicata — cioè non c'è una finestra in
-        // cui il codice è online e il database ancora no.
-        //
-        // Chi ha una sessione amministrativa passa da /api/admin/data
-        // (azione `clearDirezione`), dove il cookie viene verificato prima.
-        return json(res, 200, await rpc("clear_laundry", {
-          p_room: camera(room),
-          p_day: day,
-          p_slot: slot,
-          p_machine: String(body.machine || ""),
+        // `false` (vedi laundryRepository.clear() nel modulo). Chi ha una
+        // sessione amministrativa passa da /api/admin/data (azione
+        // `clearDirezione`), dove il cookie viene verificato prima.
+        return json(res, 200, await clearSlot({
+          room, day: body.day, slot: body.slot, machine: body.machine,
         }));
 
       // Il fuori servizio e' passato all'admin. Accettiamo entrambe le grafie
@@ -164,7 +146,15 @@ export default async function handler(req, res) {
         return fail(res, "azione sconosciuta");
     }
   } catch (err) {
-    // Il dettaglio interno resta nei log, al client va un messaggio neutro.
+    // Un errore tipizzato dal modulo Laundry (validazione di giorno/turno/
+    // camera): stesso messaggio che il client leggeva già prima ("camera non
+    // valida", "giorno o turno non valido"), non un dettaglio interno — si
+    // restituisce così com'è. Qualunque altro errore (RPC, bug imprevisto)
+    // resta invece dietro il messaggio neutro di sempre: il dettaglio interno
+    // sta solo nel log, mai nella risposta a un endpoint pubblico.
+    if (err instanceof AppError && err.expose) {
+      return fail(res, err.message, err.extra || {}, err.status);
+    }
     console.error("[laundry]", err.rpc || "", err.message);
     return fail(res, "errore del server, riprova", {}, 500);
   }

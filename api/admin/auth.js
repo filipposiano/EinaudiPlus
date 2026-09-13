@@ -1,26 +1,41 @@
 // Login del pannello amministrativo.
+//
+// Autenticazione, sessioni, ruoli e account vivono ora in src/modules/identity
+// (vedi refactor-enterprise/ARCHITETTURA-ENTERPRISE.md): qui resta solo
+// l'istradamento HTTP — corpo, rate limit, audit log, risposta. L'audit log
+// (admin_log) è un affare del modulo "ops", non ancora migrato: continua a
+// passare dal client RPC storico invece che da quello nuovo del kernel
+// condiviso, per non far dipendere questo file da due client diversi per la
+// stessa cosa.
+//
+// wrapHandler() è una rete di sicurezza in più, non un cambio di
+// comportamento: nessun percorso qui sotto lanciava eccezioni non gestite
+// prima, ma un domani un'aggiunta distratta potrebbe farlo — con wrapHandler
+// finirebbe comunque in un errore generico al client e nel log strutturato,
+// mai in uno stack trace esposto.
 
 import { readBody, json, clientIp, allow, methodOk } from "../_lib/http.js";
+import { rpc } from "../_lib/db.js";
 import {
   authenticate, issueToken, setSessionCookie, clearSessionCookie,
-  currentAdmin, adminConfigured,
-} from "../_lib/auth.js";
-import { rpc } from "../_lib/db.js";
+  currentAdmin, adminConfigured, accountByUsername,
+} from "../../src/modules/identity/index.js";
+import { wrapHandler } from "../../src/shared/errors/wrapHandler.js";
 
-export default async function handler(req, res) {
+export default wrapHandler("admin/auth", async (req, res) => {
   if (!methodOk(req, res, ["POST", "GET"])) return;
 
   // GET = "chi sono": serve al pannello per sapere se mostrare il login, e se
   // mostrare al suo posto la schermata di cambio password obbligato.
   if (req.method === "GET") {
     const me = currentAdmin(req);
-    // Serve al pannello per decidere se mostrare la sala d'attesa. Non e'
+    // Serve al pannello per decidere se mostrare la sala d'attesa. Non è
     // qui che l'obbligo viene imposto: quello lo fa data.js a ogni azione,
-    // perche' una schermata si aggira parlando all'API direttamente.
+    // perché una schermata si aggira parlando all'API direttamente.
     let deveCambiare = false;
     if (me) {
       try {
-        const row = await rpc("account_by_username", { p_username: me.u });
+        const row = await accountByUsername(me.u);
         deveCambiare = Boolean(row?.deve_cambiare_password);
       } catch { /* se il database non risponde non si blocca comunque l'accesso */ }
     }
@@ -43,7 +58,7 @@ export default async function handler(req, res) {
   }
 
   // Cinque tentativi ogni quarto d'ora per IP. Senza questo, una password
-  // sola e condivisa e' attaccabile a forza bruta con tutta calma.
+  // sola e condivisa è attaccabile a forza bruta con tutta calma.
   if (!(await allow(req, "admin-login", 5, 900))) {
     return json(res, 429, { ok: false, error: "troppi tentativi, riprova fra un quarto d'ora" });
   }
@@ -71,4 +86,4 @@ export default async function handler(req, res) {
   } catch { /* idem */ }
 
   return json(res, 200, { ok: true, user: username, role });
-}
+});
