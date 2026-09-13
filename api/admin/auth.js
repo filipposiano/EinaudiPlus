@@ -14,12 +14,13 @@
 // finirebbe comunque in un errore generico al client e nel log strutturato,
 // mai in uno stack trace esposto.
 
-import { readBody, json, clientIp, allow, methodOk } from "../_lib/http.js";
-import { rpc } from "../_lib/db.js";
+import { readBody, json, methodOk } from "../_lib/http.js";
+import { rpc } from "../../src/shared/db/rpcClient.js";
 import {
   authenticate, issueToken, setSessionCookie, clearSessionCookie,
   currentAdmin, adminConfigured, accountByUsername,
 } from "../../src/modules/identity/index.js";
+import { checkRateLimit, clientIp } from "../../src/shared/http/rateLimit.js";
 import { wrapHandler } from "../../src/shared/errors/wrapHandler.js";
 
 export default wrapHandler("admin/auth", async (req, res) => {
@@ -59,7 +60,7 @@ export default wrapHandler("admin/auth", async (req, res) => {
 
   // Cinque tentativi ogni quarto d'ora per IP. Senza questo, una password
   // sola e condivisa è attaccabile a forza bruta con tutta calma.
-  if (!(await allow(req, "admin-login", 5, 900))) {
+  if (!(await checkRateLimit("admin-login", clientIp(req), 5, 900))) {
     return json(res, 429, { ok: false, error: "troppi tentativi, riprova fra un quarto d'ora" });
   }
 

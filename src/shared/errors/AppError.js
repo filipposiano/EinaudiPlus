@@ -41,6 +41,13 @@ export class ValidationError extends AppError {
   }
 }
 
+/** 429 — rate limit superato. */
+export class RateLimitedError extends AppError {
+  constructor(message = "troppe richieste, riprova più tardi") {
+    super(message, { status: 429, code: "rate_limited", expose: true });
+  }
+}
+
 /**
  * Avvolge un errore proveniente da una dipendenza esterna (RPC/Supabase),
  * marcandolo esplicitamente come "sicuro da mostrare" quando il chiamante è

@@ -7,8 +7,19 @@
 // caso per caso.
 
 import { ValidationError } from "../../../shared/errors/AppError.js";
+import { parseIntInRange } from "../../../shared/validation/number.js";
 
 const MIN_LEN = 8;
+const ID_MIN = 1, ID_MAX = Number.MAX_SAFE_INTEGER;
+
+// L'id veniva validato solo dal dizionario LIMITI condiviso nell'adapter
+// admin/data.js — un controllo esterno al modulo, di cui questo modulo non
+// poteva sapere nulla. Ora lo possiede da sé, come già fa Laundry.
+function requireId(id) {
+  const parsed = parseIntInRange(id, ID_MIN, ID_MAX);
+  if (parsed === null) throw new ValidationError('campo "id" non valido');
+  return parsed;
+}
 
 export async function createAccount({ username, password, ruolo, attore }, { accountRepository, hasher }) {
   if (password.length < MIN_LEN) throw new ValidationError(`la password deve avere almeno ${MIN_LEN} caratteri`);
@@ -18,16 +29,17 @@ export async function createAccount({ username, password, ruolo, attore }, { acc
 }
 
 export async function resetAccountPassword({ id, password }, { accountRepository, hasher }) {
+  const parsedId = requireId(id);
   if (password.length < MIN_LEN) throw new ValidationError(`la password deve avere almeno ${MIN_LEN} caratteri`);
-  return accountRepository.setPassword({ id, passwordHash: hasher.hashPassword(password) });
+  return accountRepository.setPassword({ id: parsedId, passwordHash: hasher.hashPassword(password) });
 }
 
 export async function setAccountActive({ id, attivo }, { accountRepository }) {
-  return accountRepository.setActive({ id, attivo });
+  return accountRepository.setActive({ id: requireId(id), attivo });
 }
 
 export async function deleteAccount({ id }, { accountRepository }) {
-  return accountRepository.delete({ id });
+  return accountRepository.delete({ id: requireId(id) });
 }
 
 export async function listAccounts(_input, { accountRepository }) {

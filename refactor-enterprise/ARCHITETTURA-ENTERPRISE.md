@@ -4,6 +4,8 @@
 
 Data analisi: 2026-09-13
 
+> **Aggiornamento**: la migrazione descritta qui è stata completata. Tutti e nove i domini della Sezione 2 sono moduli veri, collegati agli adapter e verificati contro produzione (242 unit test + suite end-to-end). Dettaglio in [README.md](./README.md). Questo documento resta come registro dell'analisi originale; le sezioni sotto descrivono lo stato *iniziale* (as-is) che ha motivato il lavoro, non lo stato attuale.
+
 ---
 
 ## 0. Perché questo documento
@@ -133,18 +135,18 @@ Un modulo **non importa mai** un file interno di un altro modulo — solo il suo
 
 ## 4. Security Audit — problemi rilevati e rimedio
 
-| # | Problema | Gravità | Rimedio |
-|---|---|---|---|
-| 1 | Segreti reali (`SUPABASE_SECRET_KEY`, `SUPABASE_ACCESS_TOKEN`, `CRON_SECRET`) presenti in chiaro in `.env.local`, letti durante questa analisi | **Critico — azione manuale immediata** | Ruotare le chiavi da Supabase Dashboard / Vercel env vars. Non è un problema di architettura: il file è già correttamente in `.gitignore` e non risulta mai stato committato. |
-| 2 | Error handling non centralizzato: ogni `api/*.js` reimplementa il proprio try/catch; `admin/data.js` restituisce `err.message` grezzo (incluso dettaglio PostgREST) al client | Alto | `shared/errors`: classe `AppError` + `wrapHandler()` unico usato da ogni adapter. Nessuno stack trace o messaggio di errore del database esce mai verso il client; il dettaglio resta solo nel log server. |
-| 3 | Autorizzazione admin gestita con tre `Set()` (`SOLO_SISTEMISTA`, `VIETATE_A_STAFF`, `MUTATIONS`) in `admin/data.js`, da tenere sincronizzati a mano per ogni nuova azione — un'action dimenticata in una lista resta esposta senza che nessun errore lo segnali | Alto | La policy di autorizzazione vive dentro il modulo proprietario dell'azione (`authorize(role, action)` colocato con lo use-case), non in liste centrali facili da disallineare. |
-| 4 | Validazione input manuale e ripetuta (`intero()`, `camera()` per campo) — il codice stesso documenta due bug già scoperti così: bypass del cambio-password obbligatorio via chiamata diretta all'API, e un buco di validazione su `LIMITI` che produceva 500 invece di un errore chiaro | Medio | Schema di validazione dichiarativo per use-case (es. Zod) nello strato `application/` di ogni modulo: un contratto obbligatorio all'ingresso, non un helper che si può dimenticare di chiamare. |
-| 5 | `tokenOk()` usa un token compilato nel bundle JS pubblico; il commento originale lo descrive onestamente come "filtro anti-scanner, non autorizzazione" — corretto, ma il nome attuale rischia di farlo scambiare per un vero controllo d'accesso da chi lo tocca in futuro | Basso | Rinominarlo esplicitamente (es. `botFilterToken`) nel modulo `shared/http`, con la stessa nota già presente nel codice originale. |
-| 6 | Rate limiting invocato manualmente (`allow()`) endpoint per endpoint — una nuova route può semplicemente dimenticare la chiamata | Medio | Rate limit dichiarato come proprietà della route/use-case nel modulo, applicato automaticamente da `wrapHandler`, non una chiamata da ricordare. |
-| 7 | Logging non strutturato: `console.error("[tag]", ...)` con tag ad-hoc per file, nessun request id, nessuna correlazione fra le chiamate RPC di una stessa richiesta | Medio | Logger unico in `shared/logging`, iniettato in ogni modulo: request id, nome modulo, action, livello (info/warn/error). |
-| 8 | Nessuna copertura di test sullo switch da 650 righe di `admin/data.js` — i due bug noti in tabella (riga 4) sono stati scoperti in produzione, non da una suite di test | Medio | Con i moduli separati in use-case puri, ognuno si testa isolatamente mockando il repository — senza dover avviare Vercel né un Supabase reale. |
-| 9 | Domain creep: bici, feedback e push-subscribe vivono in `api/laundry.js` per comodità storica, non per appartenenza di dominio | Medio | Ogni dominio ha il proprio modulo; l'adapter Vercel instrada per `action` verso il modulo corretto, **mantenendo invariato l'URL pubblico** per compatibilità col client già installato sui telefoni. |
-| 10 | CSP, HSTS, `X-Frame-Options`, `Referrer-Policy` in `vercel.json` | — | Nessuna azione: già corretti, da preservare identici. |
+| # | Problema | Gravità | Rimedio | Stato |
+|---|---|---|---|---|
+| 1 | Segreti reali (`SUPABASE_SECRET_KEY`, `SUPABASE_ACCESS_TOKEN`, `CRON_SECRET`) presenti in chiaro in `.env.local`, letti durante questa analisi | **Critico — azione manuale immediata** | Ruotare le chiavi da Supabase Dashboard / Vercel env vars. Non è un problema di architettura. | ⏳ **azione dell'utente**, non del codice |
+| 2 | Error handling non centralizzato: ogni `api/*.js` reimplementa il proprio try/catch; `admin/data.js` restituisce `err.message` grezzo al client | Alto | `shared/errors`: classe `AppError` + `wrapHandler()` unico usato da ogni adapter | ✅ fatto — `wrapHandler` su tutti gli adapter tranne `telegram.js` (contratto diverso, logger diretto) |
+| 3 | Autorizzazione admin gestita con tre `Set()` in `admin/data.js`, da tenere sincronizzati a mano | Alto | La policy vive dentro il modulo proprietario (`authorize(role, action)`) | ✅ fatto — nove `authorize()`, uno per modulo, provati in sequenza in `authorizeAction()` |
+| 4 | Validazione input manuale e ripetuta — bug noti: bypass cambio-password, buco su `LIMITI` | Medio | Contratto di validazione nello strato `application/` di ogni modulo | ✅ fatto — validazione manuale (non Zod: nessuna dipendenza aggiunta, coerente con lo stile del progetto), ma un contratto per modulo, non un dizionario condiviso. `LIMITI` **rimosso interamente** |
+| 5 | `tokenOk()`/`APP_TOKEN` rischia di essere scambiato per un vero controllo d'accesso | Basso | Rinominarlo esplicitamente | ⏳ non fatto — resta col nome originale |
+| 6 | Rate limiting invocato manualmente (`allow()`) endpoint per endpoint | Medio | Primitiva centralizzata | ✅ fatto — `checkRateLimit()` in `shared/http/rateLimit.js`, unico punto per tutti i bucket (IP e per-account) |
+| 7 | Logging non strutturato, tag ad-hoc, nessun request id | Medio | Logger unico in `shared/logging` | ✅ fatto — adottato da `wrapHandler` ovunque si applica |
+| 8 | Nessuna copertura di test sullo switch da 650 righe | Medio | Use-case puri, testabili in isolamento | ✅ fatto — 242 unit test, nessuna rete |
+| 9 | Domain creep: bici, feedback, push-subscribe in `api/laundry.js` | Medio | Un modulo per dominio, stesso URL pubblico | ✅ fatto — `bikes`, `feedback`, `notifications` sono moduli propri; `api/laundry.js` delega, non possiede più la logica |
+| 10 | CSP, HSTS, `X-Frame-Options`, `Referrer-Policy` in `vercel.json` | — | Nessuna azione | — invariato, come da piano |
 
 ---
 

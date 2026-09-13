@@ -24,8 +24,20 @@ function requestId() {
 /**
  * @param {string} moduleName nome del modulo/endpoint, per i log
  * @param {(req, res, ctx: {log: object, requestId: string}) => Promise<void>} handler
+ * @param {object} [opts]
+ * @param {boolean} [opts.exposeInternalErrors=false] Se true, un errore NON
+ *   tipizzato (bug imprevisto, errore RPC grezzo) mostra comunque il proprio
+ *   messaggio al client invece del messaggio neutro — riservato agli
+ *   endpoint amministrativi, dove chi arriva qui ha già superato
+ *   l'autenticazione e il messaggio di PostgREST è spesso già la diagnosi
+ *   (vedi api/admin/data.js originale). Sugli endpoint pubblici resta false:
+ *   un estraneo non deve mai vedere un dettaglio interno.
+ * @param {string} [opts.genericMessage] Messaggio per gli errori non esposti
+ *   (default "errore del server, riprova"; es. cron.js usa "tick fallito").
  */
-export function wrapHandler(moduleName, handler) {
+export function wrapHandler(moduleName, handler, opts = {}) {
+  const { exposeInternalErrors = false, genericMessage = "errore del server, riprova" } = opts;
+
   return async function wrapped(req, res) {
     const reqId = requestId();
     const log = {
@@ -44,17 +56,22 @@ export function wrapHandler(moduleName, handler) {
         });
         return fail(
           res,
-          err.expose ? err.message : "errore del server, riprova",
+          err.expose ? err.message : genericMessage,
           err.expose ? err.extra : {},
           err.status,
         );
       }
 
-      // Errore imprevisto: mai il suo messaggio al client, sempre nel log.
+      // Errore imprevisto: nei log sempre col dettaglio pieno. Al client,
+      // il dettaglio solo se questo endpoint lo ha dichiarato esplicitamente
+      // sicuro da mostrare (admin già autenticato) — altrimenti il generico.
       log.error("errore non gestito", {
-        module: moduleName, message: err.message, stack: err.stack,
+        module: moduleName, message: err.message, stack: err.stack, rpc: err.rpc,
       });
-      return fail(res, "errore del server, riprova", {}, 500);
+      if (exposeInternalErrors) {
+        return fail(res, "errore del server: " + err.message, { rpc: err.rpc }, 500);
+      }
+      return fail(res, genericMessage, {}, 500);
     }
   };
 }

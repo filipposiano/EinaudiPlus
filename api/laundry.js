@@ -8,154 +8,101 @@
 // Lo stile RPC (action nel corpo) e' mantenuto apposta: il client gia' installato
 // sui telefoni parla questo linguaggio, e durante il cutover deve continuare a
 // funzionare senza aggiornarsi.
+//
+// Ogni azione qui sotto delega ora al proprio modulo — Laundry, Notifications,
+// Feedback, Bikes — vedi refactor-enterprise/ARCHITETTURA-ENTERPRISE.md. Questo
+// file resta l'unico endpoint pubblico già legato a una camera, motivo per cui
+// bici/notifiche/segnalazioni vivono ancora qui accanto alla lavanderia pur
+// appartenendo ad altri domini.
 
-import { rpc } from "./_lib/db.js";
-import { readBody, json, fail, tokenOk, allow, methodOk, camera } from "./_lib/http.js";
-import { endpointAllowed } from "./_lib/push.js";
-
-// Griglia, prenotazione e liberazione turno passano ora dal modulo Laundry
-// (src/modules/laundry) — vedi refactor-enterprise/ARCHITETTURA-ENTERPRISE.md.
-// Bici, segnalazioni e iscrizioni push restano qui sotto: appartengono ad
-// altri domini non ancora migrati, e questo endpoint resta - per ora - l'unico
-// posto pubblico già legato a una camera per loro.
+import { readBody, json, fail, tokenOk, methodOk } from "./_lib/http.js";
+import { checkRateLimit, clientIp } from "../src/shared/http/rateLimit.js";
 import { getSnapshot, bookSlot, clearSlot } from "../src/modules/laundry/index.js";
-import { AppError } from "../src/shared/errors/AppError.js";
+import { subscribePush, unsubscribePush, createTelegramCode } from "../src/modules/notifications/index.js";
+import { submitFeedback } from "../src/modules/feedback/index.js";
+import { getBike, setBike } from "../src/modules/bikes/index.js";
+import { wrapHandler } from "../src/shared/errors/wrapHandler.js";
 
-export default async function handler(req, res) {
+export default wrapHandler("laundry", async (req, res) => {
   if (!methodOk(req, res, ["GET", "POST"])) return;
 
   const body = req.method === "POST" ? readBody(req) : {};
 
   if (!tokenOk(req, body)) return fail(res, "unauthorized", {}, 401);
 
-  try {
-    // ── Lettura ──────────────────────────────────────────────────────────────
-    if (req.method === "GET") {
-      const room = (req.query.room || "").toString().trim();
-      // Senza camera si ricade sulla lavanderia principale, come faceva
-      // getApiUrl() con il suo "return API_URL" — invariato, decide
-      // laundry_for_room() in SQL, non questo file.
-      return json(res, 200, await getSnapshot(room));
-    }
-
-    // ── Scrittura ────────────────────────────────────────────────────────────
-    const action = String(body.action || "");
-    const room = String(body.room ?? "").trim();
-
-    if (!(await allow(req, "laundry", 60, 600))) {
-      return fail(res, "troppe richieste, riprova fra poco", {}, 429);
-    }
-
-    switch (action) {
-      // Validazione di giorno/turno/camera fatta ora dal modulo, con gli
-      // stessi messaggi e gli stessi limiti (vedi src/modules/laundry/application/).
-      case "book":
-        return json(res, 200, await bookSlot({
-          room, day: body.day, slot: body.slot, machine: body.machine, actorRoom: body.actor_room,
-        }));
-
-      case "clear":
-        // `p_as_admin` NON si manda da qui, e non è una svista: questo è il
-        // percorso pubblico e il valore di default nella funzione SQL è già
-        // `false` (vedi laundryRepository.clear() nel modulo). Chi ha una
-        // sessione amministrativa passa da /api/admin/data (azione
-        // `clearDirezione`), dove il cookie viene verificato prima.
-        return json(res, 200, await clearSlot({
-          room, day: body.day, slot: body.slot, machine: body.machine,
-        }));
-
-      // Il fuori servizio e' passato all'admin. Accettiamo entrambe le grafie
-      // che il client ha usato nel tempo ('status' e 'setStatus') per dare un
-      // messaggio chiaro invece del vecchio 'azione sconosciuta'.
-      case "status":
-      case "setStatus":
-        return fail(res, "solo gli amministratori possono segnare una macchina fuori servizio", {}, 403);
-
-      case "subscribe": {
-        const sub = body.sub || {};
-        const keys = sub.keys || {};
-        const endpoint = String(sub.endpoint || "");
-
-        // Si accettano solo gli endpoint dei servizi push conosciuti.
-        //
-        // sendWebPush() li ricontrolla comunque prima di spedire, quindi non
-        // c'era un rischio di SSRF: ma senza questo si poteva SCRIVERE in
-        // push_sub qualunque stringa — provato in produzione con
-        // `http://169.254.169.254/latest/meta-data`, l'indirizzo dei metadati
-        // cloud, e la riga veniva salvata. Righe simili non sarebbero mai
-        // state potate (la potatura scatta solo sul 404/410 di un servizio
-        // vero) e restavano attaccate alla camera di chiunque.
-        if (!endpointAllowed(endpoint)) {
-          return fail(res, "endpoint di notifica non riconosciuto");
-        }
-        // La DIREZIONE non e' una camera vera (niente cifre: camera() la
-        // respinge), ma prenota per davvero e i suoi turni finiscono per
-        // scadere come tutti gli altri — chi la usa da portineria deve poter
-        // ricevere i promemoria esattamente come un residente. Iscriversi ai
-        // suoi promemoria non da' nessun potere in piu': la griglia e' gia'
-        // pubblica, e creare o cancellare un turno suo passa comunque solo
-        // dall'endpoint amministrativo.
-        if (!camera(room) && room !== "DIREZIONE") return fail(res, "camera non valida");
-
-        return json(res, 200, await rpc("upsert_push_sub", {
-          p_room: room,
-          p_endpoint: endpoint,
-          p_p256dh: String(keys.p256dh || ""),
-          p_auth: String(keys.auth || ""),
-        }));
-      }
-
-      case "unsubscribe":
-        return json(res, 200, await rpc("remove_push_sub", {
-          p_endpoint: String(body.endpoint || ""),
-        }));
-
-      // Il codice da incollare al bot Telegram. Serve un codice e non basta la
-      // camera: altrimenti chiunque potrebbe scrivere al bot "sono la 112" e
-      // ricevere i promemoria di un altro.
-      case "telegramCode":
-        return json(res, 200, await rpc("telegram_create_code", { p_room: room }));
-
-      case "feedback": {
-        if (!(await allow(req, "feedback", 10, 86400))) {
-          return fail(res, "hai gia' inviato molte segnalazioni oggi", {}, 429);
-        }
-        return json(res, 200, await rpc("add_feedback", {
-          p_room: room,
-          p_text: String(body.text || ""),
-        }));
-      }
-
-      // Se in camera c'è una bici. Letta e scritta dalle Impostazioni
-      // dell'app, non ha niente a che fare con la lavanderia: vive qui solo
-      // perché questo è l'unico endpoint pubblico già legato a una camera.
-      case "bikeGet": {
-        if (!camera(room)) return fail(res, "camera non valida");
-        return json(res, 200, await rpc("bike_get", { p_room: camera(room) }));
-      }
-
-      case "bikeSet": {
-        if (!camera(room)) return fail(res, "camera non valida");
-        return json(res, 200, await rpc("bike_set", {
-          p_room: camera(room),
-          p_has_bike: Boolean(body.has_bike),
-        }));
-      }
-
-      default:
-        return fail(res, "azione sconosciuta");
-    }
-  } catch (err) {
-    // Un errore tipizzato dal modulo Laundry (validazione di giorno/turno/
-    // camera): stesso messaggio che il client leggeva già prima ("camera non
-    // valida", "giorno o turno non valido"), non un dettaglio interno — si
-    // restituisce così com'è. Qualunque altro errore (RPC, bug imprevisto)
-    // resta invece dietro il messaggio neutro di sempre: il dettaglio interno
-    // sta solo nel log, mai nella risposta a un endpoint pubblico.
-    if (err instanceof AppError && err.expose) {
-      return fail(res, err.message, err.extra || {}, err.status);
-    }
-    console.error("[laundry]", err.rpc || "", err.message);
-    return fail(res, "errore del server, riprova", {}, 500);
+  // ── Lettura ──────────────────────────────────────────────────────────────
+  if (req.method === "GET") {
+    const room = (req.query.room || "").toString().trim();
+    // Senza camera si ricade sulla lavanderia principale — invariato, decide
+    // laundry_for_room() in SQL, non questo file.
+    return json(res, 200, await getSnapshot(room));
   }
-}
+
+  // ── Scrittura ────────────────────────────────────────────────────────────
+  const action = String(body.action || "");
+  const room = String(body.room ?? "").trim();
+
+  if (!(await checkRateLimit("laundry", clientIp(req), 60, 600))) {
+    return fail(res, "troppe richieste, riprova fra poco", {}, 429);
+  }
+
+  switch (action) {
+    case "book":
+      return json(res, 200, await bookSlot({
+        room, day: body.day, slot: body.slot, machine: body.machine, actorRoom: body.actor_room,
+      }));
+
+    case "clear":
+      // `p_as_admin` NON si manda da qui, e non è una svista: questo è il
+      // percorso pubblico e il valore di default nella funzione SQL è già
+      // `false` (vedi laundryRepository.clear() nel modulo). Chi ha una
+      // sessione amministrativa passa da /api/admin/data (azione
+      // `clearDirezione`), dove il cookie viene verificato prima.
+      return json(res, 200, await clearSlot({
+        room, day: body.day, slot: body.slot, machine: body.machine,
+      }));
+
+    // Il fuori servizio e' passato all'admin. Accettiamo entrambe le grafie
+    // che il client ha usato nel tempo ('status' e 'setStatus') per dare un
+    // messaggio chiaro invece del vecchio 'azione sconosciuta'.
+    case "status":
+    case "setStatus":
+      return fail(res, "solo gli amministratori possono segnare una macchina fuori servizio", {}, 403);
+
+    case "subscribe": {
+      const sub = body.sub || {};
+      const keys = sub.keys || {};
+      return json(res, 200, await subscribePush({
+        room, endpoint: String(sub.endpoint || ""), p256dh: keys.p256dh, auth: keys.auth,
+      }));
+    }
+
+    case "unsubscribe":
+      return json(res, 200, await unsubscribePush(String(body.endpoint || "")));
+
+    // Il codice da incollare al bot Telegram. Serve un codice e non basta la
+    // camera: altrimenti chiunque potrebbe scrivere al bot "sono la 112" e
+    // ricevere i promemoria di un altro.
+    case "telegramCode":
+      return json(res, 200, await createTelegramCode(room));
+
+    case "feedback": {
+      if (!(await checkRateLimit("feedback", clientIp(req), 10, 86400))) {
+        return fail(res, "hai gia' inviato molte segnalazioni oggi", {}, 429);
+      }
+      return json(res, 200, await submitFeedback(room, body.text));
+    }
+
+    // Se in camera c'è una bici. Letta e scritta dalle Impostazioni
+    // dell'app, non ha niente a che fare con la lavanderia: vive qui solo
+    // perché questo è l'unico endpoint pubblico già legato a una camera.
+    case "bikeGet":
+      return json(res, 200, await getBike(room));
+
+    case "bikeSet":
+      return json(res, 200, await setBike(room, body.has_bike));
+
+    default:
+      return fail(res, "azione sconosciuta");
+  }
+});
