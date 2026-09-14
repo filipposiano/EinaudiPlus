@@ -69,6 +69,7 @@ const fr: Testi = {
   autoWash: (_end: string) => `Le sèche-linge correspondant est réservé automatiquement pour le créneau suivant.`,
   daily:    "Journalier", weekly: "Hebdomadaire", overview: "Vue d'ensemble",
   thisWeek: "Semaine en cours",
+  prossimaSettimana: "Semaine prochaine",
   confirm:  "Confirmer", cancel: "Annuler", modify: "Changer de chambre", delete: "Supprimer la réservation",
   forMe:    (r: string) => `Pour moi — Chambre ${r}`,
   forOther: "Pour quelqu'un d'autre",

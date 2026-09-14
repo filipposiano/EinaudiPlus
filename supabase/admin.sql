@@ -107,7 +107,9 @@ begin
   select * into v_l from laundry where id = p_laundry_id;
   if not found then return jsonb_build_object('ok', false, 'error', 'lavanderia non valida'); end if;
 
-  v_ws := current_laundry_week_start(v_l.id);
+  -- Stesso helper del percorso pubblico (vedi migrations/033), per lo stesso
+  -- motivo di book_as_direzione qui sopra.
+  v_ws := laundry_week_start_for_day(v_l.id, p_day);
 
   insert into laundry_booking (laundry_id, week_start, day, slot, machine_code, room, created_by)
   values (v_l.id, v_ws, p_day, p_slot, p_machine, p_room, 'admin')
@@ -236,7 +238,11 @@ begin
     return jsonb_build_object('ok', false, 'error', 'macchina non valida');
   end if;
 
-  v_ws := current_laundry_week_start(v_l.id);
+  -- Stesso helper del percorso pubblico (vedi migrations/033): per i giorni
+  -- 1-6 e' sempre la settimana corrente, per il giorno 0 durante la finestra
+  -- di anteprima e' gia' quella dopo. Senza, la DIREZIONE avrebbe scritto
+  -- sul lunedi' sbagliato rispetto a cio' che la griglia mostra gia'.
+  v_ws := laundry_week_start_for_day(v_l.id, p_day);
 
   insert into laundry_booking (laundry_id, week_start, day, slot, machine_code, room, created_by)
   values (v_l.id, v_ws, p_day, p_slot, p_machine, 'DIREZIONE', 'admin')
@@ -252,7 +258,7 @@ begin
 
   return jsonb_build_object(
     'ok', true,
-    'week', week_snapshot(v_l.id, v_ws),
+    'week', week_snapshot_mixed(v_l.id),
     'status', status_snapshot(v_l.id)
   );
 end;

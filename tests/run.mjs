@@ -149,8 +149,13 @@ section("Push e segnalazioni");
   const nonNum = await call(laundry, {
     body: { token: TOKEN, action: "book", day: "pippo", slot: "x", machine: "W-A", room: "112" },
   });
+  // Lo status non è più necessariamente 200: gli errori di validazione dal
+  // modulo Laundry portano il proprio status HTTP (400), coerente con come
+  // il pannello admin già risponde per lo stesso identico controllo. Il
+  // client (api.ts / AdminPanel.tsx) legge solo `ok`/`error` dal corpo,
+  // status a parte tranne il caso speciale 401 — è quello che conta qui.
   check("giorno/turno non numerici -> errore chiaro, non 500",
-    nonNum.status === 200 && nonNum.body?.error === "giorno o turno non valido",
+    nonNum.status !== 500 && nonNum.body?.error === "giorno o turno non valido",
     JSON.stringify(nonNum.body));
 
   check("turno decimale respinto",

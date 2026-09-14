@@ -52,6 +52,36 @@ returns date language sql stable as $$
   where l.id = p_laundry_id;
 $$;
 
+-- Anteprima del lunedì della settimana prossima. Vedi migrations/033: da
+-- sabato alle 20:00 a domenica intera a lunedì fino alle 07:00 — lo stesso
+-- confine finale di current_laundry_week_start — il giorno 0 (lunedì) di
+-- laundry_week_start_for_day() smette di puntare alla settimana corrente e
+-- punta a quella dopo.
+--
+-- Tre copie della stessa finestra, da tenere allineate a mano: questa,
+-- computaAnteprimaLunedi() in modello.ts, e il test che la verifica in
+-- tests/unit/anteprima-lunedi.test.mjs. Se cambi l'orario o il giorno qui,
+-- cambiali anche negli altri due.
+create or replace function laundry_preview_active(p_tz text default 'Europe/Rome')
+returns boolean language sql stable as $$
+  select case extract(isodow from now() at time zone p_tz)::int
+    when 6 then (now() at time zone p_tz)::time >= time '20:00'  -- sabato sera
+    when 7 then true                                              -- domenica, tutta
+    when 1 then (now() at time zone p_tz)::time <  time '07:00'   -- lunedì presto
+    else false
+  end;
+$$;
+
+-- La settimana su cui scrivere/leggere UN giorno preciso: uguale a
+-- current_laundry_week_start per i giorni 1-6 sempre, e per il giorno 0
+-- fuori dalla finestra di anteprima; durante l'anteprima il giorno 0 punta
+-- a +7.
+create or replace function laundry_week_start_for_day(p_laundry_id smallint, p_day integer)
+returns date language sql stable as $$
+  select current_laundry_week_start(p_laundry_id)
+       + case when p_day = 0 and laundry_preview_active() then 7 else 0 end;
+$$;
+
 -- Sostituisce getApiUrl() lato client, che leggeva localStorage a ogni chiamata:
 -- cambiando camera senza ricaricare si poteva leggere una lavanderia e scrivere
 -- sull'altra. Ora la decisione è una sola, server-side.
@@ -97,6 +127,30 @@ returns jsonb language sql stable as $$
   ) l on true;
 $$;
 
+-- Come sopra, ma ogni giorno legge dalla SUA settimana (vedi
+-- laundry_week_start_for_day) invece che da una sola p_week_start passata da
+-- fuori: e' quello che serve per mescolare, nella stessa risposta, sei
+-- giorni della settimana corrente e un lunedi' che durante l'anteprima
+-- appartiene gia' alla prossima. week_snapshot originale resta cosi' com'e'
+-- per chi (admin_overview) vuole davvero una settimana sola, sempre la
+-- stessa per tutti e sette i giorni.
+create or replace function week_snapshot_mixed(p_laundry_id smallint)
+returns jsonb language sql stable as $$
+  select coalesce(jsonb_object_agg(d::text, coalesce(l.day_obj, '{}'::jsonb)), '{}'::jsonb)
+  from generate_series(0, 6) as d
+  left join lateral (
+    select jsonb_object_agg(s.slot::text, s.machines) as day_obj
+    from (
+      select b.slot, jsonb_object_agg(b.machine_code, b.room) as machines
+      from laundry_booking b
+      where b.laundry_id = p_laundry_id
+        and b.week_start = laundry_week_start_for_day(p_laundry_id, d)
+        and b.day = d
+      group by b.slot
+    ) s
+  ) l on true;
+$$;
+
 -- status[machine] = 'ok' | 'oos', tutte e sei le sigle sempre presenti.
 create or replace function status_snapshot(p_laundry_id smallint)
 returns jsonb language sql stable as $$
@@ -113,16 +167,14 @@ returns jsonb language plpgsql stable as $$
 declare
   v_id smallint;
   v_l  laundry%rowtype;
-  v_ws date;
 begin
   -- Fallback su 'valentino' come faceva getApiUrl() con "return API_URL"
   v_id := coalesce(laundry_for_room(p_room), (select id from laundry where slug = 'valentino'));
   select * into v_l from laundry where id = v_id;
-  v_ws := current_laundry_week_start(v_l.id);
 
   return jsonb_build_object(
     'ok',     true,
-    'week',   week_snapshot(v_id, v_ws),
+    'week',   week_snapshot_mixed(v_id),
     'status', status_snapshot(v_id),
     'slots',  v_l.n_slots,
     -- Tema stagionale attivo (vedi tema.sql): viaggia qui perche' questo e'
@@ -191,7 +243,10 @@ begin
     return jsonb_build_object('ok', false, 'error', 'macchina non valida');
   end if;
 
-  v_ws := current_laundry_week_start(v_l.id);
+  -- Per i giorni 1-6 e' sempre la settimana corrente; per il giorno 0,
+  -- durante la finestra di anteprima (vedi laundry_preview_active), e' gia'
+  -- la settimana dopo.
+  v_ws := laundry_week_start_for_day(v_l.id, p_day);
 
   -- La quota settimanale NON viene applicata qui: senza autenticazione la
   -- camera è auto-dichiarata, quindi il blocco fermava solo chi la rispettava
@@ -215,7 +270,7 @@ begin
 
   return jsonb_build_object(
     'ok', true,
-    'week', week_snapshot(v_l.id, v_ws),
+    'week', week_snapshot_mixed(v_l.id),
     'status', status_snapshot(v_l.id)
   ) || case when v_m.is_oos
             then jsonb_build_object('warning', 'oos')
@@ -247,7 +302,7 @@ begin
     return jsonb_build_object('ok', false, 'error', 'camera non valida');
   end if;
 
-  v_ws := current_laundry_week_start(v_l.id);
+  v_ws := laundry_week_start_for_day(v_l.id, p_day);
 
   -- Di chi è il turno che si sta per liberare.
   select room into v_di
@@ -265,7 +320,7 @@ begin
     and day = p_day and slot = p_slot and machine_code = p_machine;
 
   return jsonb_build_object('ok', true,
-    'week', week_snapshot(v_l.id, v_ws), 'status', status_snapshot(v_l.id));
+    'week', week_snapshot_mixed(v_l.id), 'status', status_snapshot(v_l.id));
 end;
 $$;
 

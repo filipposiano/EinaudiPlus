@@ -166,8 +166,9 @@ export const DIREZIONE = "DIREZIONE";
  * solo una chiamata di rete in più, che è esattamente ciò che questo evita.
  *
  * Serve a togliere una richiesta a ogni avvio per il 99% di chi apre l'app.
- * `adminRole()` girava sempre, e per ogni residente la risposta era "no": una
- * invocazione serverless per persona per apertura, tutti i giorni, per niente.
+ * `adminSession()` girava sempre, e per ogni residente la risposta era "no":
+ * una invocazione serverless per persona per apertura, tutti i giorni, per
+ * niente.
  */
 const ADMIN_HINT = "laundryhub.adminSeen";
 
@@ -178,24 +179,37 @@ export function markAdminSeen(seen: boolean) {
   } catch { /* modalità privata: si torna a chiedere sempre, funziona lo stesso */ }
 }
 
-/** Il ruolo della sessione admin su questo dispositivo, se c'è. */
-export async function adminRole(): Promise<string | null> {
+/**
+ * La sessione admin su questo dispositivo: il ruolo, e se il titolare deve
+ * ancora scegliere una password sua.
+ *
+ * Il secondo dato viaggia insieme al primo perché arriva dalla stessa
+ * risposta e serve nello stesso momento: chi entra con la password
+ * provvisoria deve trovarsi davanti il cambio password subito, non scoprirlo
+ * quando prova a fare qualcosa (vedi il gate in App.tsx).
+ */
+export async function adminSession(): Promise<{ role: string | null; deveCambiarePassword: boolean }> {
+  const nessuna = { role: null, deveCambiarePassword: false };
+
   // Chi non ha mai fatto accesso qui non ha una sessione da verificare. Se la
   // traccia si perde (cache pulita, altro browser) non si rompe niente: si
   // rientra da 1935, e il login riscrive la traccia.
   try {
-    if (localStorage.getItem(ADMIN_HINT) === null) return null;
+    if (localStorage.getItem(ADMIN_HINT) === null) return nessuna;
   } catch { /* localStorage inaccessibile: si chiede al server, come prima */ }
 
   try {
     const res = await fetch("/api/admin/auth");
-    if (!res.ok) return null;
+    if (!res.ok) return nessuna;
     const data = await res.json();
     const role = data.logged ? (data.role as string) : null;
-    if (!role) markAdminSeen(false);   // sessione scaduta: non richiederla a ogni avvio
-    return role;
+    if (!role) {
+      markAdminSeen(false);   // sessione scaduta o revocata: non richiederla a ogni avvio
+      return nessuna;
+    }
+    return { role, deveCambiarePassword: Boolean(data.deve_cambiare_password) };
   } catch {
-    return null;
+    return nessuna;
   }
 }
 

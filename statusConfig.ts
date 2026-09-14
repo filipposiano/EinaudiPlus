@@ -17,9 +17,30 @@ export interface AccessibilityPrefs {
 
 export const DEFAULT_COLORS: Record<StatusKey, string> = {
   free:  "#22c55e",
-  inuse: "#facc15",
+  inuse: "#eab308",
   oos:   "#ff4757",
 };
+
+// Gialli che sono stati il default in passato e non lo sono piu'.
+//
+// Serve perche' il default vive in due posti che devono coincidere (qui e in
+// style.css) e perche' applyToDOM() distingue "personalizzato" da "default"
+// confrontando col valore qui sopra. Un dispositivo che ha in localStorage un
+// vecchio default se lo ritroverebbe promosso a scelta dell'utente: il colore
+// resterebbe quello di allora per sempre, su quel telefono e solo su quello —
+// ed e' il motivo per cui lo stesso giallo appariva diverso da un dispositivo
+// all'altro.
+//
+// Il rischio e' che a qualcuno piacesse davvero uno di questi due e se lo
+// veda tornare al nuovo default. E' il prezzo, accettato: sono valori che
+// nessuno ha scelto dal color picker, ci sono finiti passando dal pannello
+// per cambiare tutt'altro.
+const GIALLI_SUPERATI = new Set(["#facc15", "#8a5c07", "#a16207"]);
+
+function gialloMigrato(salvato: string | undefined | null): string {
+  if (!salvato) return DEFAULT_COLORS.inuse;
+  return GIALLI_SUPERATI.has(salvato.toLowerCase()) ? DEFAULT_COLORS.inuse : salvato;
+}
 
 export const DEFAULT_ICONS: Record<StatusKey, string> = {
   free:  "●",
@@ -68,7 +89,7 @@ export function loadPrefs(): AccessibilityPrefs {
     return {
       colors: {
         free:  parsed?.colors?.free  ?? DEFAULT_COLORS.free,
-        inuse: parsed?.colors?.inuse ?? DEFAULT_COLORS.inuse,
+        inuse: gialloMigrato(parsed?.colors?.inuse),
         oos:   parsed?.colors?.oos   ?? DEFAULT_COLORS.oos,
       },
       icons: {
@@ -92,17 +113,18 @@ export function savePrefs(prefs: AccessibilityPrefs): void {
 //   --status-KEY       la palette dichiarata qui sopra (DEFAULT_COLORS),
 //                       identica in entrambi i temi — quella che questo
 //                       pannello mostra e che l'utente personalizza.
-//   --status-KEY-text  il livello con cui l'app rende testo e icone. Oggi è
-//                       un semplice alias del primo: era una variante più
-//                       scura per il contrasto WCAG, ed è tornato ai colori
-//                       originali su richiesta.
+//   --status-KEY-text  il livello con cui l'app rende testo e icone. Sul tema
+//                       chiaro è una variante più scura, per il contrasto
+//                       WCAG; sul tema scuro, e per il giallo in entrambi i
+//                       temi, è un alias del primo (il perché sta in
+//                       style.css, accanto a --status-inuse-text).
 //
 // Quando l'utente NON ha personalizzato nulla, non si scrive niente qui: è il
 // foglio di stile a decidere entrambi i livelli, ognuno per il proprio tema.
 // Quando personalizza (color picker o preset daltonismo), il valore scelto si
-// scrive su ENTRAMBI i livelli — necessario finché l'alias esiste, perché
-// scrivere solo la base lascerebbe il livello "testo" fermo al vecchio colore
-// in tutta l'app tranne che nell'anteprima di questo pannello.
+// scrive su ENTRAMBI i livelli — se no il livello "testo" resterebbe fermo
+// al colore del foglio di stile in tutta l'app tranne che nell'anteprima di
+// questo pannello.
 export function applyToDOM(prefs: AccessibilityPrefs): void {
   const s = document.documentElement.style;
 

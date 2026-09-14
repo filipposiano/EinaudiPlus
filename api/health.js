@@ -12,6 +12,7 @@
 // quali variabili sono configurate e' comunque un regalo a chi sonda.
 
 import { json, methodOk } from "./_lib/http.js";
+import { segretiCoincidono } from "../src/shared/crypto/constantTime.js";
 
 /** Descrive una variabile senza rivelarla. */
 function peek(name, { secret = true, prefix = 0 } = {}) {
@@ -32,7 +33,7 @@ function peek(name, { secret = true, prefix = 0 } = {}) {
 export default async function handler(req, res) {
   if (!methodOk(req, res, ["GET", "POST"])) return;
 
-  if (!process.env.CRON_SECRET || req.headers["x-cron-secret"] !== process.env.CRON_SECRET) {
+  if (!segretiCoincidono(process.env.CRON_SECRET, req.headers["x-cron-secret"])) {
     return json(res, 401, { ok: false, error: "unauthorized" });
   }
 

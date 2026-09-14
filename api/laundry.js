@@ -8,164 +8,159 @@
 // Lo stile RPC (action nel corpo) e' mantenuto apposta: il client gia' installato
 // sui telefoni parla questo linguaggio, e durante il cutover deve continuare a
 // funzionare senza aggiornarsi.
+//
+// Ogni azione qui sotto delega ora al proprio modulo — Laundry, Notifications,
+// Feedback, Bikes — vedi refactor-enterprise/ARCHITETTURA-ENTERPRISE.md. Questo
+// file resta l'unico endpoint pubblico già legato a una camera, motivo per cui
+// bici/notifiche/segnalazioni vivono ancora qui accanto alla lavanderia pur
+// appartenendo ad altri domini.
 
-import { rpc } from "./_lib/db.js";
-import { readBody, json, fail, tokenOk, allow, methodOk, intero, camera } from "./_lib/http.js";
-import { endpointAllowed } from "./_lib/push.js";
+import { readBody, json, fail, botFilterTokenOk, methodOk } from "./_lib/http.js";
+import { checkRateLimit, clientIp } from "../src/shared/http/rateLimit.js";
+import { getSnapshot, bookSlot, clearSlot } from "../src/modules/laundry/index.js";
+import { subscribePush, unsubscribePush, createTelegramCode } from "../src/modules/notifications/index.js";
+import { submitFeedback } from "../src/modules/feedback/index.js";
+import { getBike, setBike } from "../src/modules/bikes/index.js";
+import { wrapHandler } from "../src/shared/errors/wrapHandler.js";
 
-// 19 turni al giorno, 7 giorni. Il numero vero sta in laundry.n_slots e lo
-// ricontrolla il database: qui serve solo un limite superiore per scartare
-// l'assurdo prima di fare il giro.
-const MAX_SLOT = 18;
-
-export default async function handler(req, res) {
+export default wrapHandler("laundry", async (req, res) => {
   if (!methodOk(req, res, ["GET", "POST"])) return;
 
   const body = req.method === "POST" ? readBody(req) : {};
 
-  if (!tokenOk(req, body)) return fail(res, "unauthorized", {}, 401);
+  if (!botFilterTokenOk(req, body)) return fail(res, "unauthorized", {}, 401);
 
-  try {
-    // ── Lettura ──────────────────────────────────────────────────────────────
-    if (req.method === "GET") {
-      const room = (req.query.room || "").toString().trim();
-      // Senza camera si ricade sulla lavanderia principale, come faceva
-      // getApiUrl() con il suo "return API_URL".
-      return json(res, 200, await rpc("laundry_snapshot", { p_room: room || null }));
-    }
-
-    // ── Scrittura ────────────────────────────────────────────────────────────
-    const action = String(body.action || "");
-    const room = String(body.room ?? "").trim();
-
-    if (!(await allow(req, "laundry", 60, 600))) {
+  // ── Lettura ──────────────────────────────────────────────────────────────
+  if (req.method === "GET") {
+    // Fino a ieri questo ramo usciva PRIMA di qualunque limite: la lettura
+    // pubblica — cioe' l'endpoint piu' pesante dell'app, che monta l'intera
+    // griglia settimanale — era l'unico senza tetto. /api/conferenze il suo
+    // ce l'aveva gia': era una disparita', non una scelta.
+    //
+    // Il tetto e' alto apposta, e non protegge dallo scraping: l'intero
+    // contenuto sta in una richiesta sola, quindi non c'e' ripetizione da
+    // limitare (vedi la nota in fondo al file). Serve contro il rubinetto
+    // aperto — chi martella per tenere occupata la funzione e il database.
+    //
+    // 600 ogni 10 minuti = una al secondo sostenuta da un singolo indirizzo.
+    // Deve restare largo perche' il collegio sta dietro NAT: da qui centinaia
+    // di residenti sono un client solo, e a fine turno le dashboard aperte si
+    // ricaricano tutte insieme.
+    if (!(await checkRateLimit("laundry-read", clientIp(req), 600, 600))) {
       return fail(res, "troppe richieste, riprova fra poco", {}, 429);
     }
-
-    // day e slot valgono per book e clear: si validano una volta sola.
-    const day  = intero(body.day, 0, 6);
-    const slot = intero(body.slot, 0, MAX_SLOT);
-    if ((action === "book" || action === "clear") && (day === null || slot === null)) {
-      return fail(res, "giorno o turno non valido");
-    }
-
-    switch (action) {
-      case "book": {
-        if (!camera(room)) return fail(res, "camera non valida");
-        return json(res, 200, await rpc("book_laundry", {
-          p_room: room,
-          p_day: day,
-          p_slot: slot,
-          p_machine: String(body.machine || ""),
-          // Da dove si sta agendo, distinto dall'intestatario: serve a impedire
-          // che dalla Manica si prenoti una macchina del Valentino (e
-          // viceversa). Assente nei client vecchi, e li' il controllo si
-          // disattiva invece di rifiutare prenotazioni valide.
-          p_actor_room: camera(body.actor_room),
-        }));
-      }
-
-      case "clear":
-        // `p_as_admin` NON si manda da qui, e non è una svista: questo è il
-        // percorso pubblico e il valore di default nella funzione SQL è già
-        // `false`. Ometterlo ha due effetti buoni: un client non può alzarsi i
-        // poteri mandando un campo in più, e la chiamata funziona anche prima
-        // che la migrazione 006 sia applicata — cioè non c'è una finestra in
-        // cui il codice è online e il database ancora no.
-        //
-        // Chi ha una sessione amministrativa passa da /api/admin/data
-        // (azione `clearDirezione`), dove il cookie viene verificato prima.
-        return json(res, 200, await rpc("clear_laundry", {
-          p_room: camera(room),
-          p_day: day,
-          p_slot: slot,
-          p_machine: String(body.machine || ""),
-        }));
-
-      // Il fuori servizio e' passato all'admin. Accettiamo entrambe le grafie
-      // che il client ha usato nel tempo ('status' e 'setStatus') per dare un
-      // messaggio chiaro invece del vecchio 'azione sconosciuta'.
-      case "status":
-      case "setStatus":
-        return fail(res, "solo gli amministratori possono segnare una macchina fuori servizio", {}, 403);
-
-      case "subscribe": {
-        const sub = body.sub || {};
-        const keys = sub.keys || {};
-        const endpoint = String(sub.endpoint || "");
-
-        // Si accettano solo gli endpoint dei servizi push conosciuti.
-        //
-        // sendWebPush() li ricontrolla comunque prima di spedire, quindi non
-        // c'era un rischio di SSRF: ma senza questo si poteva SCRIVERE in
-        // push_sub qualunque stringa — provato in produzione con
-        // `http://169.254.169.254/latest/meta-data`, l'indirizzo dei metadati
-        // cloud, e la riga veniva salvata. Righe simili non sarebbero mai
-        // state potate (la potatura scatta solo sul 404/410 di un servizio
-        // vero) e restavano attaccate alla camera di chiunque.
-        if (!endpointAllowed(endpoint)) {
-          return fail(res, "endpoint di notifica non riconosciuto");
-        }
-        // La DIREZIONE non e' una camera vera (niente cifre: camera() la
-        // respinge), ma prenota per davvero e i suoi turni finiscono per
-        // scadere come tutti gli altri — chi la usa da portineria deve poter
-        // ricevere i promemoria esattamente come un residente. Iscriversi ai
-        // suoi promemoria non da' nessun potere in piu': la griglia e' gia'
-        // pubblica, e creare o cancellare un turno suo passa comunque solo
-        // dall'endpoint amministrativo.
-        if (!camera(room) && room !== "DIREZIONE") return fail(res, "camera non valida");
-
-        return json(res, 200, await rpc("upsert_push_sub", {
-          p_room: room,
-          p_endpoint: endpoint,
-          p_p256dh: String(keys.p256dh || ""),
-          p_auth: String(keys.auth || ""),
-        }));
-      }
-
-      case "unsubscribe":
-        return json(res, 200, await rpc("remove_push_sub", {
-          p_endpoint: String(body.endpoint || ""),
-        }));
-
-      // Il codice da incollare al bot Telegram. Serve un codice e non basta la
-      // camera: altrimenti chiunque potrebbe scrivere al bot "sono la 112" e
-      // ricevere i promemoria di un altro.
-      case "telegramCode":
-        return json(res, 200, await rpc("telegram_create_code", { p_room: room }));
-
-      case "feedback": {
-        if (!(await allow(req, "feedback", 10, 86400))) {
-          return fail(res, "hai gia' inviato molte segnalazioni oggi", {}, 429);
-        }
-        return json(res, 200, await rpc("add_feedback", {
-          p_room: room,
-          p_text: String(body.text || ""),
-        }));
-      }
-
-      // Se in camera c'è una bici. Letta e scritta dalle Impostazioni
-      // dell'app, non ha niente a che fare con la lavanderia: vive qui solo
-      // perché questo è l'unico endpoint pubblico già legato a una camera.
-      case "bikeGet": {
-        if (!camera(room)) return fail(res, "camera non valida");
-        return json(res, 200, await rpc("bike_get", { p_room: camera(room) }));
-      }
-
-      case "bikeSet": {
-        if (!camera(room)) return fail(res, "camera non valida");
-        return json(res, 200, await rpc("bike_set", {
-          p_room: camera(room),
-          p_has_bike: Boolean(body.has_bike),
-        }));
-      }
-
-      default:
-        return fail(res, "azione sconosciuta");
-    }
-  } catch (err) {
-    // Il dettaglio interno resta nei log, al client va un messaggio neutro.
-    console.error("[laundry]", err.rpc || "", err.message);
-    return fail(res, "errore del server, riprova", {}, 500);
+    const room = (req.query.room || "").toString().trim();
+    // Senza camera si ricade sulla lavanderia principale — invariato, decide
+    // laundry_for_room() in SQL, non questo file.
+    return json(res, 200, await getSnapshot(room));
   }
-}
+
+  // ── Scrittura ────────────────────────────────────────────────────────────
+  const action = String(body.action || "");
+  const room = String(body.room ?? "").trim();
+
+  if (!(await checkRateLimit("laundry", clientIp(req), 60, 600))) {
+    return fail(res, "troppe richieste, riprova fra poco", {}, 429);
+  }
+
+  switch (action) {
+    case "book":
+      return json(res, 200, await bookSlot({
+        room, day: body.day, slot: body.slot, machine: body.machine, actorRoom: body.actor_room,
+      }));
+
+    case "clear":
+      // Un secondo limite, più stretto, solo per la cancellazione.
+      //
+      // L'identità qui è autodichiarata — chiunque può dire "sono la 214" e
+      // liberare il suo turno — ed è una scelta voluta: la lavanderia è un
+      // posto fisico, fondato sulla fiducia fra chi ci abita. Ma "non
+      // verifichiamo chi sei" e "accettiamo qualsiasi ritmo di distruzione"
+      // sono due cose separabili, e questa riga separa la seconda dalla
+      // prima. Col solo limite generale (60 richieste ogni 10 minuti) una
+      // griglia settimanale intera — 7 giorni × 19 turni × 3 macchine, circa
+      // 400 caselle — si svuota da un solo IP in poco più di un'ora.
+      //
+      // Quindici ogni dieci minuti è invisibile a un residente (cancella i
+      // propri turni, due o tre al giorno) e divide per quattro il ritmo del
+      // dispetto. Non è più stretto perché anche un amministratore passa di
+      // qui: App.tsx usa il percorso amministrativo SOLO sui turni della
+      // DIREZIONE, quindi una ripulita a mano sulla griglia arriva su questo
+      // contatore, e non deve inciamparci.
+      //
+      // Non ferma chi ruota gli indirizzi: sposta la vandalizzazione da "due
+      // minuti di noia" a "una cosa che devi volere davvero".
+      if (!(await checkRateLimit("laundry-clear", clientIp(req), 15, 600))) {
+        return fail(res, "troppe cancellazioni di fila, riprova fra poco", {}, 429);
+      }
+      // `p_as_admin` NON si manda da qui, e non è una svista: questo è il
+      // percorso pubblico e il valore di default nella funzione SQL è già
+      // `false` (vedi laundryRepository.clear() nel modulo). Chi ha una
+      // sessione amministrativa passa da /api/admin/data (azione
+      // `clearDirezione`), dove il cookie viene verificato prima.
+      return json(res, 200, await clearSlot({
+        room, day: body.day, slot: body.slot, machine: body.machine,
+      }));
+
+    // Il fuori servizio e' passato all'admin. Accettiamo entrambe le grafie
+    // che il client ha usato nel tempo ('status' e 'setStatus') per dare un
+    // messaggio chiaro invece del vecchio 'azione sconosciuta'.
+    case "status":
+    case "setStatus":
+      return fail(res, "solo gli amministratori possono segnare una macchina fuori servizio", {}, 403);
+
+    case "subscribe": {
+      const sub = body.sub || {};
+      const keys = sub.keys || {};
+      return json(res, 200, await subscribePush({
+        room, endpoint: String(sub.endpoint || ""), p256dh: keys.p256dh, auth: keys.auth,
+      }));
+    }
+
+    case "unsubscribe":
+      return json(res, 200, await unsubscribePush(String(body.endpoint || "")));
+
+    // Il codice da incollare al bot Telegram. Serve un codice e non basta la
+    // camera: altrimenti chiunque potrebbe scrivere al bot "sono la 112" e
+    // ricevere i promemoria di un altro.
+    case "telegramCode":
+      return json(res, 200, await createTelegramCode(room));
+
+    case "feedback": {
+      if (!(await checkRateLimit("feedback", clientIp(req), 10, 86400))) {
+        return fail(res, "hai gia' inviato molte segnalazioni oggi", {}, 429);
+      }
+      return json(res, 200, await submitFeedback(room, body.text));
+    }
+
+    // Se in camera c'è una bici. Letta e scritta dalle Impostazioni
+    // dell'app, non ha niente a che fare con la lavanderia: vive qui solo
+    // perché questo è l'unico endpoint pubblico già legato a una camera.
+    case "bikeGet":
+      return json(res, 200, await getBike(room));
+
+    case "bikeSet":
+      return json(res, 200, await setBike(room, body.has_bike));
+
+    default:
+      return fail(res, "azione sconosciuta");
+  }
+});
+
+// ─── Nota: perche' qui non c'e' una difesa "anti-scraping" ───────────────────
+//
+// Tornera' in mente a qualcuno prima o poi, quindi meglio scriverlo.
+//
+// Un limite per IP non protegge questi dati, e non perche' sia tarato male:
+// perche' non c'e' niente da limitare. Una GET sola restituisce la griglia
+// settimanale INTERA — sette giorni per diciannove turni per tre macchine, con
+// il numero di camera di chi ha prenotato. Due richieste (una per lavanderia)
+// e chi copia ha finito. Non esiste soglia che distingua quelle due richieste
+// dalle due che fa un residente aprendo l'app.
+//
+// L'esposizione e' voluta, non e' una falla: la schermata dice "chi ha le
+// macchine in questo turno, e chi le aveva prima", ed e' il servizio che
+// l'app rende. Ma vuol dire che la leva, se un giorno la si vuole, e' COSA
+// torna da qui a chi non ha fatto accesso — non quanto spesso lo si chiede.
+// Il limite qui sopra serve a un'altra cosa: che nessuno tenga il rubinetto
+// aperto sulla funzione e sul database.

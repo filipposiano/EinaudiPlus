@@ -69,6 +69,7 @@ const es: Testi = {
   autoWash: (_end: string) => `La secadora correspondiente se reserva automáticamente para el turno siguiente.`,
   daily:    "Diario", weekly: "Semana", overview: "Resumen",
   thisWeek: "Semana actual",
+  prossimaSettimana: "Semana próxima",
   confirm:  "Confirmar", cancel: "Cancelar", modify: "Cambiar habitación", delete: "Eliminar reserva",
   forMe:    (r: string) => `Para mí — Habitación ${r}`,
   forOther: "Para otra persona",

@@ -160,6 +160,7 @@ const nap: Partial<Testi> = {
 
   daily: "Giornaliero",
   thisWeek: "Semmana corrente",
+  prossimaSettimana: "Semmana ca vene",
 
   forMe: (r: string): string => `Pe' me — Cammera ${r}`,
   forOther: "Pe' quaccun'ato",
