@@ -98,6 +98,11 @@ export const PREV_SLOT = CUR_SLOT - 1;
  * server, comunque, anche se questo calcolo lato client sbagliasse per un
  * orologio scentrato.
  *
+ * Tre copie della stessa finestra, da tenere allineate a mano: questa,
+ * laundry_preview_active() in supabase/functions.sql, e il test che la
+ * verifica in tests/unit/anteprima-lunedi.test.mjs. Se cambi l'orario o il
+ * giorno qui, cambiali anche negli altri due.
+ *
  * Calcolato su `new Date()` diretto, non su NOW.base: quest'ultimo è già
  * spostato di un giorno prima delle 07:00 (per i turni che scavalcano la
  * mezzanotte) e mischiare i due spostamenti avrebbe reso la finestra un'ora

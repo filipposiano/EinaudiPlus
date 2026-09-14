@@ -57,6 +57,11 @@ $$;
 -- confine finale di current_laundry_week_start — il giorno 0 (lunedì) di
 -- laundry_week_start_for_day() smette di puntare alla settimana corrente e
 -- punta a quella dopo.
+--
+-- Tre copie della stessa finestra, da tenere allineate a mano: questa,
+-- computaAnteprimaLunedi() in modello.ts, e il test che la verifica in
+-- tests/unit/anteprima-lunedi.test.mjs. Se cambi l'orario o il giorno qui,
+-- cambiali anche negli altri due.
 create or replace function laundry_preview_active(p_tz text default 'Europe/Rome')
 returns boolean language sql stable as $$
   select case extract(isodow from now() at time zone p_tz)::int
