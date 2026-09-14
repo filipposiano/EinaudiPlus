@@ -25,7 +25,14 @@ export default wrapHandler("rooms", async (req, res) => {
   const space = String(req.query.space || body.space || "").trim();
   if (!SPACES.has(space)) return fail(res, "sala non valida");
 
+  // Stessa lacuna che c'era su /api/laundry: la lettura usciva prima del
+  // limite. Tetto alto per la stessa ragione (il collegio e' dietro NAT, da
+  // fuori e' un indirizzo solo per tutti); serve contro chi martella, non
+  // contro chi copia — un'agenda si porta via in una richiesta.
   if (req.method === "GET") {
+    if (!(await checkRateLimit("rooms-read", clientIp(req), 600, 600))) {
+      return fail(res, "troppe richieste, riprova fra poco", {}, 429);
+    }
     return json(res, 200, await getBookings(space));
   }
 

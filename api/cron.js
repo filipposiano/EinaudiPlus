@@ -10,14 +10,18 @@
 import { json, methodOk } from "./_lib/http.js";
 import { sendDueReminders } from "../src/modules/notifications/index.js";
 import { wrapHandler } from "../src/shared/errors/wrapHandler.js";
+import { segretiCoincidono } from "../src/shared/crypto/constantTime.js";
 
 export default wrapHandler("cron", async (req, res) => {
   if (!methodOk(req, res, ["POST", "GET"])) return;
 
   // Il segreto viaggia in header, non in query: le query string finiscono nei
   // log di accesso, gli header no.
-  const secret = req.headers["x-cron-secret"];
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+  // Confronto a tempo costante: stesso gesto che identity/ usa gia' per le
+  // password e per la firma dei token (vedi shared/crypto/constantTime.js).
+  // Un CRON_SECRET non configurato continua a chiudere l'endpoint, non ad
+  // aprirlo — se lo verifica segretiCoincidono() da sola.
+  if (!segretiCoincidono(process.env.CRON_SECRET, req.headers["x-cron-secret"])) {
     return json(res, 401, { ok: false, error: "unauthorized" });
   }
 

@@ -32,6 +32,23 @@ export default wrapHandler("laundry", async (req, res) => {
 
   // ── Lettura ──────────────────────────────────────────────────────────────
   if (req.method === "GET") {
+    // Fino a ieri questo ramo usciva PRIMA di qualunque limite: la lettura
+    // pubblica — cioe' l'endpoint piu' pesante dell'app, che monta l'intera
+    // griglia settimanale — era l'unico senza tetto. /api/conferenze il suo
+    // ce l'aveva gia': era una disparita', non una scelta.
+    //
+    // Il tetto e' alto apposta, e non protegge dallo scraping: l'intero
+    // contenuto sta in una richiesta sola, quindi non c'e' ripetizione da
+    // limitare (vedi la nota in fondo al file). Serve contro il rubinetto
+    // aperto — chi martella per tenere occupata la funzione e il database.
+    //
+    // 600 ogni 10 minuti = una al secondo sostenuta da un singolo indirizzo.
+    // Deve restare largo perche' il collegio sta dietro NAT: da qui centinaia
+    // di residenti sono un client solo, e a fine turno le dashboard aperte si
+    // ricaricano tutte insieme.
+    if (!(await checkRateLimit("laundry-read", clientIp(req), 600, 600))) {
+      return fail(res, "troppe richieste, riprova fra poco", {}, 429);
+    }
     const room = (req.query.room || "").toString().trim();
     // Senza camera si ricade sulla lavanderia principale — invariato, decide
     // laundry_for_room() in SQL, non questo file.
@@ -129,3 +146,21 @@ export default wrapHandler("laundry", async (req, res) => {
       return fail(res, "azione sconosciuta");
   }
 });
+
+// ─── Nota: perche' qui non c'e' una difesa "anti-scraping" ───────────────────
+//
+// Tornera' in mente a qualcuno prima o poi, quindi meglio scriverlo.
+//
+// Un limite per IP non protegge questi dati, e non perche' sia tarato male:
+// perche' non c'e' niente da limitare. Una GET sola restituisce la griglia
+// settimanale INTERA — sette giorni per diciannove turni per tre macchine, con
+// il numero di camera di chi ha prenotato. Due richieste (una per lavanderia)
+// e chi copia ha finito. Non esiste soglia che distingua quelle due richieste
+// dalle due che fa un residente aprendo l'app.
+//
+// L'esposizione e' voluta, non e' una falla: la schermata dice "chi ha le
+// macchine in questo turno, e chi le aveva prima", ed e' il servizio che
+// l'app rende. Ma vuol dire che la leva, se un giorno la si vuole, e' COSA
+// torna da qui a chi non ha fatto accesso — non quanto spesso lo si chiede.
+// Il limite qui sopra serve a un'altra cosa: che nessuno tenga il rubinetto
+// aperto sulla funzione e sul database.

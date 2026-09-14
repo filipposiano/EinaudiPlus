@@ -12,6 +12,7 @@
 // dichiarata: chi passa `failOpen: false` sceglie il contrario — vedi sotto.
 
 import { rpc } from "../db/rpcClient.js";
+import { throttleLocale } from "./localThrottle.js";
 
 export function clientIp(req) {
   const fwd = req.headers["x-forwarded-for"];
@@ -41,9 +42,17 @@ export function clientIp(req) {
  * rete che rallenta — non una che ferma.
  */
 export async function checkRateLimit(bucket, identifier, limit, windowSecs, { failOpen = true } = {}) {
+  const chiave = `${bucket}:${identifier}`;
+
+  // Valvola in RAM prima della rete: sotto alluvione il conteggio su Postgres
+  // sarebbe esso stesso il danno (una scrittura per ogni richiesta rifiutata).
+  // Taratura e limiti in localThrottle.js — e' larghissima, il traffico umano
+  // non la vede mai.
+  if (!throttleLocale(chiave)) return false;
+
   try {
     return await rpc("rl_hit", {
-      p_bucket: `${bucket}:${identifier}`,
+      p_bucket: chiave,
       p_limit: limit,
       p_window_secs: windowSecs,
     });
