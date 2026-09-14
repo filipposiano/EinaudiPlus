@@ -116,13 +116,14 @@
      pannello (era ORANGE = "#f59e0b" scritto a mano in App.tsx): lo stesso
      hex, solo ora è una variabile invece di una costante JS. */
   --status-free: #22c55e;
-  --status-inuse: #facc15;
+  --status-inuse: #eab308;
   --status-oos: #ff4757;
   --status-prev: #f59e0b;
 
   /* ── Varianti "testo" ─────────────────────────────────────────────────
      Il secondo livello della palette: stessa famiglia dei colori qui sopra,
-     ma scuriti quanto basta a superare il 4,5:1 del WCAG AA sul bianco.
+     ma scuriti quanto basta a superare il 4,5:1 del WCAG AA sul bianco —
+     tranne il giallo, che e' un'eccezione motivata per esteso piu' sotto.
 
      La regola per usarli, e il motivo per cui esistono due livelli:
 
@@ -147,8 +148,28 @@
      ed e' per questo che non reggono il testo piccolo. */
   --gray-accessible-text: #5a5a6b;   /* 6,76:1 */
   --status-free-text:     #14672f;   /* 6,98:1 */
-  --status-inuse-text:    #a16207;   /* 5,12:1 — prima #8a5c07: leggibile ma "sporco", tirava
-                                        sull'olivastro invece che sull'oro */
+
+  /* Il giallo e' l'ECCEZIONE dichiarata alla regola qui sopra: resta la tinta
+     base, identica al tema scuro, e non una variante scurita.
+
+     Non e' una dimenticanza, e' il fondo di un giro gia' fatto due volte. Un
+     giallo saturo scurito fino al 4,5:1 diventa olivastro-marrone: e' stato
+     provato a #8a5c07 (troppo sporco) e poi a #a16207, e in entrambi i casi
+     la risposta e' stata che l'icona della lavatrice occupata non sembrava
+     piu' gialla. In piu' la variante scurita viveva SOLO qui: sul tema scuro
+     il token e' sempre stato un alias, quindi lo stesso puntino cambiava
+     colore passando da chiaro a scuro — che e' il difetto da cui e' partita
+     questa correzione.
+
+     Il prezzo e' reale e si sceglie in piena coscienza: 1,85:1 sul bianco,
+     sotto il 4,5:1 del WCAG AA. Regge perche' il giallo qui non porta mai
+     testo — solo l'icona di stato, che e' grande, affiancata all'orario in
+     chiaro, e raddoppiata dal canale "forma" del pannello Accessibilita'
+     (l'icona per ogni stato si sceglie li', apposta per chi non distingue i
+     colori). Verde e rosso restano scuriti: non hanno questo problema, li'
+     scurire non cambia la famiglia del colore. */
+  --status-inuse-text:    var(--status-inuse);
+
   --status-oos-text:      #d11a28;   /* 5,40:1 */
   --status-prev-text:     #b45309;   /* 5,02:1 */
   --destructive-text:     #d11a28;   /* 5,40:1 */
@@ -200,7 +221,7 @@
   --sidebar-ring: #ff3b30;
 
   --status-free: #22c55e;
-  --status-inuse: #facc15;
+  --status-inuse: #eab308;
   --status-oos: #ff4757;
   --status-prev: #f59e0b;
 
@@ -211,7 +232,7 @@
      del tema chiaro (#6b6b80) e li' valeva 3,8:1: sotto soglia. */
   --gray-accessible-text: #9a9ab0;   /* 7,09:1 — era #6b6b80 a 3,8:1 */
   --status-free-text:     var(--status-free);    /* 8,57:1 */
-  --status-inuse-text:    var(--status-inuse);   /* 12,4:1 */
+  --status-inuse-text:    var(--status-inuse);   /* 10,18:1 */
   --status-oos-text:      var(--status-oos);     /* 5,85:1 */
   --status-prev-text:     var(--status-prev);    /* margine ampio */
   --destructive-text:     var(--destructive);    /* 5,85:1 */
