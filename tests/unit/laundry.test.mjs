@@ -198,6 +198,15 @@ section("authorize() — policy del modulo Laundry");
   check("staff può liberare un turno della Direzione", authorize(staff, "clearDirezione") === true);
   check("staff può leggere la griglia settimanale", authorize(staff, "week") === true);
 
+  // Le regole ricorrenti sono da sistemista in tutto il pannello, come la
+  // gemella recurringAddSpace in common-spaces: creare una regola prenota
+  // uno slot ogni settimana per sempre, e solo il sistemista può poi
+  // elencarla, sospenderla o cancellarla.
+  check("staff NON può creare una regola ricorrente", authorize(staff, "recurringAddLaundry") === false);
+  check("FDO NON può creare una regola ricorrente", authorize(fdo, "recurringAddLaundry") === false);
+  check("sistemista può creare una regola ricorrente", authorize(sistemista, "recurringAddLaundry") === true);
+  check("senza sessione non si crea una regola ricorrente", authorize(null, "recurringAddLaundry") === false);
+
   check("nessuno non autenticato può agire", authorize(null, "week") === false);
 
   check("azione di un altro modulo -> null (non 'affar mio')", authorize(sistemista, "accountCreate") === null);

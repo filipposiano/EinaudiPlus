@@ -81,12 +81,19 @@ export function CambiaPasswordObbligata({ onFatto }: { onFatto: () => void }) {
 // Lavanderia / Cinema / Musica, e compaiono li' solo dopo l'accesso.
 export function AdminLoginSheet({ onClose, onSession }: {
   onClose: () => void;
-  onSession: (role: Role | null) => void;
+  // Il secondo argomento dice se il titolare deve ancora scegliere una
+  // password sua: chi entra con la provvisoria deve trovarsi il cambio
+  // password subito (vedi il gate in App.tsx), non scoprirlo alla prima
+  // azione rifiutata dal server.
+  onSession: (role: Role | null, deveCambiarePassword?: boolean) => void;
 }) {
   function done() {
     fetch("/api/admin/auth")
       .then((r) => r.json())
-      .then((d) => { onSession(d.logged ? (d.role as Role) : null); onClose(); })
+      .then((d) => {
+        onSession(d.logged ? (d.role as Role) : null, Boolean(d.deve_cambiare_password));
+        onClose();
+      })
       .catch(() => onSession(null));
   }
 

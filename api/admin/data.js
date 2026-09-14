@@ -22,7 +22,7 @@ import { logAdminAction } from "../../src/shared/audit/auditLog.js";
 import { wrapHandler } from "../../src/shared/errors/wrapHandler.js";
 
 import {
-  currentAdmin, accountByUsername,
+  currentAdmin, accountByUsername, clearSessionCookie, sessioneAncoraValida,
   authorize as identityAuthorize,
   listAccounts, createAccount, resetAccountPassword, setAccountActive, deleteAccount,
   changeOwnPassword,
@@ -124,7 +124,37 @@ export default wrapHandler("admin/data", async (req, res) => {
     return json(res, 403, { ok: false, error: "permesso negato" });
   }
 
-  // Chi ha ancora la password provvisoria non puo' fare altro che cambiarla.
+  // Lo stato dell'account, riletto a ogni azione. Serve a due controlli
+  // diversi, ed e' una lettura sola per entrambi.
+  //
+  // `null` distingue "il database non ha risposto" da "l'account non c'e'
+  // piu'": il primo caso lascia passare (vedi sotto), il secondo no.
+  let row;
+  let rowLetta = true;
+  try {
+    row = await accountByUsername(me.u);
+  } catch {
+    rowLetta = false;
+  }
+
+  // 1. Sessione revocata: l'account e' stato disattivato o eliminato mentre
+  //    il cookie era ancora in giro.
+  //
+  // Il token e' firmato e dura 12 ore, e currentAdmin() verifica solo firma,
+  // scadenza e ruolo — non puo' sapere che nel frattempo il sistemista ha
+  // premuto "Disattiva". Senza questo controllo quel pulsante non buttava
+  // fuori nessuno fino alla scadenza naturale, cioe' proprio nel caso in cui
+  // serve (account compromesso, persona che se ne va).
+  //
+  // Solo su una risposta VERA del database: se la lettura e' fallita si
+  // prosegue, come prima e per lo stesso motivo — ogni azione qui sotto
+  // finisce comunque sul database, e con il database muto fallisce da sola.
+  if (rowLetta && !sessioneAncoraValida(row)) {
+    clearSessionCookie(res);
+    return json(res, 401, { ok: false, error: "sessione non piu' valida" });
+  }
+
+  // 2. Chi ha ancora la password provvisoria non puo' fare altro che cambiarla.
   //
   // Il pannello lo impedisce gia' con una schermata che sostituisce qualunque
   // scheda, ma quella e' una cortesia verso chi il pannello lo usa: `curl` o
@@ -136,22 +166,12 @@ export default wrapHandler("admin/data", async (req, res) => {
   // Conta perche' la provvisoria e' la password piu' debole del sistema: la
   // detta un admin a voce o per messaggio, ed era proprio quella a restare
   // buona a tempo indeterminato per chi non apriva il pannello.
-  if (action !== "accountChangeOwnPassword") {
-    let deveCambiare = false;
-    try {
-      const row = await accountByUsername(me.u);
-      deveCambiare = Boolean(row?.deve_cambiare_password);
-    } catch {
-      // Database muto: si lascia passare, ma non e' una falla — ogni azione
-      // qui sotto finisce comunque sul database e fallira' da sola.
-    }
-    if (deveCambiare) {
-      return json(res, 403, {
-        ok: false,
-        error: "cambia la password provvisoria prima di continuare",
-        deve_cambiare_password: true,
-      });
-    }
+  if (action !== "accountChangeOwnPassword" && Boolean(row?.deve_cambiare_password)) {
+    return json(res, 403, {
+      ok: false,
+      error: "cambia la password provvisoria prima di continuare",
+      deve_cambiare_password: true,
+    });
   }
 
   let result;

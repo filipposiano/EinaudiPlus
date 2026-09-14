@@ -38,6 +38,7 @@ import {
 // ha una sessione admin e non deve scaricarne il codice.
 const AdminScreens   = lazy(() => import("./AdminPanel").then((m) => ({ default: m.AdminScreens })));
 const AdminLoginSheet = lazy(() => import("./AdminPanel").then((m) => ({ default: m.AdminLoginSheet })));
+const CambiaPasswordObbligata = lazy(() => import("./AdminPanel").then((m) => ({ default: m.CambiaPasswordObbligata })));
 
 // Le sezioni amministrative sono destinazioni di navigazione come le altre,
 // non un pannello a parte: chi ha la sessione le trova nella stessa lista di
@@ -661,6 +662,10 @@ export default function App() {
   // un'autorizzazione.
   const [adminRole, setAdminRole] = useState<AdminRole | null>(null);
   const [adminLoginOpen, setAdminLoginOpen] = useState(false);
+  // Chi è entrato con la password provvisoria non deve poter fare altro che
+  // cambiarla, e deve trovarsela davanti SUBITO — non scoprirlo più tardi,
+  // provando a fare qualcosa che il server rifiuta. Vedi il gate più sotto.
+  const [deveCambiarePassword, setDeveCambiarePassword] = useState(false);
   const isAdmin = adminRole !== null;
 
   // Un solo punto in cui la sessione amministrativa cambia, da qualunque parte
@@ -679,9 +684,12 @@ export default function App() {
   // invece di un logout, che lasciava prenotare come DIREZIONE finché quella
   // richiesta non falliva a sua volta lato server (vedi SESSIONE_SCADUTA
   // sotto, e adminAction() in api.ts).
-  const handleAdminSession = useCallback((r: AdminRole | null) => {
+  const handleAdminSession = useCallback((r: AdminRole | null, deveCambiare = false) => {
     setAdminRole(r);
-    // Traccia locale: dice ad adminRole() se al prossimo avvio vale la pena
+    // Chi non ha (più) una sessione non ha nemmeno una password provvisoria
+    // da cambiare: il gate si spegne insieme al ruolo.
+    setDeveCambiarePassword(r !== null && deveCambiare);
+    // Traccia locale: dice ad adminSession() se al prossimo avvio vale la pena
     // chiedere al server. Vedi il commento in api.ts — non è autorizzazione.
     api.markAdminSeen(r !== null);
     if (r === null && localStorage.getItem("laundryhub.room") === api.DIREZIONE) {
@@ -691,7 +699,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    api.adminRole().then((r) => handleAdminSession((r as AdminRole) ?? null));
+    api.adminSession().then(({ role, deveCambiarePassword: deve }) =>
+      handleAdminSession((role as AdminRole) ?? null, deve));
   }, [handleAdminSession]);
 
   // Chi esce (o la cui sessione scade) mentre sta guardando una sezione
@@ -953,11 +962,39 @@ export default function App() {
     <Suspense fallback={null}>
       <AdminLoginSheet
         onClose={() => setAdminLoginOpen(false)}
-        onSession={(r) => {
-          handleAdminSession(r);
+        onSession={(r, deveCambiare) => {
+          handleAdminSession(r, deveCambiare);
           if (r && roomNumber !== api.DIREZIONE) chooseRoom(api.DIREZIONE);
         }} />
     </Suspense>
+  );
+
+  // La password provvisoria si cambia PRIMA di qualunque altra cosa.
+  //
+  // Il divieto vero è lato server (api/admin/data.js rifiuta ogni azione
+  // tranne il cambio password), ma finché questo gate non c'era lo si
+  // scopriva solo sbattendoci contro: si entrava, si atterrava in lavanderia
+  // come DIREZIONE, e la prima prenotazione falliva con un messaggio che
+  // arrivava a cose fatte. La schermata dentro AdminScreens copriva solo chi
+  // apriva una sezione amministrativa — non chi restava nell'app normale.
+  //
+  // Sta qui e non dentro il pannello perché una sessione admin cambia cosa
+  // fa l'app INTERA (si prenota come DIREZIONE): il momento in cui la
+  // password provvisoria è ancora buona non deve esistere in nessuna
+  // schermata, non solo nelle sezioni riservate.
+  const cambioPasswordGate = deveCambiarePassword && (
+    <div className="absolute inset-0 z-[60] overflow-y-auto" style={{ background:"var(--background)" }}>
+      <Suspense fallback={null}>
+        <CambiaPasswordObbligata
+          onFatto={() => {
+            // Rilegge dal server invece di fidarsi: è il server ad avere
+            // l'ultima parola su quando l'obbligo è soddisfatto.
+            api.adminSession().then(({ role, deveCambiarePassword: deve }) =>
+              handleAdminSession((role as AdminRole) ?? null, deve));
+          }}
+        />
+      </Suspense>
+    </div>
   );
 
   const reminderPromptSheet = reminderPrompt && roomNumber && (
@@ -973,6 +1010,7 @@ export default function App() {
         {showChrome && <InstallPrompt lang={lang}/>}
         {accessibilityModal}
         {adminLoginSheet}
+        {cambioPasswordGate}
         {reminderPromptSheet}
         <DesktopSidebar
           lang={lang}
@@ -1015,6 +1053,7 @@ export default function App() {
         {showChrome && <InstallPrompt lang={lang}/>}
         {accessibilityModal}
         {adminLoginSheet}
+        {cambioPasswordGate}
         {reminderPromptSheet}
 
         <div className="flex items-center justify-between px-7 pt-3 pb-0 shrink-0 mt-2 md:mt-0">

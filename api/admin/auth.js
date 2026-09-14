@@ -14,7 +14,7 @@ import { readBody, json, methodOk } from "../_lib/http.js";
 import { logAdminAction } from "../../src/shared/audit/auditLog.js";
 import {
   authenticate, issueToken, setSessionCookie, clearSessionCookie,
-  currentAdmin, adminConfigured, accountByUsername,
+  currentAdmin, adminConfigured, accountByUsername, sessioneAncoraValida,
 } from "../../src/modules/identity/index.js";
 import { checkRateLimit, clientIp } from "../../src/shared/http/rateLimit.js";
 import { wrapHandler } from "../../src/shared/errors/wrapHandler.js";
@@ -30,14 +30,23 @@ export default wrapHandler("admin/auth", async (req, res) => {
     // qui che l'obbligo viene imposto: quello lo fa data.js a ogni azione,
     // perché una schermata si aggira parlando all'API direttamente.
     let deveCambiare = false;
+    let revocato = false;
     if (me) {
       try {
         const row = await accountByUsername(me.u);
-        deveCambiare = Boolean(row?.deve_cambiare_password);
+        // Account disattivato o eliminato mentre il cookie era ancora in
+        // giro: qui si risponde "non loggato" così il client si allinea da
+        // solo (nasconde le sezioni, lascia l'identità DIREZIONE). Il
+        // divieto vero resta su data.js, che rifiuta ogni azione: questa è
+        // la cortesia che evita di mostrare un pannello che poi dà 401.
+        if (!sessioneAncoraValida(row)) revocato = true;
+        else deveCambiare = Boolean(row.deve_cambiare_password);
       } catch { /* se il database non risponde non si blocca comunque l'accesso */ }
     }
+    if (revocato) clearSessionCookie(res);
+    const attivo = Boolean(me) && !revocato;
     return json(res, 200, {
-      ok: true, logged: Boolean(me), user: me?.u || null, role: me?.r || null,
+      ok: true, logged: attivo, user: attivo ? me.u : null, role: attivo ? me.r : null,
       deve_cambiare_password: deveCambiare,
     });
   }

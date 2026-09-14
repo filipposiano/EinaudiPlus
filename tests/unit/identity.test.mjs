@@ -14,6 +14,7 @@ import { authenticate } from "../../src/modules/identity/application/authenticat
 import { changeOwnPassword } from "../../src/modules/identity/application/changeOwnPassword.js";
 import { createAccount, resetAccountPassword } from "../../src/modules/identity/application/manageAccounts.js";
 import { authorize, isSysadmin, isStaff, isValidRole } from "../../src/modules/identity/domain/roles.js";
+import { sessioneAncoraValida } from "../../src/modules/identity/domain/sessionState.js";
 import { issueToken, readToken } from "../../src/modules/identity/infrastructure/sessionToken.js";
 import { hashPassword, verifyPassword } from "../../src/modules/identity/infrastructure/passwordHasher.js";
 
@@ -179,6 +180,33 @@ section("issueToken() / readToken()");
   check("un token con un ruolo fuori whitelist viene rifiutato", readToken(tokenRuoloVecchio, secret) === null);
 
   check("senza segreto configurato, nessun token è valido", readToken(token, null) === null);
+}
+
+// ─── Revoca della sessione ───────────────────────────────────────────────────
+//
+// Il token dura 12 ore e readToken() non sa nulla del database: è questa
+// regola a dire che un cookie ancora firmato bene non vale più, perché nel
+// frattempo l'account è stato disattivato o eliminato. Senza, "Disattiva"
+// nella scheda Account non buttava fuori nessuno fino alla scadenza.
+
+section("sessioneAncoraValida()");
+{
+  check("account attivo: sessione valida",
+    sessioneAncoraValida({ id: 1, attivo: true }) === true);
+
+  check("account disattivato: sessione non più valida",
+    sessioneAncoraValida({ id: 1, attivo: false }) === false);
+
+  check("account eliminato (nessuna riga): sessione non più valida",
+    sessioneAncoraValida(null) === false);
+
+  check("riga senza id: sessione non più valida",
+    sessioneAncoraValida({ attivo: true }) === false);
+
+  // Si nega solo davanti a un "no" esplicito: una riga senza il campo non
+  // deve sloggiare nessuno per una lettura parziale.
+  check("riga senza il campo attivo: sessione valida",
+    sessioneAncoraValida({ id: 1 }) === true);
 }
 
 // ─── Esito ───────────────────────────────────────────────────────────────────
