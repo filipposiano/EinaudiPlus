@@ -60,7 +60,7 @@ export const TIME_SLOTS = buildSlots();
  */
 export const WEEKLY_QUOTA = 2;
 
-export const APP_VERSION = "0.9.9";
+export const APP_VERSION = "1.0.0";
 
 // ─── "Adesso" ────────────────────────────────────────────────────────────────
 //
@@ -88,8 +88,54 @@ export const TODAY_DOW = NOW.dayIdx;
 export const CUR_SLOT  = NOW.slotIdx;
 export const PREV_SLOT = CUR_SLOT - 1;
 
+/**
+ * Anteprima del lunedì della settimana prossima: da sabato alle 20:00 a
+ * lunedì alle 07:00 (domenica intera compresa) — lo stesso confine finale di
+ * nowInfo/current_laundry_week_start lato server (vedi supabase/functions.sql
+ * e migrations/033). In questa finestra il server risolve già le scritture e
+ * le letture del giorno 0 sulla settimana dopo (laundry_week_start_for_day):
+ * qui si decide solo come MOSTRARLO, non se prenotarlo lì — quello lo fa il
+ * server, comunque, anche se questo calcolo lato client sbagliasse per un
+ * orologio scentrato.
+ *
+ * Calcolato su `new Date()` diretto, non su NOW.base: quest'ultimo è già
+ * spostato di un giorno prima delle 07:00 (per i turni che scavalcano la
+ * mezzanotte) e mischiare i due spostamenti avrebbe reso la finestra un'ora
+ * più corta o più lunga a seconda del momento.
+ */
+function computaAnteprimaLunedi(d = new Date()) {
+  const dow = d.getDay();   // 0=domenica … 6=sabato (nativo di Date)
+  const hh  = d.getHours();
+  if (dow === 6) return hh >= 20;   // sabato sera
+  if (dow === 0) return true;       // domenica, tutta
+  if (dow === 1) return hh < 7;     // lunedì presto: la settimana non è ancora girata
+  return false;
+}
+export const ANTEPRIMA_LUNEDI = computaAnteprimaLunedi();
+
+// L'ordine in cui i sette giorni si mostrano nelle viste a griglia
+// (Giornaliero, Settimana): normalmente 0..6 (Lun..Dom). Durante l'anteprima
+// il lunedì (0) passa in fondo — è quello di cui si vede in anticipo la
+// prenotabilità, non quello che si sta vivendo — lasciando gli altri sei
+// nel loro ordine e posto di sempre.
+export const ORDINE_GIORNI: readonly number[] = ANTEPRIMA_LUNEDI ? [1, 2, 3, 4, 5, 6, 0] : [0, 1, 2, 3, 4, 5, 6];
+
+// La posizione di ciascun giorno nell'ordine qui sopra: serve per capire "è
+// prima o dopo oggi" quando l'ordine di visualizzazione non coincide più con
+// il numero del giorno (during l'anteprima, il lunedì vale 0 ma si mostra
+// per ultimo).
+const RANGO_GIORNI: number[] = new Array(7);
+ORDINE_GIORNI.forEach((giorno, pos) => { RANGO_GIORNI[giorno] = pos; });
+export { RANGO_GIORNI };
+
 const MONDAY = new Date(NOW.base.getFullYear(), NOW.base.getMonth(), NOW.base.getDate() - TODAY_DOW);
-export const WEEK_DATES = Array.from({ length: 7 }, (_, i) => new Date(MONDAY.getFullYear(), MONDAY.getMonth(), MONDAY.getDate() + i));
+export const WEEK_DATES = Array.from({ length: 7 }, (_, i) => {
+  const d = new Date(MONDAY.getFullYear(), MONDAY.getMonth(), MONDAY.getDate() + i);
+  // Il lunedì che si vede durante l'anteprima è già quello della settimana
+  // dopo: la data mostrata deve dirlo, non restare quella del lunedì appena
+  // passato.
+  return (i === 0 && ANTEPRIMA_LUNEDI) ? new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7) : d;
+});
 export const DAYS_DATE  = WEEK_DATES.map((d) => d.getDate());
 
 /**
@@ -209,11 +255,19 @@ export function myWeekBookings(week: WeekData, room: string): MyBooking[] {
       }
     }
   }
-  out.sort((a, b) => a.day - b.day || a.slot - b.slot);
+  // Per rango di visualizzazione, non per numero di giorno grezzo: durante
+  // l'anteprima (vedi ANTEPRIMA_LUNEDI) il giorno 0 e' il lunedi' della
+  // settimana dopo, il piu' futuro di tutti, non il piu' vicino — ordinarlo
+  // per "day - day" lo avrebbe messo per primo invece che per ultimo.
+  out.sort((a, b) => RANGO_GIORNI[a.day] - RANGO_GIORNI[b.day] || a.slot - b.slot);
   return out;
 }
 
-export const isPastBooking    = (b: MyBooking) => b.day < TODAY_DOW || (b.day === TODAY_DOW && b.slot < CUR_SLOT);
+// Per rango, non per valore grezzo del giorno: durante l'anteprima del
+// lunedi' prossimo (vedi ANTEPRIMA_LUNEDI/RANGO_GIORNI qui sopra) il giorno 0
+// e' il piu' futuro di tutti, e "b.day < TODAY_DOW" lo avrebbe segnato come
+// passato solo perche' 0 e' il numero piu' piccolo.
+export const isPastBooking    = (b: MyBooking) => RANGO_GIORNI[b.day] < RANGO_GIORNI[TODAY_DOW] || (b.day === TODAY_DOW && b.slot < CUR_SLOT);
 export const isCurrentBooking = (b: MyBooking) => b.day === TODAY_DOW && b.slot === CUR_SLOT;
 
 // ─── Preferiti ───────────────────────────────────────────────────────────────

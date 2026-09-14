@@ -7,7 +7,7 @@ import { SlotDetailSheet, type SlotDetailTarget } from "./SlotDetailSheet";
 import { FoglioSettimana } from "./FoglioSettimana";
 import { IntestazioneVista } from "./IntestazioneVista";
 import { Toast } from "../../pannelli";
-import { TIME_SLOTS, TODAY_DOW, CUR_SLOT, PREV_SLOT, DAYS_DATE, isPastBooking, type WeekData, type StatusData } from "../../modello";
+import { TIME_SLOTS, TODAY_DOW, CUR_SLOT, PREV_SLOT, DAYS_DATE, isPastBooking, ORDINE_GIORNI, RANGO_GIORNI, ANTEPRIMA_LUNEDI, type WeekData, type StatusData } from "../../modello";
 import { T, errMsg, type Lang } from "../../i18n";
 import { pianoDi, colorePiano } from "../../piani";
 import { RED, RED_FG, ORANGE, type Theme } from "../../tema";
@@ -150,15 +150,26 @@ export const WeekOverview = memo(function WeekOverview({ lang, week, status, roo
               className="flex items-end justify-center pb-2">
               <span className={`${fsDay} font-mono uppercase`} style={{ color:sub }}>{t.now}</span>
             </div>
-            {t.days.map((d, i) => {
-              const isToday = i===TODAY_DOW;
-              const isPast  = i<TODAY_DOW;
+            {ORDINE_GIORNI.map((giorno) => {
+              const isToday = giorno===TODAY_DOW;
+              const isPast  = RANGO_GIORNI[giorno]<RANGO_GIORNI[TODAY_DOW];
+              // Il lunedì spostato in fondo durante l'anteprima è l'unico
+              // giorno la cui data non segue in ordine quella prima: lo dice
+              // anche a parole, non solo con la posizione, perché una griglia
+              // che scorre in orizzontale sul telefono può nascondere che
+              // l'ultima colonna non è "domenica + 1".
+              const prossima = giorno===0 && ANTEPRIMA_LUNEDI;
               return (
-                <div key={d} className="flex flex-col items-center py-2 gap-0.5" style={dayCol}>
-                  <span className={`${fsDay} font-mono uppercase`} style={{ color:isToday?RED:isPast?`color-mix(in srgb, var(--muted-foreground) 40%, transparent)`:sub }}>{d}</span>
+                <div key={giorno} className="flex flex-col items-center py-2 gap-0.5" style={dayCol}>
+                  <span className={`${fsDay} font-mono uppercase`} style={{ color:prossima?ORANGE:isToday?RED:isPast?`color-mix(in srgb, var(--muted-foreground) 40%, transparent)`:sub }}>{t.days[giorno]}</span>
                   <div className={`${isDesktop ? "w-8 h-8" : "w-7 h-7"} rounded-full flex items-center justify-center`} style={{ background:isToday?RED:"transparent" }}>
-                    <span className="text-sm font-bold" style={{ color:isToday?RED_FG:isPast?`color-mix(in srgb, var(--muted-foreground) 40%, transparent)`:sub }}>{DAYS_DATE[i]}</span>
+                    <span className="text-sm font-bold" style={{ color:prossima?ORANGE:isToday?RED_FG:isPast?`color-mix(in srgb, var(--muted-foreground) 40%, transparent)`:sub }}>{DAYS_DATE[giorno]}</span>
                   </div>
+                  {prossima && (
+                    <span className={`${isDesktop ? "text-[9px]" : "text-[7px]"} font-bold uppercase tracking-wide text-center leading-none`} style={{ color:ORANGE }}>
+                      {t.prossimaSettimana}
+                    </span>
+                  )}
                 </div>
               );
             })}
@@ -171,12 +182,12 @@ export const WeekOverview = memo(function WeekOverview({ lang, week, status, roo
                 <span className={`${fsSlot} font-mono tabular-nums`} style={{ color:sub }}>{slot.start}</span>
               </div>
 
-              {t.days.map((_, dayIdx) => {
+              {ORDINE_GIORNI.map((dayIdx) => {
                 const dayData  = week[dayIdx] ?? {};
                 const slotData = dayData[si] ?? {};
                 const rooms    = Object.entries(slotData);
                 const isToday  = dayIdx===TODAY_DOW;
-                const isPastDay= dayIdx<TODAY_DOW;
+                const isPastDay= RANGO_GIORNI[dayIdx]<RANGO_GIORNI[TODAY_DOW];
                 const isCur    = isToday && si===CUR_SLOT;
                 const isPrevSl = isToday && si===PREV_SLOT;
                 const isPast   = isPastDay || (isToday && si<CUR_SLOT);

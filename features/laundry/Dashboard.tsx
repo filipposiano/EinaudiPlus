@@ -8,7 +8,7 @@ import * as api from "../../api";
 import {
   TIME_SLOTS, WEEKLY_QUOTA, TODAY_DOW, CUR_SLOT, DAYS_DATE, monShort, slotEndDate,
   machinesFor, deriveMachines,
-  myWeekBookings, isPastBooking, isCurrentBooking,
+  myWeekBookings, isPastBooking, isCurrentBooking, RANGO_GIORNI,
   type WeekData, type StatusData, type Machine,
   type MyBooking, type Fav,
 } from "../../modello";
@@ -83,11 +83,11 @@ export const Dashboard = memo(function Dashboard({ lang, week, status, roomNumbe
   const senzaQuota     = roomNumber === api.DIREZIONE;
   const remaining      = senzaQuota ? Infinity : WEEKLY_QUOTA - myBookings.length;
   const activeBookings = myBookings.filter((b) => !isPastBooking(b));
-  // Anche i turni gia' passati (di questa settimana) restano cancellabili: chi
-  // ha saltato un turno o ha prenotato per sbaglio deve poter liberare la
-  // quota senza aspettare che scompaia da solo a fine settimana. Vanno dopo
-  // gli attivi e in ordine dal piu' recente, cosi' l'elenco resta guidato dal
-  // "cosa mi serve adesso" e il passato non lo seppellisce.
+  // I turni gia' passati (di questa settimana) restano visibili ma non piu'
+  // cancellabili da qui: un'eliminazione su un turno concluso non libera
+  // niente di prenotabile e serve solo come storico di "chi l'aveva prima".
+  // Vanno dopo gli attivi e in ordine dal piu' recente, cosi' l'elenco resta
+  // guidato dal "cosa mi serve adesso" e il passato non lo seppellisce.
   const pastBookings   = myBookings.filter(isPastBooking).slice().reverse();
   const displayBookings = [...activeBookings, ...pastBookings];
 
@@ -124,9 +124,13 @@ export const Dashboard = memo(function Dashboard({ lang, week, status, roomNumbe
       const passato = isPastBooking({ day: f.day, slot: f.slot, mid: "W-A" });
       return { ...f, passato, mid: passato ? null : firstFreeWasherAt(f.day, f.slot) };
     })
-    // Giorno e fascia crescono insieme al tempo: ordinare per (giorno, fascia)
-    // ordina per "quanto manca", passato compreso (finisce per primo).
-    .sort((a, b) => a.day - b.day || a.slot - b.slot);
+    // Per rango di visualizzazione e non per numero di giorno grezzo, per lo
+    // stesso motivo di myWeekBookings in modello.ts: durante l'anteprima del
+    // lunedì prossimo il giorno 0 è il più lontano nel tempo, non il più
+    // vicino. A parità di rango, la fascia cresce col tempo: ordinare per
+    // (rango, fascia) ordina per "quanto manca", passato compreso (finisce
+    // per primo).
+    .sort((a, b) => RANGO_GIORNI[a.day] - RANGO_GIORNI[b.day] || a.slot - b.slot);
 
   async function cancelBooking(b: MyBooking) {
     try {
@@ -275,11 +279,17 @@ export const Dashboard = memo(function Dashboard({ lang, week, status, roomNumbe
                         dirlo. Si ferma da solo per chi ha chiesto meno
                         animazioni al sistema (vedi style.css). */}
                     {cur && <span className="size-2 rounded-full shrink-0 lampeggia" style={{ background:RED }}/>}
-                    <button onClick={()=>cancelBooking(b)} aria-label={t.delete}
-                      className="p-2 rounded-lg shrink-0 transition-all active:scale-90"
-                      style={{ background:"var(--secondary)", color:sub }}>
-                      <Trash2 size={14}/>
-                    </button>
+                    {/* Un turno passato non si cancella piu' da qui: non c'e'
+                        niente da liberare, e mostrare comunque il cestino
+                        invitava a un'azione senza effetto. Resta visibile,
+                        solo senza il pulsante. */}
+                    {!past && (
+                      <button onClick={()=>cancelBooking(b)} aria-label={t.delete}
+                        className="p-2 rounded-lg shrink-0 transition-all active:scale-90"
+                        style={{ background:"var(--secondary)", color:sub }}>
+                        <Trash2 size={14}/>
+                      </button>
+                    )}
                   </div>
                 );
               })

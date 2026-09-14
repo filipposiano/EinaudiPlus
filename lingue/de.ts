@@ -69,6 +69,7 @@ const de: Testi = {
   autoWash: (_end: string) => `Der zugehörige Trockner wird automatisch für das nächste Zeitfenster reserviert.`,
   daily:    "Täglich", weekly: "Woche", overview: "Übersicht",
   thisWeek: "Aktuelle Woche",
+  prossimaSettimana: "Nächste Woche",
   confirm:  "Bestätigen", cancel: "Abbrechen", modify: "Zimmer ändern", delete: "Buchung löschen",
   forMe:    (r: string) => `Für mich — Zimmer ${r}`,
   forOther: "Für jemand anderen",

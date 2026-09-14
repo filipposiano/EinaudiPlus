@@ -86,6 +86,9 @@ const it = {
   autoWash: (_end: string): string => `Lavatrice corrispondente prenotata automaticamente per il turno successivo.`,
   daily:    "Giornaliero", weekly: "Settimana", overview: "Panoramica",
   thisWeek: "Settimana corrente",
+  // Etichetta sul lunedì che compare in anticipo dal sabato sera: dice che
+  // quel giorno appartiene già alla settimana dopo, non a quella in corso.
+  prossimaSettimana: "Settimana prossima",
   confirm:  "Conferma", cancel: "Annulla", modify: "Modifica stanza", delete: "Elimina prenotazione",
   forMe:    (r: string): string => `Per me — Camera ${r}`,
   forOther: "Per qualcun altro",

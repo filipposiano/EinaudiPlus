@@ -246,8 +246,18 @@ function DesktopSidebar({ lang, roomNumber, showNav, facility, onFacility, admin
 
             Queste tre sono pagine come le altre — stesso `onFacility` delle
             strutture qui sopra — solo raggruppate qui perche' non sono
-            strutture. */}
-        {PAGINE_UTILITA.map(({ id, chiave }) => {
+            strutture.
+
+            Gate su showNav come le liste qui sopra: prima erano sempre
+            visibili, anche a schermata di accesso ancora aperta (roomNumber
+            null, prima di "Continua senza accedere"). Da li' si poteva
+            aprire Impostazioni, che pero' non ha un pulsante indietro suo —
+            l'unico modo di tornare era la pastiglia "Cambia camera" qui
+            sotto, nascosta esattamente perche' non c'e' ancora una camera:
+            un vicolo cieco raggiungibile solo da desktop, perche' sul
+            telefono l'hamburger che apre queste stesse voci e' gia' dietro
+            lo stesso showChrome. */}
+        {showNav && PAGINE_UTILITA.map(({ id, chiave }) => {
           const Icona = id === "guasto" ? Wrench : id === "impostazioni" ? Settings : MessageSquare;
           const attiva = facility === id;
           return (

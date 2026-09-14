@@ -78,10 +78,17 @@ returns table (
 
   union all
 
-  -- 2. La lavatrice ha finito: il bucato va spostato.
+  -- 2. La lavatrice sta per finire: il bucato andra' spostato.
+  --
+  -- Anticipato di 15 minuti rispetto alla fine turno (fire_at resta la fine
+  -- vera: e' il momento a cui il promemoria si riferisce, non quando parte).
+  -- Con la finestra di grazia di 10 minuti di claim_due_reminders, il
+  -- promemoria diventa dovuto fra 15 e 5 minuti prima della fine — non piu'
+  -- a cose gia' fatte, cosi' chi lo legge fa in tempo ad arrivare in
+  -- lavanderia proprio quando la lavatrice si ferma davvero.
   select 'washerend',
          t.ss + make_interval(mins => t.slot_len_min),
-         t.ss + make_interval(mins => t.slot_len_min),
+         t.ss + make_interval(mins => t.slot_len_min) - interval '15 minutes',
          'Sposta i vestiti in asciugatrice!',
          t.nome_asc || ' · ' || t.h_asc_da || '–' || t.h_asc_a,
          'laundry-' || t.day || '-' || t.slot || '-' || t.machine_code
@@ -89,10 +96,12 @@ returns table (
 
   union all
 
-  -- 3. Anche l'asciugatrice ha finito.
+  -- 3. Anche l'asciugatrice sta per finire. Stesso anticipo di 'washerend' e
+  -- per lo stesso motivo: il ritiro arriva prima che il cestello si sia gia'
+  -- fermato da un pezzo.
   select 'dryerend',
          t.ss + make_interval(mins => 2 * t.slot_len_min),
-         t.ss + make_interval(mins => 2 * t.slot_len_min),
+         t.ss + make_interval(mins => 2 * t.slot_len_min) - interval '15 minutes',
          'Ritira i tuoi vestiti!',
          t.nome_asc || ' · ' || t.h_asc_da || '–' || t.h_asc_a,
          'laundry-' || t.day || '-' || t.slot || '-' || t.machine_code

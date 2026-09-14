@@ -16,6 +16,7 @@ import * as roomsApi from "../../roomsApi";
 import type { RoomKind, RoomBooking, CinemaType } from "../../roomsApi";
 import RuotaPicker from "../../RuotaPicker";
 import { Toast } from "../../pannelli";
+import { pianoDi, colorePiano } from "../../piani";
 
 // Le stesse sei lingue dell'app: il tipo arriva da i18n, cosi' non si puo'
 // aggiungere una lingua di la' e dimenticarla di qua.
@@ -495,7 +496,7 @@ function RulesModal({ room, lang, onClose }: { room: RoomKind; lang: Lang; onClo
 }
 
 // ─── Timeline giornaliera ──────────────────────────────────────────────────────
-function Timeline({ room, bookings }: { room: RoomKind; bookings: RoomBooking[] }) {
+function Timeline({ room, bookings, myRoom }: { room: RoomKind; bookings: RoomBooking[]; myRoom: string }) {
   const { winStart, winEnd } = ROOM_CFG[room];
   // Fine "normalizzata": una fascia che termina a 00:00 (o oltre la mezzanotte)
   // arriva con end ≤ start → la trattiamo come +24h (00:00 = 24:00 = 1440).
@@ -523,19 +524,31 @@ function Timeline({ room, bookings }: { room: RoomKind; bookings: RoomBooking[] 
             style={{ left: pct(m), background: "color-mix(in srgb, var(--foreground) 8%, transparent)" }} />
         ))}
         {bookings.map((b) => {
-          const open = b.type === "open";
           const left = Math.max(b.start, winStart);
           const right = Math.min(endOf(b), spanEnd);
+          // Stessa logica della lavanderia (vedi DayView.tsx): la camera dice
+          // il piano, e il piano dice il colore — cosi' una camera si
+          // riconosce a colpo d'occhio nello stesso modo in ogni sala, non
+          // solo in lavanderia. Mescolato col bianco, non con lo sfondo
+          // scuro/chiaro del tema: resta un pastello leggibile con testo
+          // scuro qualunque sia il tema, invece di restare scuro anch'esso in
+          // tema scuro. Chi non ha un piano riconoscibile (DIREZIONE, un nome
+          // libero) resta sul colore pieno di prima — aperto/privato per il
+          // cinema, che qui e' l'unica informazione che resta da distinguere.
+          const piano = pianoDi(b.name);
+          const isMe = !!myRoom && b.name.trim().toUpperCase() === myRoom.trim().toUpperCase();
+          const open = b.type === "open";
+          const pieno = open ? `color-mix(in srgb, ${RED} 82%, transparent)` : `color-mix(in srgb, ${OOS} 72%, transparent)`;
           return (
             <div key={b.id} className="absolute top-0 bottom-0 flex flex-col items-center justify-center overflow-hidden px-1 gap-0.5"
               title={`${b.name} · ${fmtMin(b.start)}–${fmtMin(b.end)}`}
               style={{
                 left: pct(left), width: `${((right - left) / span) * 100}%`, minWidth: "10px",
-                background: open ? `color-mix(in srgb, ${RED} 82%, transparent)` : `color-mix(in srgb, ${OOS} 72%, transparent)`,
+                background: piano ? `color-mix(in srgb, ${colorePiano(piano)} ${isMe ? 72 : 32}%, white)` : pieno,
                 borderLeft: "1px solid var(--background)",
               }}>
-              <span className="text-[11px] font-semibold leading-none truncate w-full text-center" style={{ color: "#fff" }}>{b.name}</span>
-              <span className="text-[9px] font-mono leading-none truncate w-full text-center" style={{ color: "rgba(255,255,255,0.85)" }}>{fmtMin(b.start)}–{fmtMin(b.end)}</span>
+              <span className="text-[11px] font-semibold leading-none truncate w-full text-center" style={{ color: piano ? "#111" : "#fff" }}>{b.name}</span>
+              <span className="text-[9px] font-mono leading-none truncate w-full text-center" style={{ color: piano ? "rgba(0,0,0,0.65)" : "rgba(255,255,255,0.85)" }}>{fmtMin(b.start)}–{fmtMin(b.end)}</span>
             </div>
           );
         })}
@@ -771,7 +784,7 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
         </div>
 
         {/* Timeline occupazione */}
-        <Timeline room={room} bookings={dayBookings} />
+        <Timeline room={room} bookings={dayBookings} myRoom={myRoom} />
 
         {/* Form nuova prenotazione */}
         <div className="rounded-2xl border p-4 mb-4" style={{ background: surf, borderColor: div }}>

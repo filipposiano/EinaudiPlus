@@ -5,7 +5,7 @@ import { BookModal, type BookTarget } from "./BookModal";
 import { ModifyModal, type ModifyTarget } from "./ModifyModal";
 import { IntestazioneVista } from "./IntestazioneVista";
 import { Toast } from "../../pannelli";
-import { TIME_SLOTS, TODAY_DOW, CUR_SLOT, PREV_SLOT, DAYS_DATE, machinesFor, type WeekData, type StatusData, type Fav } from "../../modello";
+import { TIME_SLOTS, TODAY_DOW, CUR_SLOT, PREV_SLOT, DAYS_DATE, machinesFor, ORDINE_GIORNI, RANGO_GIORNI, ANTEPRIMA_LUNEDI, type WeekData, type StatusData, type Fav } from "../../modello";
 import { T, errMsg, type Lang } from "../../i18n";
 import { pianoDi, colorePiano } from "../../piani";
 import { RED, RED_FG, ORANGE, ORANGE_T, type Theme } from "../../tema";
@@ -77,15 +77,23 @@ export const DaySchedule = memo(function DaySchedule({ lang, week, status, roomN
 
       <div className="px-5 pb-2 shrink-0">
         <div className="grid grid-cols-7 gap-1">
-          {t.days.map((d, i) => {
-            const isActive = i===selDay;
-            const isPast   = i<TODAY_DOW;
+          {ORDINE_GIORNI.map((giorno) => {
+            const isActive = giorno===selDay;
+            const isPast   = RANGO_GIORNI[giorno]<RANGO_GIORNI[TODAY_DOW];
+            // Vedi WeekView: il lunedì in fondo, durante l'anteprima, è
+            // quello della settimana dopo — lo dice anche a parole.
+            const prossima = giorno===0 && ANTEPRIMA_LUNEDI;
             return (
-              <button key={d} onClick={()=>setSelDay(i)}
+              <button key={giorno} onClick={()=>setSelDay(giorno)}
                 className="flex flex-col items-center py-1.5 rounded-xl transition-colors"
-                style={{ background:isActive?RED:"transparent", color:isActive?RED_FG:isPast?"color-mix(in srgb, var(--muted-foreground) 40%, transparent)":sub }}>
-                <span className="text-[9px] font-mono uppercase leading-none mb-0.5">{d}</span>
-                <span className="text-sm font-bold leading-none">{DAYS_DATE[i]}</span>
+                style={{ background:isActive?RED:"transparent", color:isActive?RED_FG:prossima?ORANGE:isPast?"color-mix(in srgb, var(--muted-foreground) 40%, transparent)":sub }}>
+                <span className="text-[9px] font-mono uppercase leading-none mb-0.5">{t.days[giorno]}</span>
+                <span className="text-sm font-bold leading-none">{DAYS_DATE[giorno]}</span>
+                {prossima && !isActive && (
+                  <span className="text-[6px] font-bold uppercase tracking-wide leading-none mt-0.5" style={{ color:ORANGE }}>
+                    {t.prossimaSettimana}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -106,7 +114,7 @@ export const DaySchedule = memo(function DaySchedule({ lang, week, status, roomN
         {TIME_SLOTS.map((slot, si) => {
           const isCur  = si===CUR_SLOT  && selDay===TODAY_DOW;
           const isPrev = si===PREV_SLOT && selDay===TODAY_DOW;
-          const isPast = selDay<TODAY_DOW || (selDay===TODAY_DOW && si<CUR_SLOT);
+          const isPast = RANGO_GIORNI[selDay]<RANGO_GIORNI[TODAY_DOW] || (selDay===TODAY_DOW && si<CUR_SLOT);
           const isFav  = favs.some((f) => f.day === selDay && f.slot === si);
           return (
             <div key={slot.start} className="flex items-center px-5 relative"

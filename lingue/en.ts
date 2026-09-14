@@ -69,6 +69,7 @@ const en: Testi = {
   autoWash: (_end: string) => `Corresponding dryer auto-reserved for the next slot.`,
   daily:    "Daily", weekly: "Week", overview: "Overview",
   thisWeek: "Current week",
+  prossimaSettimana: "Next week",
   confirm:  "Confirm", cancel:  "Cancel", modify: "Edit room", delete: "Delete booking",
   forMe:    (r: string) => `For me — Room ${r}`,
   forOther: "For someone else",
