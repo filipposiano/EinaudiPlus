@@ -65,7 +65,13 @@ export default wrapHandler("admin/auth", async (req, res) => {
 
   // Cinque tentativi ogni quarto d'ora per IP. Senza questo, una password
   // sola e condivisa è attaccabile a forza bruta con tutta calma.
-  if (!(await checkRateLimit("admin-login", clientIp(req), 5, 900))) {
+  //
+  // `failOpen: false` è l'eccezione al default del resto dell'app: qui, se è
+  // il contatore stesso a non rispondere, si nega invece di lasciar passare
+  // (la motivazione per esteso sta in shared/http/rateLimit.js). Il messaggio
+  // resta lo stesso nei due casi — non è compito di questa risposta dire a un
+  // estraneo se la porta è chiusa a chiave o se è il custode a stare male.
+  if (!(await checkRateLimit("admin-login", clientIp(req), 5, 900, { failOpen: false }))) {
     return json(res, 429, { ok: false, error: "troppi tentativi, riprova fra un quarto d'ora" });
   }
 

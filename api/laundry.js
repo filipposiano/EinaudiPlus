@@ -53,6 +53,29 @@ export default wrapHandler("laundry", async (req, res) => {
       }));
 
     case "clear":
+      // Un secondo limite, più stretto, solo per la cancellazione.
+      //
+      // L'identità qui è autodichiarata — chiunque può dire "sono la 214" e
+      // liberare il suo turno — ed è una scelta voluta: la lavanderia è un
+      // posto fisico, fondato sulla fiducia fra chi ci abita. Ma "non
+      // verifichiamo chi sei" e "accettiamo qualsiasi ritmo di distruzione"
+      // sono due cose separabili, e questa riga separa la seconda dalla
+      // prima. Col solo limite generale (60 richieste ogni 10 minuti) una
+      // griglia settimanale intera — 7 giorni × 19 turni × 3 macchine, circa
+      // 400 caselle — si svuota da un solo IP in poco più di un'ora.
+      //
+      // Quindici ogni dieci minuti è invisibile a un residente (cancella i
+      // propri turni, due o tre al giorno) e divide per quattro il ritmo del
+      // dispetto. Non è più stretto perché anche un amministratore passa di
+      // qui: App.tsx usa il percorso amministrativo SOLO sui turni della
+      // DIREZIONE, quindi una ripulita a mano sulla griglia arriva su questo
+      // contatore, e non deve inciamparci.
+      //
+      // Non ferma chi ruota gli indirizzi: sposta la vandalizzazione da "due
+      // minuti di noia" a "una cosa che devi volere davvero".
+      if (!(await checkRateLimit("laundry-clear", clientIp(req), 15, 600))) {
+        return fail(res, "troppe cancellazioni di fila, riprova fra poco", {}, 429);
+      }
       // `p_as_admin` NON si manda da qui, e non è una svista: questo è il
       // percorso pubblico e il valore di default nella funzione SQL è già
       // `false` (vedi laundryRepository.clear() nel modulo). Chi ha una
