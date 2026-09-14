@@ -151,7 +151,7 @@ function LoginScreen({ lang, onLogin, onAdmin }: {
         {t.usaTastiera}
       </p>
 
-      <p className="text-[10px] font-mono mt-6" style={{ color:sub }}>v. {APP_VERSION} (beta)</p>
+      <p className="text-[10px] font-mono mt-6" style={{ color:sub }}>v. {APP_VERSION}</p>
     </div>
   );
 }
@@ -269,7 +269,7 @@ function DesktopSidebar({ lang, roomNumber, showNav, facility, onFacility, admin
             </button>
           );
         })}
-        <p className="text-center text-[10px] font-mono pt-1" style={{ color:sub }}>v. {APP_VERSION} (beta)</p>
+        <p className="text-center text-[10px] font-mono pt-1" style={{ color:sub }}>v. {APP_VERSION}</p>
       </div>
     </aside>
   );
@@ -454,7 +454,7 @@ function MenuStrutture({ aperto, onClose, facility, onChange, lang, adminRole, r
               </button>
             );
           })}
-          <p className="text-center text-[10px] font-mono pt-1" style={{ color:sub }}>v. {APP_VERSION} (beta)</p>
+          <p className="text-center text-[10px] font-mono pt-1" style={{ color:sub }}>v. {APP_VERSION}</p>
         </div>
       </nav>
     </>
