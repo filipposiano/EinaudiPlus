@@ -122,6 +122,7 @@ const en: Testi = {
   navLavanderia: "Laundry", navCinema: "Cinema", navMusica: "Music",
   navMacchine: "Machines", navSegnalazioni: "Reports",
   navRicorrenti: "Recurring", navNotifiche: "Notifications", navManutenzione: "Maintenance", navTema: "Theme",
+  navCambioBiancheria: "Linen change",
   amministrazione: "Administration",
   mesiBrevi: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"],
   navLingua: "Language",
@@ -185,6 +186,9 @@ const en: Testi = {
   temaSistema: "System",
   temaChiaro: "Light",
   temaScuro: "Dark",
+  cambioBiancheriaTitolo: "Linen change",
+  cambioBiancheriaValore: (tipo: "grande" | "piccolo"): string =>
+    tipo === "grande" ? "Today is the BIG change" : "Today is the SMALL change",
 };
 
 export default en;

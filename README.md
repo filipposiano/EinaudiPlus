@@ -61,8 +61,9 @@ quest'ordine, e nient'altro:
 | 8 | `reminders.sql` | promemoria dovuti e potatura periodica |
 | 9 | `bici.sql` | dichiarazione bici per camera, vista di portineria/sistemista |
 | 10 | `tema.sql` | tema stagionale decorativo (Halloween, Natale…), acceso/spento dal sistemista |
-| 11 | `cron.sql` | job `pg_cron` (va personalizzato: contiene dei segnaposto) |
-| 12 | **`permessi.sql`** | **restringe l'esecuzione a `service_role`. Non è facoltativo** |
+| 11 | `cambio-biancheria.sql` | cambio biancheria del martedì (grande/piccolo), impostato da FDO e sistemista |
+| 12 | `cron.sql` | job `pg_cron` (va personalizzato: contiene dei segnaposto) |
+| 13 | **`permessi.sql`** | **restringe l'esecuzione a `service_role`. Non è facoltativo** |
 
 `permessi.sql` va **per ultimo** e va eseguito: agisce su tutte le funzioni
 già create, e senza di lui ognuna resta invocabile via `/rest/v1/rpc/` da

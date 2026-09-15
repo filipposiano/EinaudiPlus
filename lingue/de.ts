@@ -122,6 +122,7 @@ const de: Testi = {
   navLavanderia: "Waschküche", navCinema: "Kino", navMusica: "Musik",
   navMacchine: "Maschinen", navSegnalazioni: "Meldungen",
   navRicorrenti: "Wiederkehrend", navNotifiche: "Benachrichtigungen", navManutenzione: "Wartung", navTema: "Design",
+  navCambioBiancheria: "Wäschewechsel",
   amministrazione: "Verwaltung",
   mesiBrevi: ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"],
   navLingua: "Sprache",
@@ -185,6 +186,9 @@ const de: Testi = {
   temaSistema: "System",
   temaChiaro: "Hell",
   temaScuro: "Dunkel",
+  cambioBiancheriaTitolo: "Wäschewechsel",
+  cambioBiancheriaValore: (tipo: "grande" | "piccolo"): string =>
+    tipo === "grande" ? "Heute ist der GROSSE Wechsel" : "Heute ist der KLEINE Wechsel",
 };
 
 export default de;

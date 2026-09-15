@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "test": "node tests/run.mjs",
     "lint": "eslint src/modules",
-    "test:unit": "node tests/unit/identity.test.mjs && node tests/unit/laundry.test.mjs && node tests/unit/common-spaces.test.mjs && node tests/unit/theme.test.mjs && node tests/unit/notifications.test.mjs && node tests/unit/bikes.test.mjs && node tests/unit/feedback.test.mjs && node tests/unit/conference-room.test.mjs && node tests/unit/ops.test.mjs && node tests/unit/anteprima-lunedi.test.mjs && node tests/unit/rate-limit.test.mjs && node tests/unit/crypto.test.mjs"
+    "test:unit": "node tests/unit/identity.test.mjs && node tests/unit/laundry.test.mjs && node tests/unit/common-spaces.test.mjs && node tests/unit/theme.test.mjs && node tests/unit/notifications.test.mjs && node tests/unit/bikes.test.mjs && node tests/unit/feedback.test.mjs && node tests/unit/conference-room.test.mjs && node tests/unit/ops.test.mjs && node tests/unit/anteprima-lunedi.test.mjs && node tests/unit/rate-limit.test.mjs && node tests/unit/crypto.test.mjs && node tests/unit/linen-change.test.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.300.0",

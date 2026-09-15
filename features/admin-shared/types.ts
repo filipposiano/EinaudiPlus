@@ -6,4 +6,4 @@
 // `staff` ha gli stessi poteri di `fdo`; solo `sistemista` puo' di piu'.
 // Restano account distinti perche' l'audit log registra chi ha fatto cosa.
 export type Role = "fdo" | "staff" | "sistemista";
-export type Tab = "macchine" | "segnalazioni" | "bici" | "account" | "ricorrenti" | "notifiche" | "manutenzione" | "tema";
+export type Tab = "macchine" | "segnalazioni" | "bici" | "account" | "ricorrenti" | "notifiche" | "manutenzione" | "tema" | "cambiobiancheria";

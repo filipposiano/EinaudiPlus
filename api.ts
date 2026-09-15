@@ -15,6 +15,11 @@ export type StatusData = Record<string, string>;
  *  preferenza per residente. */
 export type TemaStagionale = "nessuno" | "halloween" | "natale";
 
+/** Il cambio biancheria della settimana corrente (martedì), impostato da FDO
+ *  e sistemista (vedi AdminPanel → Cambio biancheria). `null` finché nessun
+ *  amministratore l'ha ancora configurato. */
+export type CambioBiancheria = "grande" | "piccolo" | null;
+
 /** La camera dichiarata su questo dispositivo. */
 function currentRoom(): string {
   try {
@@ -58,7 +63,9 @@ async function postAction(action: string, payload: Record<string, unknown>) {
   return data;
 }
 
-export async function getSnapshot(): Promise<{ week: WeekData; status: StatusData; tema: TemaStagionale }> {
+export async function getSnapshot(): Promise<{
+  week: WeekData; status: StatusData; tema: TemaStagionale; cambioBiancheria: CambioBiancheria;
+}> {
   const qs = `?token=${TOKEN}&room=${encodeURIComponent(currentRoom())}`;
   const res = await fetch(`${ENDPOINT}${qs}`);
   if (!res.ok) throw new Error("Errore di rete durante il caricamento");
@@ -66,7 +73,13 @@ export async function getSnapshot(): Promise<{ week: WeekData; status: StatusDat
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || "Errore restituito dal server.");
 
-  return { week: data.week || {}, status: data.status || {}, tema: (data.tema as TemaStagionale) || "nessuno" };
+  return {
+    week: data.week || {}, status: data.status || {}, tema: (data.tema as TemaStagionale) || "nessuno",
+    // Il campo arriva già in snake_case dalla funzione SQL (stesso stile di
+    // deve_cambiare_password): niente da rimappare, solo il fallback per un
+    // campo assente (backend non ancora aggiornato) o non configurato.
+    cambioBiancheria: (data.cambio_biancheria as CambioBiancheria) ?? null,
+  };
 }
 
 export async function book(day: number, slot: number, machine: string, room: string) {
