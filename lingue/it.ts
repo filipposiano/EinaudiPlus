@@ -142,6 +142,7 @@ const it = {
   navLavanderia: "Lavanderia", navCinema: "Cinema", navMusica: "Musica",
   navMacchine: "Macchine", navSegnalazioni: "Segnalazioni",
   navRicorrenti: "Ricorrenti", navNotifiche: "Notifiche", navManutenzione: "Manutenzione", navTema: "Tema",
+  navCambioBiancheria: "Cambio biancheria",
   amministrazione: "Amministrazione",
   mesiBrevi: ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"],
   navLingua: "Lingua",
@@ -205,6 +206,12 @@ const it = {
   temaSistema: "Sistema",
   temaChiaro: "Chiaro",
   temaScuro: "Scuro",
+  // Blocco "cambio biancheria" in cima alla Dashboard, visibile solo
+  // martedì 05:00-14:00 (vedi finestraCambioBiancheriaAttiva in modello.ts).
+  cambioBiancheriaTitolo: "Cambio biancheria",
+  cambioBiancheriaValore: (tipo: "grande" | "piccolo" | "nessuno"): string =>
+    tipo === "nessuno" ? "Questa settimana non c'è cambio biancheria"
+    : tipo === "grande" ? "Oggi c'è cambio GRANDE" : "Oggi c'è cambio PICCOLO",
 };
 
 export default it;

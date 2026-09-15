@@ -21,6 +21,7 @@ import { S } from "./features/admin-shared/adminStyles";
 import type { Laundry } from "./features/laundry/admin/types";
 import { Login } from "./features/identity/admin/Login";
 import { Macchine } from "./features/laundry/admin/MacchineTab";
+import { CambioBiancheria } from "./features/laundry/admin/CambioBiancheriaTab";
 import { Segnalazioni } from "./features/feedback/admin/Segnalazioni";
 import { Bici } from "./features/bikes/admin/BiciTab";
 import { Accounts } from "./features/identity/admin/Accounts";
@@ -134,6 +135,9 @@ export function AdminScreens({ tab, onSession }: {
           un'autorizzazione. */}
       {tab === "macchine" && (!staff
         ? <Macchine laundries={laundries} reload={loadOverview} />
+        : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata a FDO e sistemista.</p>)}
+      {tab === "cambiobiancheria" && (!staff
+        ? <CambioBiancheria />
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata a FDO e sistemista.</p>)}
       {tab === "segnalazioni" && (!staff
         ? <Segnalazioni laundries={laundries} reload={loadOverview} />

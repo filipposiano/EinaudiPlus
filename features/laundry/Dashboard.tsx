@@ -1,5 +1,5 @@
 import { useState, useEffect, memo } from "react";
-import { Plus, Trash2, Star, History, AlertTriangle, Wind } from "lucide-react";
+import { Plus, Trash2, Star, History, AlertTriangle, Wind, Bed } from "lucide-react";
 import { WashingMachine } from "../../icons";
 import { FavPicker } from "./FavPicker";
 import { QuickBookModal } from "./QuickBookModal";
@@ -9,6 +9,7 @@ import {
   TIME_SLOTS, WEEKLY_QUOTA, TODAY_DOW, CUR_SLOT, DAYS_DATE, monShort, slotEndDate,
   machinesFor, deriveMachines,
   myWeekBookings, isPastBooking, isCurrentBooking, RANGO_GIORNI,
+  finestraCambioBiancheriaAttiva,
   type WeekData, type StatusData, type Machine,
   type MyBooking, type Fav,
 } from "../../modello";
@@ -25,7 +26,7 @@ import {
 // Senza, bastava aprire Impostazioni o far comparire un pannello per
 // ridisegnare da capo anche la griglia settimanale, che sono 7x19 celle: lavoro
 // buttato, e su un telefono lento si sente.
-export const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, onClear, onGoDay }: {
+export const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, onClear, onGoDay, cambioBiancheria }: {
   theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
   favs: Fav[]; onToggleFav: (day:number, slot:number)=>void;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
@@ -34,6 +35,11 @@ export const Dashboard = memo(function Dashboard({ lang, week, status, roomNumbe
   // il posto piu' diretto per prenotare un turno adesso. Chi vuole guardare
   // tutta la settimana passa dall'interruttore in cima a quella pagina.
   onGoDay: ()=>void;
+  // Il tipo per il martedì di questa settimana (vedi AdminPanel → Cambio
+  // biancheria). Il blocco si mostra solo martedì 05:00-14:00 (vedi
+  // finestraCambioBiancheriaAttiva) — negli altri giorni/orari il valore
+  // arriva comunque ma non si usa.
+  cambioBiancheria: api.CambioBiancheria;
 }) {
   const t = T[lang];
   const [now, setNow]           = useState(new Date());
@@ -72,6 +78,11 @@ export const Dashboard = memo(function Dashboard({ lang, week, status, roomNumbe
     }, ultimoMinuto ? 1000 : 10_000);
     return () => clearInterval(id);
   }, [ultimoMinuto]);
+
+  // Ricalcolato a ogni tick di `now` (lo stesso stato che guida il conto alla
+  // rovescia sopra): il blocco deve sparire da solo alle 14:00 senza bisogno
+  // di una ricarica, esattamente come `ultimoMinuto` non ne richiede una.
+  const mostraCambioBiancheria = finestraCambioBiancheriaAttiva(now) && cambioBiancheria !== null;
 
   const machines = deriveMachines(week, status, TODAY_DOW, CUR_SLOT, roomNumber);
 
@@ -169,6 +180,31 @@ export const Dashboard = memo(function Dashboard({ lang, week, status, roomNumbe
           "Camera 318" in cima allo schermo (vedi App, il chip mobile). Stava
           qui da solo sopra un vuoto che il telefono riempie gia' con la sua
           barra di stato — la stessa informazione, un centimetro piu' sotto. */}
+
+      {/* Cambio biancheria del martedì: sopra a tutto il resto, come
+          richiesto — è un avviso che riguarda il martedì mattina, non una
+          proprietà di un turno o di una macchina, quindi non appartiene a
+          nessuna delle sezioni sotto. Stesso linguaggio visivo delle altre
+          card (rounded-2xl, tinta color-mix), tinta ORANGE: la stessa già
+          usata per "chi aveva la macchina prima" — un avviso informativo,
+          non un errore (RED) né un esito positivo (GREEN). */}
+      {mostraCambioBiancheria && (
+        <section className="px-5 mb-4">
+          <div className="rounded-2xl border flex items-center gap-3 px-4 py-3.5"
+            style={{
+              background: `color-mix(in srgb, ${ORANGE} 12%, transparent)`,
+              borderColor: `color-mix(in srgb, ${ORANGE} 30%, transparent)`,
+            }}>
+            <div className="p-2 rounded-xl shrink-0" style={{ background:`color-mix(in srgb, ${ORANGE} 18%, transparent)`, color:ORANGE_T }}>
+              <Bed size={18}/>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] font-mono tracking-widest uppercase" style={{ color:ORANGE_T }}>{t.cambioBiancheriaTitolo}</p>
+              <p className="text-sm font-bold" style={{ color:fg }}>{t.cambioBiancheriaValore(cambioBiancheria as "grande" | "piccolo" | "nessuno")}</p>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Lavatrici */}
       <section className="px-5 mb-4">

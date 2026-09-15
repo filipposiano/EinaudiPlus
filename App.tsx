@@ -4,7 +4,7 @@ import {
   Delete, X, Wrench, Loader2,
   Film, Music, Menu,
   MessageSquare, LogOut,
-  Settings, Repeat, Eraser, Presentation, UserCog, Bike, Sparkles, Bell,
+  Settings, Repeat, Eraser, Presentation, UserCog, Bike, Sparkles, Bell, Bed,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -52,7 +52,7 @@ const CambiaPasswordObbligata = lazy(() => import("./AdminPanel").then((m) => ({
 // `isAdminFacility` scambierebbe l'una per l'altra.
 type Facility = "laundry" | "cinema" | "music" | "conferenze" | "bike" | "guasto" | "impostazioni" | "feedback" | AdminTab;
 
-const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "bici", "account", "ricorrenti", "notifiche", "manutenzione", "tema"];
+const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "bici", "account", "ricorrenti", "notifiche", "manutenzione", "tema", "cambiobiancheria"];
 const isAdminFacility = (f: Facility): f is AdminTab => (ADMIN_TABS as string[]).includes(f);
 
 /** Etichetta della camera nell'intestazione. Chi amministra è la Direzione. */
@@ -318,7 +318,7 @@ const facilitiesFor = (roomNumber: string | null) =>
 // controllo vero resta sul server: nascondere una voce non è un'autorizzazione.
 const ADMIN_SECTIONS: {
   id: AdminTab; icon: any;
-  chiave: "navMacchine" | "navSegnalazioni" | "navBici" | "navAccount" | "navRicorrenti" | "navNotifiche" | "navManutenzione" | "navTema";
+  chiave: "navMacchine" | "navSegnalazioni" | "navBici" | "navAccount" | "navRicorrenti" | "navNotifiche" | "navManutenzione" | "navTema" | "navCambioBiancheria";
   sistemistaOnly?: boolean;
   // Macchine e segnalazioni restano affari di FDO e sistemista: lo staff
   // prenota per conto della Direzione come l'FDO, ma non deve vedere lo
@@ -326,6 +326,9 @@ const ADMIN_SECTIONS: {
   staffEsclusa?: boolean;
 }[] = [
   { id: "macchine",       icon: Wrench,        chiave: "navMacchine",     staffEsclusa: true },
+  // Stesso livello di Macchine: decisione operativa di portineria (FDO e
+  // sistemista), non un'estetica come Tema qui sotto.
+  { id: "cambiobiancheria", icon: Bed,         chiave: "navCambioBiancheria", staffEsclusa: true },
   { id: "segnalazioni",   icon: MessageSquare, chiave: "navSegnalazioni", staffEsclusa: true },
   // Quali camere hanno una bici: la vede chi e' in portineria, come le
   // macchine e le segnalazioni. Cancellarle tutte (reset annuale) resta al
@@ -574,6 +577,9 @@ export default function App() {
   // una preferenza di questo dispositivo, arriva dal server ad ogni
   // caricamento, come week/status.
   const [tema,   setTema]     = useState<api.TemaStagionale>("nessuno");
+  // Cambio biancheria del martedì (vedi AdminPanel → Cambio biancheria):
+  // stessa provenienza di tema, arriva dal server a ogni caricamento.
+  const [cambioBiancheria, setCambioBiancheria] = useState<api.CambioBiancheria>(null);
   const [loading, setLoading] = useState(true);
   const [error,  setError]    = useState<string | null>(null);
   // Preferiti caricati in base alla camera corrente (vedi loadFavs).
@@ -625,7 +631,8 @@ export default function App() {
   const refresh = useCallback(async () => {
     try {
       const s = await api.getSnapshot();
-      setWeek(s.week); setStatus(s.status); setTema(s.tema); setError(null);
+      setWeek(s.week); setStatus(s.status); setTema(s.tema);
+      setCambioBiancheria(s.cambioBiancheria); setError(null);
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -896,7 +903,7 @@ export default function App() {
     <LoginScreen lang={lang} onLogin={chooseRoom} onAdmin={() => setAdminLoginOpen(true)}/>
   ) : (
     <>
-      {screen===0 && <Dashboard   theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} onGoDay={vaiAlGiorno}/>}
+      {screen===0 && <Dashboard   theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} onGoDay={vaiAlGiorno} cambioBiancheria={cambioBiancheria}/>}
       {screen===1 && <DaySchedule theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} favs={favs} onToggleFav={toggleFav} onBook={handleBook} onClear={handleClear} isAdmin={isAdmin} onScreen={setScreen}/>}
       {screen===2 && <WeekOverview theme={theme} lang={lang} week={week} status={status} roomNumber={roomNumber} onBook={handleBook} onClear={handleClear} isAdmin={isAdmin} onScreen={setScreen}/>}
     </>

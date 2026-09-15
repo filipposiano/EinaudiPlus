@@ -160,6 +160,28 @@ export function slotEndDate(slotIdx: number) {
   return d;
 }
 
+/**
+ * La finestra in cui la Dashboard mostra il blocco "cambio biancheria":
+ * martedì, dalle 05:00 (incluse) alle 14:00 (escluse).
+ *
+ * A differenza di ANTEPRIMA_LUNEDI, non è una costante calcolata una volta
+ * sola all'avvio: la Dashboard tiene già un `now` che avanza (il conto alla
+ * rovescia del turno corrente), e questa funzione va richiamata a ogni suo
+ * aggiornamento — il blocco deve sparire da solo alle 14:00 anche se
+ * nessuno ricarica la pagina.
+ *
+ * Usa il giorno/ora LOCALE del dispositivo (Date.getDay/getHours), non
+ * nowInfo() con il suo spostamento di giornata alle 07:00: quello serve a
+ * capire a quale turno di lavanderia appartiene un istante, questo descrive
+ * un evento del calendario reale — un vero martedì mattina — che non ha
+ * niente a che fare con i turni. Nessuna prenotazione dipende da questo
+ * calcolo: è solo un avviso, quindi un orologio scentrato al peggio mostra
+ * il blocco con qualche minuto di scarto, non un dato sbagliato.
+ */
+export function finestraCambioBiancheriaAttiva(d: Date): boolean {
+  return d.getDay() === 2 && d.getHours() >= 5 && d.getHours() < 14;
+}
+
 /** "1:23:45" o "23:45" — il conto alla rovescia in dashboard. */
 export function fmtCountdown(ms: number) {
   const s = Math.max(0, Math.floor(ms / 1000));

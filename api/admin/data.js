@@ -40,6 +40,9 @@ import {
 } from "../../src/modules/common-spaces/index.js";
 import { authorize as themeAuthorize, getTheme, setTheme } from "../../src/modules/theme/index.js";
 import {
+  authorize as linenChangeAuthorize, getLinenChangeAnchor, setLinenChangeAnchor, setLinenChangeSkip,
+} from "../../src/modules/linen-change/index.js";
+import {
   authorize as notificationsAuthorize,
   adminListPushSubs, adminDeletePushSub, adminListTelegramSubs, adminDeleteTelegramSub, adminBroadcast,
 } from "../../src/modules/notifications/index.js";
@@ -76,6 +79,7 @@ const MUTATIONS = new Set([
   "conferenzaSkip", "conferenzaMove", "conferenzaResetOccorrenza",
   "accountCreate", "accountSetPassword", "accountSetActive", "accountDelete",
   "accountChangeOwnPassword", "biciPurge", "biciDeleteRoom", "biciAddRoom", "temaSet",
+  "cambioBiancheriaSet", "cambioBiancheriaSkip",
 ]);
 
 /**
@@ -89,6 +93,7 @@ function authorizeAction(me, action) {
     ?? laundryAuthorize(me, action)
     ?? commonSpacesAuthorize(me, action)
     ?? themeAuthorize(me, action)
+    ?? linenChangeAuthorize(me, action)
     ?? notificationsAuthorize(me, action)
     ?? bikesAuthorize(me, action)
     ?? feedbackAuthorize(me, action)
@@ -414,6 +419,19 @@ export default wrapHandler("admin/data", async (req, res) => {
 
     case "temaSet":
       result = await setTheme(body.tema);
+      break;
+
+    // ── Cambio biancheria del martedì ────────────────────────────────────
+    case "cambioBiancheriaGet":
+      result = await getLinenChangeAnchor();
+      break;
+
+    case "cambioBiancheriaSet":
+      result = await setLinenChangeAnchor(body.ancora_data, body.ancora_tipo);
+      break;
+
+    case "cambioBiancheriaSkip":
+      result = await setLinenChangeSkip(body.data, body.salta);
       break;
 
     // ── Bici ──────────────────────────────────────────────────────────────
