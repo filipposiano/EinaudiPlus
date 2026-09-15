@@ -189,7 +189,7 @@ const en: Testi = {
   cambioBiancheriaTitolo: "Linen change",
   cambioBiancheriaValore: (tipo: "grande" | "piccolo" | "nessuno"): string =>
     tipo === "nessuno" ? "No linen change this week"
-    : tipo === "grande" ? "Today's linen change is big" : "Today's linen change is small",
+    : tipo === "grande" ? "Today's linen change is BIG" : "Today's linen change is SMALL",
 };
 
 export default en;

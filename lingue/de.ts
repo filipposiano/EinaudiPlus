@@ -189,7 +189,7 @@ const de: Testi = {
   cambioBiancheriaTitolo: "Wäschewechsel",
   cambioBiancheriaValore: (tipo: "grande" | "piccolo" | "nessuno"): string =>
     tipo === "nessuno" ? "Diese Woche kein Wäschewechsel"
-    : tipo === "grande" ? "Heute ist der große Wechsel" : "Heute ist der kleine Wechsel",
+    : tipo === "grande" ? "Heute ist der GROSSE Wechsel" : "Heute ist der KLEINE Wechsel",
 };
 
 export default de;

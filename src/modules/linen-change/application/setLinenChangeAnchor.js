@@ -5,7 +5,7 @@
 // di che tipo, e ogni altro martedì — passato o futuro — si ricalcola da lì
 // (vedi linen_change_type_for() in SQL).
 
-import { ValidationError } from "../../../shared/errors/AppError.js";
+import { ValidationError, fromRpcError } from "../../../shared/errors/AppError.js";
 import { isValidTipo, isTuesdayISO } from "../domain/schedule.js";
 
 export async function setLinenChangeAnchor({ data, tipo }, { linenChangeRepository }) {
@@ -15,5 +15,13 @@ export async function setLinenChangeAnchor({ data, tipo }, { linenChangeReposito
   const dataValue = String(data || "");
   if (!isTuesdayISO(dataValue)) throw new ValidationError("la data deve essere un martedì");
 
-  return linenChangeRepository.setAnchor({ data: dataValue, tipo: value });
+  try {
+    return await linenChangeRepository.setAnchor({ data: dataValue, tipo: value });
+  } catch (err) {
+    // Vedi la stessa nota in getLinenChangeAnchor.js: senza questo, un
+    // fallimento della RPC (non una validazione — quelle sono già gestite
+    // sopra) arriva all'admin come "errore del server, riprova" invece del
+    // messaggio di PostgREST, che qui è spesso già la diagnosi.
+    throw fromRpcError(err, { exposeToClient: true });
+  }
 }

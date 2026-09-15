@@ -4,7 +4,7 @@ import {
   Delete, X, Wrench, Loader2,
   Film, Music, Menu,
   MessageSquare, LogOut,
-  Settings, Repeat, Eraser, Presentation, UserCog, Bike, Sparkles, Bell, Shirt,
+  Settings, Repeat, Eraser, Presentation, UserCog, Bike, Sparkles, Bell, Bed,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -328,7 +328,7 @@ const ADMIN_SECTIONS: {
   { id: "macchine",       icon: Wrench,        chiave: "navMacchine",     staffEsclusa: true },
   // Stesso livello di Macchine: decisione operativa di portineria (FDO e
   // sistemista), non un'estetica come Tema qui sotto.
-  { id: "cambiobiancheria", icon: Shirt,       chiave: "navCambioBiancheria", staffEsclusa: true },
+  { id: "cambiobiancheria", icon: Bed,         chiave: "navCambioBiancheria", staffEsclusa: true },
   { id: "segnalazioni",   icon: MessageSquare, chiave: "navSegnalazioni", staffEsclusa: true },
   // Quali camere hanno una bici: la vede chi e' in portineria, come le
   // macchine e le segnalazioni. Cancellarle tutte (reset annuale) resta al

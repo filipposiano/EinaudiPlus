@@ -39,6 +39,21 @@ async function throws(fn) {
   try { await fn(); return null; } catch (e) { return e; }
 }
 
+/** Un repository che fallisce come rpcClient.js quando PostgREST rifiuta
+ *  la chiamata (funzione inesistente, vincolo violato, ecc.): un errore con
+ *  .message e .status, non un AppError già tipizzato — lo stesso che
+ *  arriverebbe da una migrazione non ancora applicata. */
+function repositoryCheRompe(messaggio = "Could not find the function", status = 404) {
+  const err = new Error(messaggio);
+  err.status = status;
+  err.rpc = "linen_change_qualcosa";
+  return {
+    async adminGet() { throw err; },
+    async setAnchor() { throw err; },
+    async setSkip() { throw err; },
+  };
+}
+
 // ─── isValidTipo() / isTuesdayISO() ─────────────────────────────────────────
 
 section("isValidTipo()");
@@ -123,6 +138,41 @@ section("setLinenChangeSkip()");
   const repoNonToccato = fakeRepository();
   await throws(() => setLinenChangeSkip({ data: "2026-09-14", salta: true }, { linenChangeRepository: repoNonToccato }));
   check("e il repository non viene chiamato", repoNonToccato.calls.length === 0);
+}
+
+// ─── Un fallimento della RPC arriva all'admin come diagnosi, non generico ────
+//
+// Prima di questo modulo, fromRpcError() era scritta ma non chiamata da
+// nessuna parte: qualunque fallimento della RPC (non una validazione, che è
+// già gestita prima di arrivarci) usciva come "errore del server, riprova"
+// — vero anche per una migrazione non ancora applicata, il caso più comune
+// in pratica. Qui si verifica che l'eccezione rilanciata sia ESPONIBILE
+// (expose:true) col messaggio vero di PostgREST, non un AppError generico.
+
+section("un errore della RPC è esponibile all'admin, non generico");
+{
+  const repoRotto = repositoryCheRompe("Could not find the function public.linen_change_admin_get");
+
+  const errGet = await throws(() => getLinenChangeAnchor({}, { linenChangeRepository: repoRotto }));
+  check("getLinenChangeAnchor: il messaggio vero arriva, non un generico",
+    errGet?.message === "Could not find the function public.linen_change_admin_get");
+  check("ed è marcato esponibile", errGet?.expose === true);
+
+  const errSet = await throws(() =>
+    setLinenChangeAnchor({ data: "2026-09-15", tipo: "grande" }, { linenChangeRepository: repoRotto }));
+  check("setLinenChangeAnchor: stesso comportamento dopo la validazione", errSet?.expose === true);
+
+  const errSkip = await throws(() =>
+    setLinenChangeSkip({ data: "2026-09-15", salta: true }, { linenChangeRepository: repoRotto }));
+  check("setLinenChangeSkip: stesso comportamento dopo la validazione", errSkip?.expose === true);
+
+  // Una ValidationError (input rifiutato PRIMA di toccare il repository)
+  // non deve passare da questo giro: è già esponibile per conto suo, e
+  // avvolgerla di nuovo l'avrebbe solo complicata senza motivo.
+  const errValidazione = await throws(() =>
+    setLinenChangeAnchor({ data: "2026-09-14", tipo: "grande" }, { linenChangeRepository: repoRotto }));
+  check("una ValidationError resta quella che è, non passa dalla RPC",
+    errValidazione?.message === "la data deve essere un martedì" && errValidazione?.code === "validation_error");
 }
 
 // ─── Policy di autorizzazione ────────────────────────────────────────────────

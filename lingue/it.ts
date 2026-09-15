@@ -211,7 +211,7 @@ const it = {
   cambioBiancheriaTitolo: "Cambio biancheria",
   cambioBiancheriaValore: (tipo: "grande" | "piccolo" | "nessuno"): string =>
     tipo === "nessuno" ? "Questa settimana non c'è cambio biancheria"
-    : tipo === "grande" ? "Oggi c'è cambio grande" : "Oggi c'è cambio piccolo",
+    : tipo === "grande" ? "Oggi c'è cambio GRANDE" : "Oggi c'è cambio PICCOLO",
 };
 
 export default it;
