@@ -187,8 +187,9 @@ const es: Testi = {
   temaChiaro: "Claro",
   temaScuro: "Oscuro",
   cambioBiancheriaTitolo: "Cambio de ropa blanca",
-  cambioBiancheriaValore: (tipo: "grande" | "piccolo"): string =>
-    tipo === "grande" ? "Hoy es el cambio GRANDE" : "Hoy es el cambio PEQUEÑO",
+  cambioBiancheriaValore: (tipo: "grande" | "piccolo" | "nessuno"): string =>
+    tipo === "nessuno" ? "Esta semana no hay cambio de ropa blanca"
+    : tipo === "grande" ? "Hoy es el cambio grande" : "Hoy es el cambio pequeño",
 };
 
 export default es;

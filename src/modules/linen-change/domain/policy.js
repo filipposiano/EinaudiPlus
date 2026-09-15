@@ -11,7 +11,7 @@
 
 import { isStaff } from "../../identity/index.js";
 
-const AZIONI_LINEN_CHANGE = new Set(["cambioBiancheriaGet", "cambioBiancheriaSet"]);
+const AZIONI_LINEN_CHANGE = new Set(["cambioBiancheriaGet", "cambioBiancheriaSet", "cambioBiancheriaSkip"]);
 
 /**
  * Decide se `claims` può eseguire `action`.

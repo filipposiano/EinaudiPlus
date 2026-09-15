@@ -16,9 +16,10 @@ export type StatusData = Record<string, string>;
 export type TemaStagionale = "nessuno" | "halloween" | "natale";
 
 /** Il cambio biancheria della settimana corrente (martedì), impostato da FDO
- *  e sistemista (vedi AdminPanel → Cambio biancheria). `null` finché nessun
- *  amministratore l'ha ancora configurato. */
-export type CambioBiancheria = "grande" | "piccolo" | null;
+ *  e sistemista (vedi AdminPanel → Cambio biancheria). `"nessuno"` quando un
+ *  amministratore ha saltato di proposito quel martedì (distinto da `null`,
+ *  che vuol dire "non ancora configurato affatto"). */
+export type CambioBiancheria = "grande" | "piccolo" | "nessuno" | null;
 
 /** La camera dichiarata su questo dispositivo. */
 function currentRoom(): string {

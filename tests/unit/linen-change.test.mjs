@@ -5,6 +5,7 @@
 
 import { getLinenChangeAnchor } from "../../src/modules/linen-change/application/getLinenChangeAnchor.js";
 import { setLinenChangeAnchor } from "../../src/modules/linen-change/application/setLinenChangeAnchor.js";
+import { setLinenChangeSkip } from "../../src/modules/linen-change/application/setLinenChangeSkip.js";
 import { authorize } from "../../src/modules/linen-change/domain/policy.js";
 import { isValidTipo, isTuesdayISO } from "../../src/modules/linen-change/domain/schedule.js";
 
@@ -26,6 +27,10 @@ function fakeRepository(initial = { ancora_data: null, ancora_tipo: null }) {
       calls.push({ name: "setAnchor", args });
       stato = { ancora_data: args.data, ancora_tipo: args.tipo };
       return { ok: true, ancora_data: args.data, ancora_tipo: args.tipo };
+    },
+    async setSkip(args) {
+      calls.push({ name: "setSkip", args });
+      return { ok: true, data: args.data, salta: args.salta };
     },
   };
 }
@@ -91,6 +96,35 @@ section("setLinenChangeAnchor()");
   check("e il repository non viene chiamato", repoNonToccato.calls.length === 0);
 }
 
+// ─── setLinenChangeSkip() ─────────────────────────────────────────────────────
+
+section("setLinenChangeSkip()");
+{
+  const repo = fakeRepository();
+  await setLinenChangeSkip({ data: "2026-09-15", salta: true }, { linenChangeRepository: repo });
+  check("salta=true passa al repository così com'è",
+    repo.calls[0].name === "setSkip" && repo.calls[0].args.data === "2026-09-15" && repo.calls[0].args.salta === true);
+
+  const repo2 = fakeRepository();
+  await setLinenChangeSkip({ data: "2026-09-15", salta: false }, { linenChangeRepository: repo2 });
+  check("salta=false (annulla il salto) passa altrettanto",
+    repo2.calls[0].args.salta === false);
+
+  // Valori "truthy"/"falsy" arrivati dal corpo JSON (es. non booleani veri)
+  // si normalizzano, non si passano grezzi.
+  const repo3 = fakeRepository();
+  await setLinenChangeSkip({ data: "2026-09-15", salta: undefined }, { linenChangeRepository: repo3 });
+  check("salta assente diventa false, non undefined", repo3.calls[0].args.salta === false);
+
+  const errGiorno = await throws(() =>
+    setLinenChangeSkip({ data: "2026-09-14", salta: true }, { linenChangeRepository: fakeRepository() }));
+  check("una data che non è martedì viene respinta", errGiorno?.message === "la data deve essere un martedì");
+
+  const repoNonToccato = fakeRepository();
+  await throws(() => setLinenChangeSkip({ data: "2026-09-14", salta: true }, { linenChangeRepository: repoNonToccato }));
+  check("e il repository non viene chiamato", repoNonToccato.calls.length === 0);
+}
+
 // ─── Policy di autorizzazione ────────────────────────────────────────────────
 
 section("authorize() — policy del modulo Linen Change");
@@ -101,14 +135,17 @@ section("authorize() — policy del modulo Linen Change");
 
   check("FDO può leggere l'ancora", authorize(fdo, "cambioBiancheriaGet") === true);
   check("FDO può spostare l'ancora", authorize(fdo, "cambioBiancheriaSet") === true);
+  check("FDO può saltare un martedì", authorize(fdo, "cambioBiancheriaSkip") === true);
   check("sistemista può leggere l'ancora", authorize(sistemista, "cambioBiancheriaGet") === true);
   check("sistemista può spostare l'ancora", authorize(sistemista, "cambioBiancheriaSet") === true);
+  check("sistemista può saltare un martedì", authorize(sistemista, "cambioBiancheriaSkip") === true);
 
   // La distinzione che conta: a differenza del tema (solo sistemista), qui
   // è lo STAFF a restare fuori — la stessa regola di setMachineStatus in
   // laundry/domain/policy.js, non l'opposto di quella del tema.
   check("staff non può leggere l'ancora", authorize(staff, "cambioBiancheriaGet") === false);
   check("staff non può spostare l'ancora", authorize(staff, "cambioBiancheriaSet") === false);
+  check("staff non può saltare un martedì", authorize(staff, "cambioBiancheriaSkip") === false);
 
   check("nessuno non autenticato può agire", authorize(null, "cambioBiancheriaGet") === false);
   check("azione di un altro modulo -> null", authorize(sistemista, "temaGet") === null);

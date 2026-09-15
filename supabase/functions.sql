@@ -182,8 +182,9 @@ begin
     -- senza bisogno di un secondo endpoint o di un canale dedicato.
     'tema',   app_theme_get(),
     -- Stessa scelta per il cambio biancheria del martedi' (vedi
-    -- cambio-biancheria.sql): grande/piccolo/null, gia' risolto per il
-    -- martedi' di QUESTA settimana. La finestra oraria in cui mostrarlo
+    -- cambio-biancheria.sql): grande/piccolo/nessuno/null, gia' risolto per
+    -- il martedi' di QUESTA settimana ('nessuno' = saltato di proposito,
+    -- null = mai configurato). La finestra oraria in cui mostrarlo
     -- (martedi' 05:00-14:00) la decide il client, non questo campo.
     'cambio_biancheria', linen_change_current()
   );

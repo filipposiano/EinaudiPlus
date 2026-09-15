@@ -12,4 +12,9 @@ export const linenChangeRepository = {
   async setAnchor({ data, tipo }) {
     return rpc("linen_change_set_anchor", { p_anchor_date: data, p_anchor_type: tipo });
   },
+
+  /** Segna (salta=true) o toglie (salta=false) il salto di un martedì. */
+  async setSkip({ data, salta }) {
+    return rpc("linen_change_set_skip", { p_date: data, p_skip: salta });
+  },
 };

@@ -1,5 +1,5 @@
 import { useState, useEffect, memo } from "react";
-import { Plus, Trash2, Star, History, AlertTriangle, Wind, Shirt } from "lucide-react";
+import { Plus, Trash2, Star, History, AlertTriangle, Wind, Bed } from "lucide-react";
 import { WashingMachine } from "../../icons";
 import { FavPicker } from "./FavPicker";
 import { QuickBookModal } from "./QuickBookModal";
@@ -196,11 +196,11 @@ export const Dashboard = memo(function Dashboard({ lang, week, status, roomNumbe
               borderColor: `color-mix(in srgb, ${ORANGE} 30%, transparent)`,
             }}>
             <div className="p-2 rounded-xl shrink-0" style={{ background:`color-mix(in srgb, ${ORANGE} 18%, transparent)`, color:ORANGE_T }}>
-              <Shirt size={18}/>
+              <Bed size={18}/>
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[11px] font-mono tracking-widest uppercase" style={{ color:ORANGE_T }}>{t.cambioBiancheriaTitolo}</p>
-              <p className="text-sm font-bold" style={{ color:fg }}>{t.cambioBiancheriaValore(cambioBiancheria as "grande" | "piccolo")}</p>
+              <p className="text-sm font-bold" style={{ color:fg }}>{t.cambioBiancheriaValore(cambioBiancheria as "grande" | "piccolo" | "nessuno")}</p>
             </div>
           </div>
         </section>

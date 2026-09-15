@@ -40,7 +40,7 @@ import {
 } from "../../src/modules/common-spaces/index.js";
 import { authorize as themeAuthorize, getTheme, setTheme } from "../../src/modules/theme/index.js";
 import {
-  authorize as linenChangeAuthorize, getLinenChangeAnchor, setLinenChangeAnchor,
+  authorize as linenChangeAuthorize, getLinenChangeAnchor, setLinenChangeAnchor, setLinenChangeSkip,
 } from "../../src/modules/linen-change/index.js";
 import {
   authorize as notificationsAuthorize,
@@ -79,7 +79,7 @@ const MUTATIONS = new Set([
   "conferenzaSkip", "conferenzaMove", "conferenzaResetOccorrenza",
   "accountCreate", "accountSetPassword", "accountSetActive", "accountDelete",
   "accountChangeOwnPassword", "biciPurge", "biciDeleteRoom", "biciAddRoom", "temaSet",
-  "cambioBiancheriaSet",
+  "cambioBiancheriaSet", "cambioBiancheriaSkip",
 ]);
 
 /**
@@ -428,6 +428,10 @@ export default wrapHandler("admin/data", async (req, res) => {
 
     case "cambioBiancheriaSet":
       result = await setLinenChangeAnchor(body.ancora_data, body.ancora_tipo);
+      break;
+
+    case "cambioBiancheriaSkip":
+      result = await setLinenChangeSkip(body.data, body.salta);
       break;
 
     // ── Bici ──────────────────────────────────────────────────────────────

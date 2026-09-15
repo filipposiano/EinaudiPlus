@@ -26,6 +26,10 @@
 -- nessun amministratore l'ha impostata, linen_change_current() torna null e
 -- la dashboard non mostra nulla, invece di indovinare un'ancora arbitraria
 -- che quasi certamente sarebbe sbagliata.
+--
+-- Un martedì puo' anche essere saltato del tutto (nessun cambio quella
+-- settimana): e' un'eccezione puntuale, in linen_change_skip, che non
+-- sposta l'ancora e non disturba l'alternanza delle settimane successive.
 
 create table if not exists linen_change_anchor (
   id           boolean primary key default true check (id),
@@ -35,6 +39,18 @@ create table if not exists linen_change_anchor (
 );
 
 alter table linen_change_anchor enable row level security;
+
+-- Martedì specifici in cui non c'è cambio (es. una settimana di chiusura
+-- parziale), SENZA disturbare l'alternanza: un martedì saltato non consuma
+-- un turno della sequenza, il martedì dopo torna al tipo che avrebbe avuto
+-- comunque. Stesso principio di conference_eccezione in polivalente.sql —
+-- un'eccezione puntuale su una regola che resta invariata, non una modifica
+-- alla regola stessa.
+create table if not exists linen_change_skip (
+  skip_date date primary key
+);
+
+alter table linen_change_skip enable row level security;
 
 -- Il martedì della settimana corrente (Europe/Rome), qualunque giorno sia
 -- oggi: passato se oggi è dopo martedì, futuro se è prima, oggi stesso se
@@ -46,7 +62,17 @@ returns date language sql stable as $$
   select (date_trunc('week', now() at time zone p_tz) + interval '1 day')::date;
 $$;
 
--- Il tipo per un martedì qualunque, data l'ancora configurata.
+-- Il tipo per un martedì qualunque, data l'ancora configurata — 'grande',
+-- 'piccolo', 'nessuno' (saltato) o null (non ancora configurato: si
+-- distingue da 'nessuno', che è una scelta esplicita di un amministratore,
+-- non l'assenza di configurazione).
+--
+-- Il salto si controlla PRIMA dell'alternanza e la scavalca senza toccarla:
+-- non è un terzo valore nella sequenza grande/piccolo, è un'eccezione che
+-- lascia la sequenza esattamente dov'era — il martedì successivo torna al
+-- tipo che avrebbe avuto comunque, come se quel salto non fosse mai esistito
+-- ai fini del conteggio (stesso principio con cui conference_eccezione salta
+-- un'occorrenza senza spostare le altre).
 --
 -- Richiede che p_tuesday sia davvero un martedì quanto lo è l'ancora stessa:
 -- l'unico chiamante pubblico (linen_change_current) passa sempre
@@ -63,6 +89,10 @@ declare
   v_ancora_tipo text;
   v_settimane   int;
 begin
+  if exists (select 1 from linen_change_skip where skip_date = p_tuesday) then
+    return 'nessuno';
+  end if;
+
   select anchor_date, anchor_type into v_ancora_data, v_ancora_tipo
   from linen_change_anchor where id = true;
 
@@ -89,13 +119,21 @@ $$;
 
 -- Lettura per il pannello amministrativo: l'ancora GREZZA (non il tipo già
 -- risolto), perché il form deve ripartire da cosa è stato salvato l'ultima
--- volta, non da un valore ricalcolato per oggi.
+-- volta, non da un valore ricalcolato per oggi — più i martedì saltati, per
+-- poterli mostrare e disfare. Il filtro sugli ultimi 7 giorni è solo per non
+-- allungare la lista con salti ormai passati e irrilevanti: la riga resta
+-- comunque nella tabella, non è una pulizia.
 create or replace function linen_change_admin_get()
 returns jsonb language sql stable as $$
   select jsonb_build_object(
-    'ancora_data', anchor_date,
-    'ancora_tipo', anchor_type
-  ) from linen_change_anchor where id = true;
+    'ancora_data', (select anchor_date from linen_change_anchor where id = true),
+    'ancora_tipo', (select anchor_type from linen_change_anchor where id = true),
+    'salta', coalesce((
+      select jsonb_agg(skip_date order by skip_date)
+      from linen_change_skip
+      where skip_date >= current_date - interval '7 days'
+    ), '[]'::jsonb)
+  );
 $$;
 
 -- Sposta l'ancora. Un'unica azione copre sia la correzione occasionale sia
@@ -122,14 +160,36 @@ begin
 end;
 $$;
 
+-- Segna o toglie il salto di un martedì. Un solo verbo con un booleano,
+-- invece di due funzioni separate (aggiungi/togli): rispecchia che nel form
+-- amministrativo è lo stesso pulsante, prima "salta questo" e poi "annulla".
+create or replace function linen_change_set_skip(p_date date, p_skip boolean)
+returns jsonb language plpgsql as $$
+begin
+  if extract(isodow from p_date) <> 2 then
+    return jsonb_build_object('ok', false, 'error', 'la data deve essere un martedì');
+  end if;
+
+  if p_skip then
+    insert into linen_change_skip (skip_date) values (p_date) on conflict (skip_date) do nothing;
+  else
+    delete from linen_change_skip where skip_date = p_date;
+  end if;
+
+  return jsonb_build_object('ok', true, 'data', p_date, 'salta', p_skip);
+end;
+$$;
+
 revoke all on function linen_change_current_tuesday(text) from public, anon, authenticated;
 revoke all on function linen_change_type_for(date) from public, anon, authenticated;
 revoke all on function linen_change_current() from public, anon, authenticated;
 revoke all on function linen_change_admin_get() from public, anon, authenticated;
 revoke all on function linen_change_set_anchor(date, text) from public, anon, authenticated;
+revoke all on function linen_change_set_skip(date, boolean) from public, anon, authenticated;
 
 grant execute on function linen_change_current_tuesday(text) to service_role;
 grant execute on function linen_change_type_for(date) to service_role;
 grant execute on function linen_change_current() to service_role;
 grant execute on function linen_change_admin_get() to service_role;
 grant execute on function linen_change_set_anchor(date, text) to service_role;
+grant execute on function linen_change_set_skip(date, boolean) to service_role;

@@ -187,8 +187,9 @@ const fr: Testi = {
   temaChiaro: "Clair",
   temaScuro: "Sombre",
   cambioBiancheriaTitolo: "Changement de linge",
-  cambioBiancheriaValore: (tipo: "grande" | "piccolo"): string =>
-    tipo === "grande" ? "Aujourd'hui, c'est le grand changement" : "Aujourd'hui, c'est le petit changement",
+  cambioBiancheriaValore: (tipo: "grande" | "piccolo" | "nessuno"): string =>
+    tipo === "nessuno" ? "Pas de changement de linge cette semaine"
+    : tipo === "grande" ? "Aujourd'hui, c'est le grand changement" : "Aujourd'hui, c'est le petit changement",
 };
 
 export default fr;

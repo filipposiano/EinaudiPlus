@@ -209,8 +209,9 @@ const it = {
   // Blocco "cambio biancheria" in cima alla Dashboard, visibile solo
   // martedì 05:00-14:00 (vedi finestraCambioBiancheriaAttiva in modello.ts).
   cambioBiancheriaTitolo: "Cambio biancheria",
-  cambioBiancheriaValore: (tipo: "grande" | "piccolo"): string =>
-    tipo === "grande" ? "Oggi è il cambio GRANDE" : "Oggi è il cambio PICCOLO",
+  cambioBiancheriaValore: (tipo: "grande" | "piccolo" | "nessuno"): string =>
+    tipo === "nessuno" ? "Questa settimana non c'è cambio biancheria"
+    : tipo === "grande" ? "Oggi c'è cambio grande" : "Oggi c'è cambio piccolo",
 };
 
 export default it;
