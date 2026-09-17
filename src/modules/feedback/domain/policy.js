@@ -4,7 +4,7 @@
 // prenota e libera turni per conto della Direzione come l'FDO, ma non deve
 // vedere né toccare le segnalazioni dei residenti.
 
-import { isStaff } from "../../identity/index.js";
+import { isStaff, isDelegato } from "../../identity/index.js";
 
 const AZIONI_FEEDBACK = new Set(["feedback", "markFeedback"]);
 const VIETATE_A_STAFF = new Set(["feedback", "markFeedback"]);
@@ -12,6 +12,9 @@ const VIETATE_A_STAFF = new Set(["feedback", "markFeedback"]);
 export function authorize(claims, action) {
   if (!AZIONI_FEEDBACK.has(action)) return null;
   if (!claims) return false;
+  // I permessi del delegato stanno per intero nel modulo Grigliata — vedi
+  // la stessa riga in laundry/domain/policy.js.
+  if (isDelegato(claims)) return false;
   if (VIETATE_A_STAFF.has(action) && isStaff(claims)) return false;
   return true;
 }

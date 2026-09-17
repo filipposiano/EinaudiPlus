@@ -4,7 +4,7 @@
 // isSysadmin() è un concetto di Identity, consumato qui tramite la sua
 // superficie pubblica (index.js), non un file interno.
 
-import { isSysadmin } from "../../identity/index.js";
+import { isSysadmin, isDelegato } from "../../identity/index.js";
 
 /** Azioni amministrative di dominio Common Spaces, riconosciute da authorize(). */
 const AZIONI_COMMON_SPACES = new Set([
@@ -28,5 +28,8 @@ export function authorize(claims, action) {
   if (!AZIONI_COMMON_SPACES.has(action)) return null;
   if (!claims) return false;
   if (SOLO_SISTEMISTA.has(action)) return isSysadmin(claims);
+  // I permessi del delegato stanno per intero nel modulo Grigliata — vedi
+  // la stessa riga in laundry/domain/policy.js.
+  if (isDelegato(claims)) return false;
   return true;
 }

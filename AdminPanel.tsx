@@ -29,6 +29,7 @@ import { Ricorrenti } from "./features/ops/admin/Ricorrenti";
 import { Notifiche } from "./features/notifications/admin/NotificheTab";
 import { Manutenzione } from "./features/ops/admin/Manutenzione";
 import { Tema } from "./features/theme/admin/Tema";
+import { GrigliataAdmin } from "./features/grigliata/admin/GrigliataAdmin";
 import { CambiaPasswordObbligata } from "./features/identity/admin/Session";
 
 export type { Role, Tab } from "./features/admin-shared/types";
@@ -77,11 +78,15 @@ export function AdminScreens({ tab, onSession }: {
   }, [onSession]);
 
   useEffect(() => { refreshSession(); }, [refreshSession]);
-  // Lo staff non vede Macchine ne' Segnalazioni — le uniche schede che usano
-  // `laundries` — quindi per lui questa chiamata fallirebbe soltanto (il
-  // server la rifiuta, vedi VIETATE_A_STAFF in api/admin/data.js) senza
-  // nessun beneficio.
-  useEffect(() => { if (logged && role !== "staff") loadOverview(); }, [logged, role, loadOverview]);
+  // Lo staff non vede Macchine ne' Segnalazioni, il delegato non vede
+  // nient'altro che Grigliata — le uniche schede che usano `laundries` —
+  // quindi per entrambi questa chiamata fallirebbe soltanto (il server la
+  // rifiuta: VIETATE_A_STAFF in laundry/domain/policy.js per lo staff,
+  // isDelegato() in ops/domain/policy.js per il delegato) senza nessun
+  // beneficio.
+  useEffect(() => {
+    if (logged && role !== "staff" && role !== "delegato") loadOverview();
+  }, [logged, role, loadOverview]);
 
   // L'uscita non sta piu' qui: la fa il pulsante della camera nell'app, che
   // chiude la sessione e riporta al selettore della stanza. `adminLogout()`
@@ -89,6 +94,7 @@ export function AdminScreens({ tab, onSession }: {
 
   const sistemista = role === "sistemista";
   const staff = role === "staff";
+  const delegato = role === "delegato";
 
   if (logged === null) {
     return <p style={{ fontSize: 13, ...S.sub, padding: "20px 4px" }}>Caricamento…</p>;
@@ -133,18 +139,21 @@ export function AdminScreens({ tab, onSession }: {
           compaiono nemmeno nella navigazione, ma se ci si arriva lo stesso
           il controllo vero resta sul server: nascondere una voce non e'
           un'autorizzazione. */}
-      {tab === "macchine" && (!staff
+      {tab === "macchine" && (!staff && !delegato
         ? <Macchine laundries={laundries} reload={loadOverview} />
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata a FDO e sistemista.</p>)}
-      {tab === "cambiobiancheria" && (!staff
+      {tab === "cambiobiancheria" && (!staff && !delegato
         ? <CambioBiancheria />
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata a FDO e sistemista.</p>)}
-      {tab === "segnalazioni" && (!staff
+      {tab === "segnalazioni" && (!staff && !delegato
         ? <Segnalazioni laundries={laundries} reload={loadOverview} />
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata a FDO e sistemista.</p>)}
-      {tab === "bici" && (!staff
+      {tab === "bici" && (!staff && !delegato
         ? <Bici sistemista={sistemista} />
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata a FDO e sistemista.</p>)}
+      {tab === "grigliataAdmin" && (delegato || sistemista
+        ? <GrigliataAdmin />
+        : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata al delegato e al sistemista.</p>)}
       {tab === "account" && (sistemista
         ? <Accounts me={username} />
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata al sistemista.</p>)}

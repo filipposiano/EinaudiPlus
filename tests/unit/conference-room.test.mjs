@@ -111,10 +111,15 @@ section("authorize() — policy del modulo Conference Room");
 {
   const fdo = { u: "mario", r: "fdo" };
   const staff = { u: "luigi", r: "staff" };
+  const delegato = { u: "toad", r: "delegato" };
 
   for (const azione of ["conferenzaList", "conferenzaAdd", "conferenzaUpdate", "conferenzaSkip", "conferenzaMove", "conferenzaResetOccorrenza", "conferenzaDelete"]) {
     check(`FDO può '${azione}'`, authorize(fdo, azione) === true);
     check(`staff può '${azione}' (nessuna restrizione, come nell'originale)`, authorize(staff, azione) === true);
+    // I permessi del delegato stanno per intero nel modulo Grigliata: prima
+    // di escluderlo esplicitamente, questo modulo concedeva a chiunque avesse
+    // una sessione (return Boolean(claims)), delegato compreso.
+    check(`il delegato NON può '${azione}'`, authorize(delegato, azione) === false);
   }
   check("nessuno non autenticato può agire", authorize(null, "conferenzaAdd") === false);
   check("azione di un altro modulo -> null", authorize(fdo, "spaces") === null);

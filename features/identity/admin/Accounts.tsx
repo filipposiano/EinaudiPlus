@@ -29,6 +29,7 @@ const RUOLI_CREABILI: { value: Role; label: string }[] = [
   { value: "fdo", label: "FDO (portineria)" },
   { value: "staff", label: "Staff" },
   { value: "sistemista", label: "Sistemista" },
+  { value: "delegato", label: "Delegato (Grigliata)" },
 ];
 
 const etichettaData = (iso: string) =>

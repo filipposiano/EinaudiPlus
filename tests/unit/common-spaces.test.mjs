@@ -146,6 +146,11 @@ section("authorize() — policy del modulo Common Spaces");
   const fdo = { u: "mario", r: "fdo" };
   const staff = { u: "luigi", r: "staff" };
   const sistemista = { u: "peach", r: "sistemista" };
+  const delegato = { u: "toad", r: "delegato" };
+
+  // I permessi del delegato stanno per intero nel modulo Grigliata.
+  check("il delegato non può leggere la panoramica sale", authorize(delegato, "spaces") === false);
+  check("il delegato non può cancellare una prenotazione sala", authorize(delegato, "deleteSpaceBooking") === false);
 
   check("staff può leggere la panoramica sale", authorize(staff, "spaces") === true);
   check("staff può cancellare una prenotazione sala", authorize(staff, "deleteSpaceBooking") === true);

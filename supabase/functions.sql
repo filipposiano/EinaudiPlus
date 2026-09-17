@@ -186,7 +186,11 @@ begin
     -- il martedi' di QUESTA settimana ('nessuno' = saltato di proposito,
     -- null = mai configurato). La finestra oraria in cui mostrarlo
     -- (martedi' 05:00-14:00) la decide il client, non questo campo.
-    'cambio_biancheria', linen_change_current()
+    'cambio_biancheria', linen_change_current(),
+    -- Solo il booleano (vedi grigliata.sql): decide se la scheda "Grigliata"
+    -- compare in navigazione. Il contenuto vero lo legge grigliata_stato_pubblico()
+    -- quando la scheda si apre davvero, non qui.
+    'grigliata_attiva', grigliata_attiva_bool()
   );
 end;
 $$;

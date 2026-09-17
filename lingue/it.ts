@@ -143,6 +143,8 @@ const it = {
   navMacchine: "Macchine", navSegnalazioni: "Segnalazioni",
   navRicorrenti: "Ricorrenti", navNotifiche: "Notifiche", navManutenzione: "Manutenzione", navTema: "Tema",
   navCambioBiancheria: "Cambio biancheria",
+  navGrigliata: "Grigliata",
+  navGrigliataAdmin: "Grigliata",
   amministrazione: "Amministrazione",
   mesiBrevi: ["gen","feb","mar","apr","mag","giu","lug","ago","set","ott","nov","dic"],
   navLingua: "Lingua",

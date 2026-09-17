@@ -3,7 +3,7 @@
 // Lettura: FDO e sistemista, non staff. Cancellazione totale (reset
 // annuale) e assegnazione/rimozione per camera: solo sistemista.
 
-import { isSysadmin, isStaff } from "../../identity/index.js";
+import { isSysadmin, isStaff, isDelegato } from "../../identity/index.js";
 
 const AZIONI_BIKES = new Set(["biciList", "biciPurge", "biciDeleteRoom", "biciAddRoom"]);
 const SOLO_SISTEMISTA = new Set(["biciPurge", "biciDeleteRoom", "biciAddRoom"]);
@@ -13,6 +13,9 @@ export function authorize(claims, action) {
   if (!AZIONI_BIKES.has(action)) return null;
   if (!claims) return false;
   if (SOLO_SISTEMISTA.has(action)) return isSysadmin(claims);
+  // I permessi del delegato stanno per intero nel modulo Grigliata — vedi
+  // la stessa riga in laundry/domain/policy.js.
+  if (isDelegato(claims)) return false;
   if (VIETATE_A_STAFF.has(action) && isStaff(claims)) return false;
   return true;
 }

@@ -65,6 +65,11 @@ import {
   getOverview, listRecurringRules, setRecurringRuleActive, deleteRecurringRule,
   applyRecurringRules, purgeData, getCounts,
 } from "../../src/modules/ops/index.js";
+import {
+  authorize as grigliataAuthorize,
+  adminCreaEvento, adminOverview as grigliataAdminOverview,
+  adminConfermaPagamento, adminChiudiEvento,
+} from "../../src/modules/grigliata/index.js";
 
 // Le azioni che modificano qualcosa finiscono nell'audit log. Le letture no,
 // sarebbero solo rumore.
@@ -80,6 +85,7 @@ const MUTATIONS = new Set([
   "accountCreate", "accountSetPassword", "accountSetActive", "accountDelete",
   "accountChangeOwnPassword", "biciPurge", "biciDeleteRoom", "biciAddRoom", "temaSet",
   "cambioBiancheriaSet", "cambioBiancheriaSkip",
+  "grigliataCrea", "grigliataConfermaPagamento", "grigliataChiudi",
 ]);
 
 /**
@@ -98,6 +104,7 @@ function authorizeAction(me, action) {
     ?? bikesAuthorize(me, action)
     ?? feedbackAuthorize(me, action)
     ?? conferenceAuthorize(me, action)
+    ?? grigliataAuthorize(me, action)
     ?? opsAuthorize(me, action);
 }
 
@@ -432,6 +439,27 @@ export default wrapHandler("admin/data", async (req, res) => {
 
     case "cambioBiancheriaSkip":
       result = await setLinenChangeSkip(body.data, body.salta);
+      break;
+
+    // ── Grigliata (delegato e sistemista) ────────────────────────────────
+    case "grigliataCrea":
+      result = await adminCreaEvento({
+        titolo: body.titolo, scadenza: body.scadenza,
+        paypalLink: body.paypal_link, satispayLink: body.satispay_link,
+        attore: me.u,
+      });
+      break;
+
+    case "grigliataOverview":
+      result = await grigliataAdminOverview();
+      break;
+
+    case "grigliataConfermaPagamento":
+      result = await adminConfermaPagamento(body.adesione_id, me.u);
+      break;
+
+    case "grigliataChiudi":
+      result = await adminChiudiEvento(body.evento_id);
       break;
 
     // ── Bici ──────────────────────────────────────────────────────────────

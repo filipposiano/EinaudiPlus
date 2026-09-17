@@ -197,6 +197,11 @@ section("authorize() — policy del modulo Linen Change");
   check("staff non può spostare l'ancora", authorize(staff, "cambioBiancheriaSet") === false);
   check("staff non può saltare un martedì", authorize(staff, "cambioBiancheriaSkip") === false);
 
+  // I permessi del delegato stanno per intero nel modulo Grigliata.
+  const delegato = { u: "toad", r: "delegato" };
+  check("il delegato non può leggere l'ancora", authorize(delegato, "cambioBiancheriaGet") === false);
+  check("il delegato non può spostare l'ancora", authorize(delegato, "cambioBiancheriaSet") === false);
+
   check("nessuno non autenticato può agire", authorize(null, "cambioBiancheriaGet") === false);
   check("azione di un altro modulo -> null", authorize(sistemista, "temaGet") === null);
 }

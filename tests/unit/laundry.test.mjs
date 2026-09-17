@@ -188,6 +188,13 @@ section("authorize() — policy del modulo Laundry");
   const fdo = { u: "mario", r: "fdo" };
   const staff = { u: "luigi", r: "staff" };
   const sistemista = { u: "peach", r: "sistemista" };
+  const delegato = { u: "toad", r: "delegato" };
+
+  // I permessi del delegato stanno per intero nel modulo Grigliata: qui non
+  // deve poter fare NIENTE, a differenza di FDO/staff/sistemista.
+  check("il delegato non può cambiare lo stato di una macchina", authorize(delegato, "setMachineStatus") === false);
+  check("il delegato non può liberare un turno", authorize(delegato, "clearDirezione") === false);
+  check("il delegato non può nemmeno leggere la griglia settimanale", authorize(delegato, "week") === false);
 
   check("staff non può cambiare lo stato di una macchina", authorize(staff, "setMachineStatus") === false);
   check("FDO può cambiare lo stato di una macchina", authorize(fdo, "setMachineStatus") === true);

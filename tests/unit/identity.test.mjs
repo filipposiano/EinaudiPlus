@@ -13,7 +13,7 @@
 import { authenticate } from "../../src/modules/identity/application/authenticate.js";
 import { changeOwnPassword } from "../../src/modules/identity/application/changeOwnPassword.js";
 import { createAccount, resetAccountPassword } from "../../src/modules/identity/application/manageAccounts.js";
-import { authorize, isSysadmin, isStaff, isValidRole } from "../../src/modules/identity/domain/roles.js";
+import { authorize, isSysadmin, isStaff, isDelegato, isValidRole } from "../../src/modules/identity/domain/roles.js";
 import { sessioneAncoraValida } from "../../src/modules/identity/domain/sessionState.js";
 import { issueToken, readToken } from "../../src/modules/identity/infrastructure/sessionToken.js";
 import { hashPassword, verifyPassword } from "../../src/modules/identity/infrastructure/passwordHasher.js";
@@ -141,13 +141,16 @@ section("authorize() — policy del modulo Identity");
   const fdo = { u: "mario", r: "fdo" };
   const staff = { u: "luigi", r: "staff" };
   const sistemista = { u: "peach", r: "sistemista" };
+  const delegato = { u: "toad", r: "delegato" };
 
   check("FDO non può creare account", authorize(fdo, "accountCreate") === false);
   check("staff non può creare account", authorize(staff, "accountCreate") === false);
+  check("delegato non può creare account", authorize(delegato, "accountCreate") === false);
   check("sistemista può creare account", authorize(sistemista, "accountCreate") === true);
   check("sistemista può elencare account", authorize(sistemista, "accountList") === true);
 
   check("chiunque autenticato può cambiare la propria password", authorize(fdo, "accountChangeOwnPassword") === true);
+  check("anche il delegato può cambiare la propria password", authorize(delegato, "accountChangeOwnPassword") === true);
   check("nessuno non autenticato può cambiare password", authorize(null, "accountChangeOwnPassword") === false);
 
   check("azione di un altro modulo -> null (non 'affar mio', non un divieto)",
@@ -155,7 +158,9 @@ section("authorize() — policy del modulo Identity");
 
   check("isSysadmin", isSysadmin(sistemista) === true && isSysadmin(fdo) === false);
   check("isStaff", isStaff(staff) === true && isStaff(sistemista) === false);
+  check("isDelegato", isDelegato(delegato) === true && isDelegato(sistemista) === false && isDelegato(null) === false);
   check("ruolo sconosciuto respinto dalla whitelist", isValidRole("portineria") === false);
+  check("delegato è un ruolo valido", isValidRole("delegato") === true);
 }
 
 // ─── Token di sessione ───────────────────────────────────────────────────────
