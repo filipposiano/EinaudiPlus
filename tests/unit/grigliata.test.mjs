@@ -10,7 +10,9 @@ import { adminCreaEvento } from "../../src/modules/grigliata/application/adminCr
 import { adminOverview } from "../../src/modules/grigliata/application/adminOverview.js";
 import { adminConfermaPagamento } from "../../src/modules/grigliata/application/adminConfermaPagamento.js";
 import { adminChiudiEvento } from "../../src/modules/grigliata/application/adminChiudiEvento.js";
-import { adminModificaScadenza } from "../../src/modules/grigliata/application/adminModificaScadenza.js";
+import { adminModificaEvento } from "../../src/modules/grigliata/application/adminModificaEvento.js";
+import { adminAggiungiAdesione } from "../../src/modules/grigliata/application/adminAggiungiAdesione.js";
+import { adminRimuoviAdesione } from "../../src/modules/grigliata/application/adminRimuoviAdesione.js";
 import { adminRiapriEvento } from "../../src/modules/grigliata/application/adminRiapriEvento.js";
 import { adminEliminaEvento } from "../../src/modules/grigliata/application/adminEliminaEvento.js";
 import { authorize } from "../../src/modules/grigliata/domain/policy.js";
@@ -42,7 +44,9 @@ function fakeRepository() {
       return { ok: true, room: "214", titolo: "Grigliata di prova" };
     },
     async adminChiudi(id) { calls.push({ name: "adminChiudi", id }); return { ok: true }; },
-    async adminModificaScadenza(args) { calls.push({ name: "adminModificaScadenza", args }); return { ok: true }; },
+    async adminModifica(args) { calls.push({ name: "adminModifica", args }); return { ok: true }; },
+    async adminAggiungiAdesione(args) { calls.push({ name: "adminAggiungiAdesione", args }); return { ok: true }; },
+    async adminRimuoviAdesione(id) { calls.push({ name: "adminRimuoviAdesione", id }); return { ok: true }; },
     async adminRiapri(id) { calls.push({ name: "adminRiapri", id }); return { ok: true }; },
     async adminElimina(id) { calls.push({ name: "adminElimina", id }); return { ok: true }; },
   };
@@ -64,7 +68,9 @@ function repositoryCheRompe(messaggio = "Could not find the function") {
     async adminOverview() { throw err; },
     async adminConfermaPagamento() { throw err; },
     async adminChiudi() { throw err; },
-    async adminModificaScadenza() { throw err; },
+    async adminModifica() { throw err; },
+    async adminAggiungiAdesione() { throw err; },
+    async adminRimuoviAdesione() { throw err; },
     async adminRiapri() { throw err; },
     async adminElimina() { throw err; },
   };
@@ -217,25 +223,66 @@ section("adminChiudiEvento()");
   check("un id non numerico viene respinto", err?.message === "evento non valido");
 }
 
-section("adminModificaScadenza()");
+section("adminModificaEvento()");
 {
   const futuro = new Date(Date.now() + 3600_000).toISOString();
   const repo = fakeRepository();
-  await adminModificaScadenza({ eventoId: "7", scadenza: futuro }, { grigliataRepository: repo });
-  check("l'id arriva convertito in numero e la data come ISO",
-    repo.calls[0].args.id === 7 && repo.calls[0].args.scadenza === new Date(futuro).toISOString());
+  await adminModificaEvento({ eventoId: "7", titolo: "  Grigliata corretta  ", scadenza: futuro }, { grigliataRepository: repo });
+  check("l'id arriva convertito in numero, il titolo ripulito, la data come ISO",
+    repo.calls[0].args.id === 7 && repo.calls[0].args.titolo === "Grigliata corretta"
+    && repo.calls[0].args.scadenza === new Date(futuro).toISOString());
 
   const errId = await throws(() =>
-    adminModificaScadenza({ eventoId: "x", scadenza: futuro }, { grigliataRepository: fakeRepository() }));
+    adminModificaEvento({ eventoId: "x", titolo: "x", scadenza: futuro }, { grigliataRepository: fakeRepository() }));
   check("un id non numerico viene respinto", errId?.message === "evento non valido");
 
   const errData = await throws(() =>
-    adminModificaScadenza({ eventoId: "7", scadenza: "2020-01-01T00:00:00Z" }, { grigliataRepository: fakeRepository() }));
+    adminModificaEvento({ eventoId: "7", titolo: "x", scadenza: "2020-01-01T00:00:00Z" }, { grigliataRepository: fakeRepository() }));
   check("una scadenza nel passato viene respinta", errData?.message === "la scadenza deve essere una data futura");
 
   const repoNonToccato = fakeRepository();
-  await throws(() => adminModificaScadenza({ eventoId: "7", scadenza: "2020-01-01" }, { grigliataRepository: repoNonToccato }));
+  await throws(() => adminModificaEvento({ eventoId: "7", titolo: "x", scadenza: "2020-01-01" }, { grigliataRepository: repoNonToccato }));
   check("e il repository non viene chiamato", repoNonToccato.calls.length === 0);
+
+  // Titolo assente: passa vuoto al repository, che ricade su 'Grigliata'
+  // lato SQL (stessa regola di adminCreaEvento) — qui non si respinge.
+  const repoSenzaTitolo = fakeRepository();
+  await adminModificaEvento({ eventoId: "7", titolo: "", scadenza: futuro }, { grigliataRepository: repoSenzaTitolo });
+  check("titolo assente passa vuoto, non respinto", repoSenzaTitolo.calls[0].args.titolo === "");
+}
+
+section("adminAggiungiAdesione()");
+{
+  const repo = fakeRepository();
+  await adminAggiungiAdesione({ eventoId: "7", room: " 214 ", menu: "vegano" }, { grigliataRepository: repo });
+  check("l'id arriva convertito in numero, la camera ripulita, il menu passato",
+    repo.calls[0].args.eventoId === 7 && repo.calls[0].args.room === "214" && repo.calls[0].args.menu === "vegano");
+
+  const errId = await throws(() =>
+    adminAggiungiAdesione({ eventoId: "x", room: "214", menu: "classico" }, { grigliataRepository: fakeRepository() }));
+  check("un id di evento non numerico viene respinto", errId?.message === "evento non valido");
+
+  const errRoom = await throws(() =>
+    adminAggiungiAdesione({ eventoId: "7", room: "non una camera", menu: "classico" }, { grigliataRepository: fakeRepository() }));
+  check("una camera nel formato sbagliato viene respinta", errRoom?.message === "numero di camera non valido");
+
+  const errMenu = await throws(() =>
+    adminAggiungiAdesione({ eventoId: "7", room: "214", menu: "piccante" }, { grigliataRepository: fakeRepository() }));
+  check("un menu non riconosciuto viene respinto", errMenu?.message === "scegli un menu");
+
+  const repoNonToccato = fakeRepository();
+  await throws(() => adminAggiungiAdesione({ eventoId: "7", room: "x", menu: "classico" }, { grigliataRepository: repoNonToccato }));
+  check("e il repository non viene chiamato", repoNonToccato.calls.length === 0);
+}
+
+section("adminRimuoviAdesione()");
+{
+  const repo = fakeRepository();
+  await adminRimuoviAdesione({ adesioneId: "42" }, { grigliataRepository: repo });
+  check("l'id arriva convertito in numero", repo.calls[0].id === 42);
+
+  const err = await throws(() => adminRimuoviAdesione({ adesioneId: "x" }, { grigliataRepository: fakeRepository() }));
+  check("un id non numerico viene respinto", err?.message === "adesione non valida");
 }
 
 section("adminRiapriEvento()");
@@ -291,9 +338,17 @@ section("un errore della RPC è esponibile all'admin, non generico");
   const errChiudi = await throws(() => adminChiudiEvento({ eventoId: "1" }, { grigliataRepository: repoRotto }));
   check("adminChiudiEvento: stesso comportamento dopo la validazione", errChiudi?.expose === true);
 
-  const errScadenza = await throws(() =>
-    adminModificaScadenza({ eventoId: "1", scadenza: futuro }, { grigliataRepository: repoRotto }));
-  check("adminModificaScadenza: stesso comportamento dopo la validazione", errScadenza?.expose === true);
+  const errModifica = await throws(() =>
+    adminModificaEvento({ eventoId: "1", titolo: "x", scadenza: futuro }, { grigliataRepository: repoRotto }));
+  check("adminModificaEvento: stesso comportamento dopo la validazione", errModifica?.expose === true);
+
+  const errAggiungi = await throws(() =>
+    adminAggiungiAdesione({ eventoId: "1", room: "214", menu: "classico" }, { grigliataRepository: repoRotto }));
+  check("adminAggiungiAdesione: stesso comportamento dopo la validazione", errAggiungi?.expose === true);
+
+  const errRimuovi = await throws(() =>
+    adminRimuoviAdesione({ adesioneId: "1" }, { grigliataRepository: repoRotto }));
+  check("adminRimuoviAdesione: stesso comportamento dopo la validazione", errRimuovi?.expose === true);
 
   const errRiapri = await throws(() => adminRiapriEvento({ eventoId: "1" }, { grigliataRepository: repoRotto }));
   check("adminRiapriEvento: stesso comportamento dopo la validazione", errRiapri?.expose === true);
@@ -313,7 +368,8 @@ section("authorize() — policy del modulo Grigliata");
 
   for (const azione of [
     "grigliataCrea", "grigliataOverview", "grigliataConfermaPagamento", "grigliataChiudi",
-    "grigliataModificaScadenza", "grigliataRiapri", "grigliataElimina",
+    "grigliataModifica", "grigliataAggiungiAdesione", "grigliataRimuoviAdesione",
+    "grigliataRiapri", "grigliataElimina",
   ]) {
     check(`il delegato può '${azione}'`, authorize(delegato, azione) === true);
     check(`il sistemista può '${azione}'`, authorize(sistemista, azione) === true);

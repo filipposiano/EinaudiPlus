@@ -68,7 +68,8 @@ import {
 import {
   authorize as grigliataAuthorize,
   adminCreaEvento, adminOverview as grigliataAdminOverview,
-  adminConfermaPagamento, adminChiudiEvento, adminModificaScadenza,
+  adminConfermaPagamento, adminChiudiEvento, adminModificaEvento,
+  adminAggiungiAdesione, adminRimuoviAdesione,
   adminRiapriEvento, adminEliminaEvento,
 } from "../../src/modules/grigliata/index.js";
 
@@ -86,8 +87,8 @@ const MUTATIONS = new Set([
   "accountCreate", "accountSetPassword", "accountSetActive", "accountDelete",
   "accountChangeOwnPassword", "biciPurge", "biciDeleteRoom", "biciAddRoom", "temaSet",
   "cambioBiancheriaSet", "cambioBiancheriaSkip",
-  "grigliataCrea", "grigliataConfermaPagamento", "grigliataChiudi", "grigliataModificaScadenza",
-  "grigliataRiapri", "grigliataElimina",
+  "grigliataCrea", "grigliataConfermaPagamento", "grigliataChiudi", "grigliataModifica",
+  "grigliataAggiungiAdesione", "grigliataRimuoviAdesione", "grigliataRiapri", "grigliataElimina",
 ]);
 
 /**
@@ -464,8 +465,16 @@ export default wrapHandler("admin/data", async (req, res) => {
       result = await adminChiudiEvento(body.evento_id);
       break;
 
-    case "grigliataModificaScadenza":
-      result = await adminModificaScadenza(body.evento_id, body.scadenza);
+    case "grigliataModifica":
+      result = await adminModificaEvento(body.evento_id, body.titolo, body.scadenza);
+      break;
+
+    case "grigliataAggiungiAdesione":
+      result = await adminAggiungiAdesione(body.evento_id, body.room, body.menu);
+      break;
+
+    case "grigliataRimuoviAdesione":
+      result = await adminRimuoviAdesione(body.adesione_id);
       break;
 
     case "grigliataRiapri":

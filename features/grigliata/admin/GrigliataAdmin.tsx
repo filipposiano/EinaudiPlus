@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pencil, Plus, Check } from "lucide-react";
+import { Pencil, Plus, Check, UserPlus } from "lucide-react";
 import { call } from "../../admin-shared/adminApi";
 import { S } from "../../admin-shared/adminStyles";
 import { PIANI, pianoDi, nomePiano, colorePiano, type Piano } from "../../../piani";
@@ -74,11 +74,20 @@ export function GrigliataAdmin() {
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  // Modifica della scadenza dell'evento corrente — a parte dal form di
-  // creazione qui sotto: qui si cambia una data su un evento che esiste già,
-  // non se ne fa partire uno nuovo.
-  const [modificaScadenza, setModificaScadenza] = useState(false);
+  // Modifica di titolo e scadenza dell'evento corrente — a parte dal form
+  // di creazione qui sotto: qui si corregge un evento che esiste già, non
+  // se ne fa partire uno nuovo.
+  const [modificaEvento, setModificaEvento] = useState(false);
+  const [nuovoTitolo, setNuovoTitolo] = useState("");
   const [nuovaScadenza, setNuovaScadenza] = useState("");
+
+  // Aggiunta a mano di una camera — per chi non usa l'app, o per registrare
+  // chi ha dato la sua parola di persona. Sempre "partecipa", con un menu:
+  // e' quello che grigliata_admin_aggiungi_adesione fa (vedi il commento
+  // gemello lato SQL).
+  const [aggiungiCamera, setAggiungiCamera] = useState(false);
+  const [nuovaCamera, setNuovaCamera] = useState("");
+  const [nuovoMenuCamera, setNuovoMenuCamera] = useState<Menu>("classico");
 
   // "Elimina" chiede conferma DENTRO la pagina, non con window.confirm():
   // e' bloccato in diversi contesti (PWA installata, iframe senza
@@ -87,9 +96,9 @@ export function GrigliataAdmin() {
   // in Manutenzione.tsx per lo stesso motivo.
   const [daEliminare, setDaEliminare] = useState(false);
 
-  // La pastiglia di chi non ha ancora il pagamento confermato è cliccabile:
-  // apre questo popup invece di confermare al primo tocco — confermare un
-  // incasso è un'azione reale (avvisa la camera), merita un passaggio in
+  // Ogni pastiglia è cliccabile, confermata o no: apre questo popup invece
+  // di agire al primo tocco — confermare un incasso o togliere una camera
+  // sono azioni reali (la prima avvisa la camera), meritano un passaggio in
   // più, come "Elimina" qui sopra. Il popup dice esplicitamente che si può
   // confermare anche se la camera non ha ancora toccato "Ho pagato" da sé
   // (es. ha pagato in mano, o al bancomat): non è un requisito, solo
@@ -182,22 +191,23 @@ export function GrigliataAdmin() {
     }
   }
 
-  function apriModificaScadenza() {
+  function apriModificaEvento() {
     if (!overview?.evento) return;
+    setNuovoTitolo(overview.evento.titolo);
     setNuovaScadenza(isoInDatetimeLocal(overview.evento.scadenza));
-    setModificaScadenza(true);
+    setModificaEvento(true);
   }
 
-  async function salvaScadenza() {
+  async function salvaEvento() {
     if (!overview?.evento || busy) return;
     setBusy(true); setMsg(null);
     try {
-      await call("grigliataModificaScadenza", {
-        evento_id: overview.evento.id, scadenza: new Date(nuovaScadenza).toISOString(),
+      await call("grigliataModifica", {
+        evento_id: overview.evento.id, titolo: nuovoTitolo, scadenza: new Date(nuovaScadenza).toISOString(),
       });
-      setModificaScadenza(false);
+      setModificaEvento(false);
       await carica();
-      setMsg("Scadenza aggiornata.");
+      setMsg("Grigliata aggiornata.");
     } catch (e: any) {
       setMsg("Non è riuscito: " + e.message);
     } finally {
@@ -227,6 +237,45 @@ export function GrigliataAdmin() {
     if (await confermaPagamento(adesioneSelezionata.id)) setAdesioneSelezionata(null);
   }
 
+  async function aggiungiAdesione() {
+    if (!overview?.evento || busy) return;
+    setBusy(true); setMsg(null);
+    try {
+      await call("grigliataAggiungiAdesione", {
+        evento_id: overview.evento.id, room: nuovaCamera, menu: nuovoMenuCamera,
+      });
+      setAggiungiCamera(false);
+      setNuovaCamera("");
+      await carica();
+      setMsg("Camera aggiunta.");
+    } catch (e: any) {
+      setMsg("Non è riuscito: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Come confermaPagamento: torna true/false così il popup sa se chiudersi. */
+  async function rimuoviAdesione(adesioneId: number): Promise<boolean> {
+    if (busy) return false;
+    setBusy(true); setMsg(null);
+    try {
+      await call("grigliataRimuoviAdesione", { adesione_id: adesioneId });
+      await carica();
+      return true;
+    } catch (e: any) {
+      setMsg("Non è riuscito: " + e.message);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function rimuoviSelezionata() {
+    if (!adesioneSelezionata) return;
+    if (await rimuoviAdesione(adesioneSelezionata.id)) setAdesioneSelezionata(null);
+  }
+
   const evento = overview?.evento ?? null;
   const adesioni = overview?.adesioni ?? [];
 
@@ -251,9 +300,9 @@ export function GrigliataAdmin() {
   // differenza voluta: qui il colore stesso PORTA il significato. In
   // bianco e nero finché il pagamento non è confermato, colorata col colore
   // del piano appena lo è — un solo sguardo sulla griglia dice quanto
-  // manca, senza dover leggere ogni riga. Cliccabile solo finché è ancora
-  // grigia: confermare è un'azione, non serve un tocco su una pastiglia già
-  // a posto.
+  // manca, senza dover leggere ogni riga. Sempre cliccabile (confermata o
+  // no): il popup che apre serve anche a togliere la camera, non solo a
+  // confermare un pagamento.
   const AdesioneChip = ({ a, colore }: { a: Adesione; colore: string }) => {
     const confermato = a.pagamento_confermato;
     const stile = {
@@ -263,11 +312,11 @@ export function GrigliataAdmin() {
       background: confermato ? `color-mix(in srgb, ${colore} 12%, var(--card))` : "var(--secondary)",
       border: `1px solid ${confermato ? `color-mix(in srgb, ${colore} 32%, var(--border))` : "var(--border)"}`,
       color: "var(--foreground)",
-      cursor: confermato ? "default" : "pointer",
+      cursor: "pointer",
       opacity: busy ? 0.6 : 1,
     } as const;
     return (
-      <button onClick={() => !confermato && setAdesioneSelezionata(a)} disabled={busy} style={stile}>
+      <button onClick={() => setAdesioneSelezionata(a)} disabled={busy} style={stile}>
         <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "monospace" }}>{a.room}</span>
         <span style={{
           fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.02em",
@@ -334,7 +383,13 @@ export function GrigliataAdmin() {
 
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+      {/* Titolo a sinistra, "+" a destra: su desktop questa scheda non ha
+          una topbar sopra di sé (a differenza del layout mobile, che il
+          nome della sezione lo mostra già lì) — un pulsante da solo,
+          allineato tutto a destra, lasciava uno spazio vuoto grande quanto
+          la larghezza della pagina. */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 4 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 800 }}>Grigliata</h2>
         <button onClick={() => setMostraForm(true)} title="Fai partire una nuova grigliata"
           style={{
             width: 34, height: 34, borderRadius: 99, flexShrink: 0,
@@ -403,29 +458,39 @@ export function GrigliataAdmin() {
       {/* ── Riepilogo ────────────────────────────────────────────────────── */}
       {evento ? (
         <div style={{ ...S.card, padding: 16, marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4 }}>
-            <p style={{ fontSize: 16, fontWeight: 700 }}>{evento.titolo}</p>
-            <span style={{
-              fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99, flexShrink: 0,
-              background: evento.attiva ? "color-mix(in srgb, #22c55e 18%, transparent)" : "var(--secondary)",
-              color: evento.attiva ? "#16a34a" : "var(--muted-foreground)",
-            }}>
-              {evento.attiva ? "ATTIVA" : "CHIUSA"}
-            </span>
-          </div>
-
-          {modificaScadenza ? (
-            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
-              <input style={{ ...S.input, width: "auto", flex: 1, minWidth: 180 }} type="datetime-local"
-                value={nuovaScadenza} onChange={(e) => setNuovaScadenza(e.target.value)} />
-              <button onClick={salvaScadenza} disabled={busy} style={{ ...S.btn, opacity: busy ? 0.5 : 1 }}>Salva</button>
-              <button onClick={() => setModificaScadenza(false)} style={S.btn}>Annulla</button>
+          {modificaEvento ? (
+            <div style={{ display: "grid", gap: 8, marginBottom: 14 }}>
+              <input style={S.input} value={nuovoTitolo} onChange={(e) => setNuovoTitolo(e.target.value)} placeholder="Grigliata" />
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <input style={{ ...S.input, width: "auto", flex: 1, minWidth: 180 }} type="datetime-local"
+                  value={nuovaScadenza} onChange={(e) => setNuovaScadenza(e.target.value)} />
+                <button onClick={salvaEvento} disabled={busy} style={{ ...S.btn, opacity: busy ? 0.5 : 1 }}>Salva</button>
+                <button onClick={() => setModificaEvento(false)} style={S.btn}>Annulla</button>
+              </div>
             </div>
           ) : (
-            <button onClick={apriModificaScadenza}
-              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, ...S.sub, marginBottom: 14, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-              Scade {fmtData(evento.scadenza)} <Pencil size={12} />
-            </button>
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4 }}>
+                <button onClick={apriModificaEvento}
+                  style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 16, fontWeight: 700, color: "var(--foreground)", background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}>
+                  {evento.titolo} <Pencil size={13} style={{ flexShrink: 0, color: "var(--gray-accessible-text)" }} />
+                </button>
+                {/* ATTIVA/CHIUSA non è solo un'etichetta: è il pulsante che
+                    attiva o disattiva la grigliata — un tocco solo, invece
+                    di un "Chiudi ora"/"Riapri" separato da cercare più giù. */}
+                <button onClick={() => (evento.chiuso ? riapri() : chiudi())} disabled={busy}
+                  title={evento.chiuso ? "Tocca per riattivarla" : "Tocca per chiuderla subito"}
+                  style={{
+                    fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99, flexShrink: 0,
+                    border: "none", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1,
+                    background: evento.attiva ? "color-mix(in srgb, #22c55e 18%, transparent)" : "var(--secondary)",
+                    color: evento.attiva ? "#16a34a" : "var(--muted-foreground)",
+                  }}>
+                  {evento.attiva ? "ATTIVA" : "CHIUSA"}
+                </button>
+              </div>
+              <p style={{ fontSize: 12, ...S.sub, marginBottom: 14 }}>Scade {fmtData(evento.scadenza)}</p>
+            </>
           )}
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
@@ -435,23 +500,13 @@ export function GrigliataAdmin() {
             <Statistica valore={`${vegano.pagati}/${vegano.totale}`} etichetta="Menu vegano (pagati/tot.)" />
           </div>
 
-          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-            {!evento.chiuso && (
-              <button onClick={chiudi} disabled={busy} style={{ ...S.danger, opacity: busy ? 0.5 : 1 }}>
-                Chiudi ora
+          {evento.chiuso && (
+            <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+              <button onClick={() => setDaEliminare(true)} disabled={busy} style={{ ...S.danger, opacity: busy ? 0.5 : 1 }}>
+                Elimina
               </button>
-            )}
-            {evento.chiuso && (
-              <>
-                <button onClick={riapri} disabled={busy} style={{ ...S.btn, opacity: busy ? 0.5 : 1 }}>
-                  Riapri
-                </button>
-                <button onClick={() => setDaEliminare(true)} disabled={busy} style={{ ...S.danger, opacity: busy ? 0.5 : 1 }}>
-                  Elimina
-                </button>
-              </>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       ) : (
         <div style={{ ...S.card, padding: 16, marginBottom: 16, fontSize: 13, ...S.sub, textAlign: "center" }}>
@@ -460,9 +515,45 @@ export function GrigliataAdmin() {
       )}
 
       {/* ── Chi ha risposto, per piano ───────────────────────────────────── */}
-      {adesioni.length > 0 && (
+      {evento && (
         <div style={{ ...S.card, padding: 14 }}>
-          <p style={{ fontSize: 12, ...S.sub, marginBottom: 10 }}>Chi ha risposto:</p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <p style={{ fontSize: 12, ...S.sub }}>Chi ha risposto:</p>
+            {/* Per chi non usa l'app, o ha dato la sua parola di persona:
+                il delegato registra (o corregge) una camera a mano, invece
+                di aspettare che aderisca da sola. */}
+            <button onClick={() => setAggiungiCamera((v) => !v)} title="Aggiungi una camera a mano"
+              style={{
+                display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700,
+                color: "var(--gray-accessible-text)", background: "none", border: "none", cursor: "pointer", padding: 0,
+              }}>
+              <UserPlus size={13} /> Aggiungi
+            </button>
+          </div>
+
+          {aggiungiCamera && (
+            <div style={{
+              display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center",
+              marginBottom: 14, padding: 10, borderRadius: 12, background: "var(--secondary)",
+            }}>
+              <input style={{ ...S.input, width: "auto", flex: 1, minWidth: 90 }} placeholder="Camera"
+                value={nuovaCamera} onChange={(e) => setNuovaCamera(e.target.value)} />
+              <select style={{ ...S.input, width: "auto" }} value={nuovoMenuCamera}
+                onChange={(e) => setNuovoMenuCamera(e.target.value as Menu)}>
+                <option value="classico">Classico</option>
+                <option value="vegano">Vegano</option>
+              </select>
+              <button onClick={aggiungiAdesione} disabled={busy || !nuovaCamera.trim()} style={{ ...S.btn, opacity: busy || !nuovaCamera.trim() ? 0.5 : 1 }}>
+                {busy ? "In corso…" : "Aggiungi"}
+              </button>
+              <button onClick={() => { setAggiungiCamera(false); setNuovaCamera(""); }} style={S.btn}>Annulla</button>
+            </div>
+          )}
+
+          {adesioni.length === 0 && !aggiungiCamera && (
+            <p style={{ fontSize: 12, ...S.sub }}>Ancora nessuna risposta.</p>
+          )}
+
           {PIANI.map((p) => (
             <GruppoPiano key={p} piano={p} righe={adesioni.filter((a) => pianoDi(a.room) === p)} />
           ))}
@@ -489,7 +580,7 @@ export function GrigliataAdmin() {
         </div>
       )}
 
-      {/* ── Conferma un pagamento — overlay in pagina, dalla pastiglia ──── */}
+      {/* ── Una camera: conferma il pagamento o toglila — dalla pastiglia ── */}
       {adesioneSelezionata && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 60, display: "flex",
@@ -501,13 +592,20 @@ export function GrigliataAdmin() {
               Menu: {adesioneSelezionata.menu === "vegano" ? "Vegano" : "Classico"}
             </p>
             <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
-              {adesioneSelezionata.pagamento_dichiarato
-                ? "Ha dichiarato di aver pagato."
-                : "Non ha ancora dichiarato di aver pagato — puoi confermarlo comunque, ad esempio se ha pagato in mano o senza usare l'app."}
+              {adesioneSelezionata.pagamento_confermato
+                ? "Pagamento confermato."
+                : adesioneSelezionata.pagamento_dichiarato
+                  ? "Ha dichiarato di aver pagato."
+                  : "Non ha ancora dichiarato di aver pagato — puoi confermarlo comunque, ad esempio se ha pagato in mano o senza usare l'app."}
             </p>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button style={S.btn} disabled={busy} onClick={confermaSelezionata}>
-                {busy ? "In corso…" : "Conferma pagamento"}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {!adesioneSelezionata.pagamento_confermato && (
+                <button style={S.btn} disabled={busy} onClick={confermaSelezionata}>
+                  {busy ? "In corso…" : "Conferma pagamento"}
+                </button>
+              )}
+              <button style={S.danger} disabled={busy} onClick={rimuoviSelezionata}>
+                {busy ? "In corso…" : "Rimuovi camera"}
               </button>
               <button style={S.btn} disabled={busy} onClick={() => setAdesioneSelezionata(null)}>
                 Annulla
