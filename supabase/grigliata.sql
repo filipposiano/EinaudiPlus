@@ -329,6 +329,52 @@ begin
 end;
 $$;
 
+-- Riapre un evento chiuso. Chiude prima qualunque ALTRO evento ancora
+-- attivo: "attiva" è calcolato (not chiuso and now() < scadenza), non un
+-- flag a sé — senza questo passaggio si potrebbero ritrovare due grigliate
+-- attive insieme, e la scheda residenti ne mostra sempre una sola.
+--
+-- Non tocca la scadenza: se era già passata, l'evento torna "non chiuso"
+-- ma resta comunque non attivo finché non si sposta anche la data (vedi
+-- grigliata_admin_modifica_scadenza) — due decisioni separate, non una.
+create or replace function grigliata_admin_riapri(p_evento_id bigint)
+returns jsonb language plpgsql as $$
+begin
+  update grigliata_evento set chiuso = true
+    where id <> p_evento_id and not chiuso and now() < scadenza;
+
+  update grigliata_evento set chiuso = false where id = p_evento_id;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'evento non trovato');
+  end if;
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- Elimina un evento e, per la on delete cascade sulla tabella
+-- grigliata_adesione, tutte le sue adesioni — irreversibile, per questo
+-- solo su un evento già chiuso: un evento ancora attivo va chiuso prima,
+-- così non sparisce sotto i piedi a una scheda residenti che lo sta
+-- ancora mostrando.
+create or replace function grigliata_admin_elimina(p_evento_id bigint)
+returns jsonb language plpgsql as $$
+declare
+  v_chiuso boolean;
+begin
+  select chiuso into v_chiuso from grigliata_evento where id = p_evento_id;
+  if v_chiuso is null then
+    return jsonb_build_object('ok', false, 'error', 'evento non trovato');
+  end if;
+  if not v_chiuso then
+    return jsonb_build_object('ok', false, 'error', 'chiudi prima la grigliata per poterla eliminare');
+  end if;
+
+  delete from grigliata_evento where id = p_evento_id;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Permessi
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -343,6 +389,8 @@ revoke all on function grigliata_admin_modifica_scadenza(bigint, timestamptz) fr
 revoke all on function grigliata_admin_overview() from public, anon, authenticated;
 revoke all on function grigliata_admin_conferma_pagamento(bigint, text) from public, anon, authenticated;
 revoke all on function grigliata_admin_chiudi(bigint) from public, anon, authenticated;
+revoke all on function grigliata_admin_riapri(bigint) from public, anon, authenticated;
+revoke all on function grigliata_admin_elimina(bigint) from public, anon, authenticated;
 
 grant execute on function grigliata_attiva_bool() to service_role;
 grant execute on function grigliata_stato_pubblico(text) to service_role;
@@ -354,3 +402,5 @@ grant execute on function grigliata_admin_modifica_scadenza(bigint, timestamptz)
 grant execute on function grigliata_admin_overview() to service_role;
 grant execute on function grigliata_admin_conferma_pagamento(bigint, text) to service_role;
 grant execute on function grigliata_admin_chiudi(bigint) to service_role;
+grant execute on function grigliata_admin_riapri(bigint) to service_role;
+grant execute on function grigliata_admin_elimina(bigint) to service_role;

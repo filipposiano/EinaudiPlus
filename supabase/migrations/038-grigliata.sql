@@ -265,6 +265,43 @@ begin
 end;
 $$;
 
+-- Riapre un evento chiuso, chiudendo prima qualunque ALTRO evento ancora
+-- attivo (una alla volta, sempre). Non tocca la scadenza.
+create or replace function grigliata_admin_riapri(p_evento_id bigint)
+returns jsonb language plpgsql as $$
+begin
+  update grigliata_evento set chiuso = true
+    where id <> p_evento_id and not chiuso and now() < scadenza;
+
+  update grigliata_evento set chiuso = false where id = p_evento_id;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'evento non trovato');
+  end if;
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- Elimina un evento chiuso e, per cascata, le sue adesioni. Solo su un
+-- evento già chiuso: uno ancora attivo va chiuso prima.
+create or replace function grigliata_admin_elimina(p_evento_id bigint)
+returns jsonb language plpgsql as $$
+declare
+  v_chiuso boolean;
+begin
+  select chiuso into v_chiuso from grigliata_evento where id = p_evento_id;
+  if v_chiuso is null then
+    return jsonb_build_object('ok', false, 'error', 'evento non trovato');
+  end if;
+  if not v_chiuso then
+    return jsonb_build_object('ok', false, 'error', 'chiudi prima la grigliata per poterla eliminare');
+  end if;
+
+  delete from grigliata_evento where id = p_evento_id;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
 -- Aggiunge il booleano alla foto che l'app legge a ogni avvio (stessa
 -- funzione toccata dalle migrations/035 e 036 per tema e cambio biancheria).
 create or replace function laundry_snapshot(p_room text default null)
@@ -298,6 +335,8 @@ revoke all on function grigliata_admin_modifica_scadenza(bigint, timestamptz) fr
 revoke all on function grigliata_admin_overview() from public, anon, authenticated;
 revoke all on function grigliata_admin_conferma_pagamento(bigint, text) from public, anon, authenticated;
 revoke all on function grigliata_admin_chiudi(bigint) from public, anon, authenticated;
+revoke all on function grigliata_admin_riapri(bigint) from public, anon, authenticated;
+revoke all on function grigliata_admin_elimina(bigint) from public, anon, authenticated;
 
 grant execute on function grigliata_attiva_bool() to service_role;
 grant execute on function grigliata_stato_pubblico(text) to service_role;
@@ -309,3 +348,5 @@ grant execute on function grigliata_admin_modifica_scadenza(bigint, timestamptz)
 grant execute on function grigliata_admin_overview() to service_role;
 grant execute on function grigliata_admin_conferma_pagamento(bigint, text) to service_role;
 grant execute on function grigliata_admin_chiudi(bigint) to service_role;
+grant execute on function grigliata_admin_riapri(bigint) to service_role;
+grant execute on function grigliata_admin_elimina(bigint) to service_role;

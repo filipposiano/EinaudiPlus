@@ -11,6 +11,8 @@ import { adminOverview } from "../../src/modules/grigliata/application/adminOver
 import { adminConfermaPagamento } from "../../src/modules/grigliata/application/adminConfermaPagamento.js";
 import { adminChiudiEvento } from "../../src/modules/grigliata/application/adminChiudiEvento.js";
 import { adminModificaScadenza } from "../../src/modules/grigliata/application/adminModificaScadenza.js";
+import { adminRiapriEvento } from "../../src/modules/grigliata/application/adminRiapriEvento.js";
+import { adminEliminaEvento } from "../../src/modules/grigliata/application/adminEliminaEvento.js";
 import { authorize } from "../../src/modules/grigliata/domain/policy.js";
 import { isValidMenu, isFutureDateTime } from "../../src/modules/grigliata/domain/validazione.js";
 
@@ -41,6 +43,8 @@ function fakeRepository() {
     },
     async adminChiudi(id) { calls.push({ name: "adminChiudi", id }); return { ok: true }; },
     async adminModificaScadenza(args) { calls.push({ name: "adminModificaScadenza", args }); return { ok: true }; },
+    async adminRiapri(id) { calls.push({ name: "adminRiapri", id }); return { ok: true }; },
+    async adminElimina(id) { calls.push({ name: "adminElimina", id }); return { ok: true }; },
   };
 }
 
@@ -61,6 +65,8 @@ function repositoryCheRompe(messaggio = "Could not find the function") {
     async adminConfermaPagamento() { throw err; },
     async adminChiudi() { throw err; },
     async adminModificaScadenza() { throw err; },
+    async adminRiapri() { throw err; },
+    async adminElimina() { throw err; },
   };
 }
 
@@ -232,6 +238,35 @@ section("adminModificaScadenza()");
   check("e il repository non viene chiamato", repoNonToccato.calls.length === 0);
 }
 
+section("adminRiapriEvento()");
+{
+  const repo = fakeRepository();
+  await adminRiapriEvento({ eventoId: "9" }, { grigliataRepository: repo });
+  check("l'id arriva convertito in numero", repo.calls[0].id === 9);
+
+  const err = await throws(() => adminRiapriEvento({ eventoId: "x" }, { grigliataRepository: fakeRepository() }));
+  check("un id non numerico viene respinto", err?.message === "evento non valido");
+}
+
+section("adminEliminaEvento()");
+{
+  const repo = fakeRepository();
+  await adminEliminaEvento({ eventoId: "9" }, { grigliataRepository: repo });
+  check("l'id arriva convertito in numero", repo.calls[0].id === 9);
+
+  const err = await throws(() => adminEliminaEvento({ eventoId: "x" }, { grigliataRepository: fakeRepository() }));
+  check("un id non numerico viene respinto", err?.message === "evento non valido");
+
+  // La regola "solo un evento chiuso si elimina" è della funzione SQL, non
+  // di questo use-case: qui si verifica solo che un rifiuto del repository
+  // (che è quello che la SQL produrrebbe restituendo ok:false) arrivi
+  // inalterato al chiamante, senza essere silenziato.
+  const repoRifiuta = { async adminElimina() { return { ok: false, error: "chiudi prima la grigliata per poterla eliminare" }; } };
+  const res = await adminEliminaEvento({ eventoId: "9" }, { grigliataRepository: repoRifiuta });
+  check("il rifiuto della SQL (evento ancora attivo) passa inalterato",
+    res.ok === false && res.error === "chiudi prima la grigliata per poterla eliminare");
+}
+
 // ─── Un fallimento della RPC arriva all'admin come diagnosi, non generico ────
 
 section("un errore della RPC è esponibile all'admin, non generico");
@@ -259,6 +294,12 @@ section("un errore della RPC è esponibile all'admin, non generico");
   const errScadenza = await throws(() =>
     adminModificaScadenza({ eventoId: "1", scadenza: futuro }, { grigliataRepository: repoRotto }));
   check("adminModificaScadenza: stesso comportamento dopo la validazione", errScadenza?.expose === true);
+
+  const errRiapri = await throws(() => adminRiapriEvento({ eventoId: "1" }, { grigliataRepository: repoRotto }));
+  check("adminRiapriEvento: stesso comportamento dopo la validazione", errRiapri?.expose === true);
+
+  const errElimina = await throws(() => adminEliminaEvento({ eventoId: "1" }, { grigliataRepository: repoRotto }));
+  check("adminEliminaEvento: stesso comportamento dopo la validazione", errElimina?.expose === true);
 }
 
 // ─── Policy di autorizzazione ────────────────────────────────────────────────
@@ -270,7 +311,10 @@ section("authorize() — policy del modulo Grigliata");
   const sistemista = { u: "peach", r: "sistemista" };
   const delegato = { u: "toad", r: "delegato" };
 
-  for (const azione of ["grigliataCrea", "grigliataOverview", "grigliataConfermaPagamento", "grigliataChiudi", "grigliataModificaScadenza"]) {
+  for (const azione of [
+    "grigliataCrea", "grigliataOverview", "grigliataConfermaPagamento", "grigliataChiudi",
+    "grigliataModificaScadenza", "grigliataRiapri", "grigliataElimina",
+  ]) {
     check(`il delegato può '${azione}'`, authorize(delegato, azione) === true);
     check(`il sistemista può '${azione}'`, authorize(sistemista, azione) === true);
     check(`FDO NON può '${azione}'`, authorize(fdo, azione) === false);

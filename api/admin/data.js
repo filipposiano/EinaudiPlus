@@ -69,6 +69,7 @@ import {
   authorize as grigliataAuthorize,
   adminCreaEvento, adminOverview as grigliataAdminOverview,
   adminConfermaPagamento, adminChiudiEvento, adminModificaScadenza,
+  adminRiapriEvento, adminEliminaEvento,
 } from "../../src/modules/grigliata/index.js";
 
 // Le azioni che modificano qualcosa finiscono nell'audit log. Le letture no,
@@ -86,6 +87,7 @@ const MUTATIONS = new Set([
   "accountChangeOwnPassword", "biciPurge", "biciDeleteRoom", "biciAddRoom", "temaSet",
   "cambioBiancheriaSet", "cambioBiancheriaSkip",
   "grigliataCrea", "grigliataConfermaPagamento", "grigliataChiudi", "grigliataModificaScadenza",
+  "grigliataRiapri", "grigliataElimina",
 ]);
 
 /**
@@ -464,6 +466,14 @@ export default wrapHandler("admin/data", async (req, res) => {
 
     case "grigliataModificaScadenza":
       result = await adminModificaScadenza(body.evento_id, body.scadenza);
+      break;
+
+    case "grigliataRiapri":
+      result = await adminRiapriEvento(body.evento_id);
+      break;
+
+    case "grigliataElimina":
+      result = await adminEliminaEvento(body.evento_id);
       break;
 
     // ── Bici ──────────────────────────────────────────────────────────────

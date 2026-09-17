@@ -45,4 +45,14 @@ export const grigliataRepository = {
   async adminModificaScadenza({ id, scadenza }) {
     return rpc("grigliata_admin_modifica_scadenza", { p_evento_id: id, p_scadenza: scadenza });
   },
+
+  /** Admin: riapre un evento chiuso (chiude prima qualunque altro ancora attivo). */
+  async adminRiapri(id) {
+    return rpc("grigliata_admin_riapri", { p_evento_id: id });
+  },
+
+  /** Admin: elimina un evento già chiuso, e le sue adesioni per cascata. */
+  async adminElimina(id) {
+    return rpc("grigliata_admin_elimina", { p_evento_id: id });
+  },
 };

@@ -20,6 +20,8 @@ import { adminOverview as _adminOverview } from "./application/adminOverview.js"
 import { adminConfermaPagamento as _adminConfermaPagamento } from "./application/adminConfermaPagamento.js";
 import { adminChiudiEvento as _adminChiudiEvento } from "./application/adminChiudiEvento.js";
 import { adminModificaScadenza as _adminModificaScadenza } from "./application/adminModificaScadenza.js";
+import { adminRiapriEvento as _adminRiapriEvento } from "./application/adminRiapriEvento.js";
+import { adminEliminaEvento as _adminEliminaEvento } from "./application/adminEliminaEvento.js";
 
 export { authorize } from "./domain/policy.js";
 export { MENU, isValidMenu } from "./domain/validazione.js";
@@ -60,4 +62,12 @@ export async function adminChiudiEvento(eventoId) {
 
 export async function adminModificaScadenza(eventoId, scadenza) {
   return _adminModificaScadenza({ eventoId, scadenza }, deps);
+}
+
+export async function adminRiapriEvento(eventoId) {
+  return _adminRiapriEvento({ eventoId }, deps);
+}
+
+export async function adminEliminaEvento(eventoId) {
+  return _adminEliminaEvento({ eventoId }, deps);
 }

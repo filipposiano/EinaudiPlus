@@ -1,24 +1,21 @@
 import { useEffect, useState } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil, Plus } from "lucide-react";
 import { call } from "../../admin-shared/adminApi";
 import { S } from "../../admin-shared/adminStyles";
+import { PIANI, pianoDi, nomePiano, colorePiano, type Piano } from "../../../piani";
 
 // ─── Grigliata (delegato) ──────────────────────────────────────────────────────
 //
 // Riservata a delegato e sistemista (vedi
-// src/modules/grigliata/domain/policy.js). Una alla volta: far partire una
-// nuova grigliata chiude automaticamente quella ancora attiva — lo fa la
-// funzione SQL, non questo componente, quindi non c'è un "sei sicuro?" da
-// mostrare qui: è già così per costruzione.
+// src/modules/grigliata/domain/policy.js). Una alla volta: far partire (o
+// riaprire) una grigliata chiude automaticamente quella ancora attiva — lo
+// fa la funzione SQL, non questo componente.
 //
-// Tre sezioni, in quest'ordine — non era così alla prima versione, dov'era
-// il form di creazione a comparire per primo anche con un evento già in
-// corso: (1) il RIEPILOGO dell'evento corrente, con le statistiche che
-// contano operativamente ("quanti da confermare", non solo "quanti hanno
-// risposto"); (2) la lista di chi ha risposto, per confermare i pagamenti
-// uno per uno; (3) "fai partire una nuova grigliata", in fondo e più
-// piccola — è l'azione che si fa una volta ogni tanto, non quella con cui
-// si apre la scheda ogni giorno.
+// Il riepilogo (nome, stato, scadenza, statistiche) è la prima cosa che si
+// vede, non il form di creazione: quello si apre dal "+" in alto a destra,
+// com'era per Macchine/Bici prima che questa scheda esistesse — un'azione
+// eccezionale non deve competere visivamente con "conferma pagamento", che
+// è quella con cui si apre la pagina ogni giorno.
 
 type Menu = "classico" | "vegano";
 
@@ -83,8 +80,15 @@ export function GrigliataAdmin() {
   const [modificaScadenza, setModificaScadenza] = useState(false);
   const [nuovaScadenza, setNuovaScadenza] = useState("");
 
-  // Form "fai partire una nuova grigliata" — chiuso di default, anche con
-  // un evento già attivo: è l'azione eccezionale, non quella di ogni giorno.
+  // "Elimina" chiede conferma DENTRO la pagina, non con window.confirm():
+  // e' bloccato in diversi contesti (PWA installata, iframe senza
+  // allow-modals) e in quel caso torna false senza mostrare niente — il
+  // pulsante sembra semplicemente non funzionare. Stessa scelta già fatta
+  // in Manutenzione.tsx per lo stesso motivo.
+  const [daEliminare, setDaEliminare] = useState(false);
+
+  // Form "fai partire una nuova grigliata" — chiuso di default, si apre dal
+  // "+" in alto: è l'azione eccezionale, non quella di ogni giorno.
   const [mostraForm, setMostraForm] = useState(false);
   const [titolo, setTitolo] = useState(titoloDaData(scadenzaDiDefault()));
   const [titoloModificato, setTitoloModificato] = useState(false);
@@ -140,6 +144,35 @@ export function GrigliataAdmin() {
     }
   }
 
+  async function riapri() {
+    if (!overview?.evento || busy) return;
+    setBusy(true); setMsg(null);
+    try {
+      await call("grigliataRiapri", { evento_id: overview.evento.id });
+      await carica();
+      setMsg("Grigliata riaperta.");
+    } catch (e: any) {
+      setMsg("Non è riuscito: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function elimina() {
+    if (!overview?.evento || busy) return;
+    setBusy(true); setMsg(null);
+    try {
+      await call("grigliataElimina", { evento_id: overview.evento.id });
+      setDaEliminare(false);
+      await carica();
+      setMsg("Grigliata eliminata.");
+    } catch (e: any) {
+      setMsg("Non è riuscito: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function apriModificaScadenza() {
     if (!overview?.evento) return;
     setNuovaScadenza(isoInDatetimeLocal(overview.evento.scadenza));
@@ -179,23 +212,95 @@ export function GrigliataAdmin() {
   const evento = overview?.evento ?? null;
   const adesioni = overview?.adesioni ?? [];
 
-  // Le quattro cifre che contano operativamente: non solo "quanti hanno
-  // risposto", ma quanti da cucinare in che modo e quanti restano da
-  // incassare — le due domande che il delegato si fa aprendo la scheda.
   const partecipanti = adesioni.filter((a) => a.partecipa);
   const confermati = partecipanti.filter((a) => a.pagamento_confermato).length;
-  const classico = partecipanti.filter((a) => a.menu === "classico").length;
-  const vegano = partecipanti.filter((a) => a.menu === "vegano").length;
+  const perMenu = (m: Menu) => {
+    const del = partecipanti.filter((a) => a.menu === m);
+    return { totale: del.length, pagati: del.filter((a) => a.pagamento_confermato).length };
+  };
+  const classico = perMenu("classico");
+  const vegano = perMenu("vegano");
 
-  const Statistica = ({ valore, etichetta }: { valore: number; etichetta: string }) => (
+  const Statistica = ({ valore, etichetta }: { valore: string | number; etichetta: string }) => (
     <div style={{ textAlign: "center" }}>
       <p style={{ fontSize: 22, fontWeight: 800 }}>{valore}</p>
       <p style={{ fontSize: 11, ...S.sub }}>{etichetta}</p>
     </div>
   );
 
+  // Una riga "camera 214 — menu / stato pagamento", riusata nei tre
+  // sottogruppi qui sotto (confermati, da confermare, non partecipano).
+  const RigaAdesione = ({ a }: { a: Adesione }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "6px 0" }}>
+      <div style={{ minWidth: 0 }}>
+        <p style={{ fontSize: 13, fontWeight: 600 }}>Camera {a.room}</p>
+        {a.partecipa && <p style={{ fontSize: 12, ...S.sub }}>Menu: {a.menu === "vegano" ? "Vegano" : "Classico"}</p>}
+      </div>
+      {a.partecipa && !a.pagamento_confermato && (
+        <button onClick={() => confermaPagamento(a.id)} disabled={busy}
+          style={{ ...S.btn, flexShrink: 0, opacity: busy ? 0.5 : 1 }}>
+          Conferma pagamento
+        </button>
+      )}
+      {a.pagamento_confermato && (
+        <span style={{ fontSize: 12, fontWeight: 700, color: "#22c55e", flexShrink: 0 }}>✓ confermato</span>
+      )}
+    </div>
+  );
+
+  const Sottogruppo = ({ etichetta, righe }: { etichetta: string; righe: Adesione[] }) =>
+    righe.length === 0 ? null : (
+      <div style={{ marginBottom: 6 }}>
+        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", ...S.sub, marginTop: 8 }}>
+          {etichetta} · {righe.length}
+        </p>
+        {righe.map((a) => <RigaAdesione key={a.id} a={a} />)}
+      </div>
+    );
+
+  // Un gruppo per piano — stesso ordine e stessa idea di BiciTab.tsx:
+  // "Manica" (un edificio a se') prima dei piani veri e propri, che
+  // salgono dal primo al quarto, poi il basso fabbricato. Dentro ogni
+  // piano, tre sotto-elenchi: confermati, da confermare, non partecipano —
+  // le due domande che il delegato si fa girando per i piani.
+  const GruppoPiano = ({ piano, righe }: { piano: Piano; righe: Adesione[] }) => {
+    if (righe.length === 0) return null;
+    const partecipanoQui = righe.filter((a) => a.partecipa);
+    const confermatiQui = partecipanoQui.filter((a) => a.pagamento_confermato);
+    const daConfermareQui = partecipanoQui.filter((a) => !a.pagamento_confermato);
+    const nonPartecipanoQui = righe.filter((a) => !a.partecipa);
+    const colore = colorePiano(piano);
+    return (
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 2 }}>
+          <span style={{ width: 9, height: 9, borderRadius: 99, background: colore, flexShrink: 0 }} />
+          <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", ...S.sub }}>
+            {nomePiano(piano)} · {righe.length}
+          </p>
+        </div>
+        <Sottogruppo etichetta="Confermati" righe={confermatiQui} />
+        <Sottogruppo etichetta="Da confermare" righe={daConfermareQui} />
+        <Sottogruppo etichetta="Non partecipano" righe={nonPartecipanoQui} />
+      </div>
+    );
+  };
+
+  const fuoriSchema = adesioni.filter((a) => pianoDi(a.room) === null);
+
   return (
     <>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+        <button onClick={() => setMostraForm(true)} title="Fai partire una nuova grigliata"
+          style={{
+            width: 34, height: 34, borderRadius: 99, flexShrink: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "var(--primary)", color: "var(--primary-foreground)",
+            border: "none", cursor: "pointer",
+          }}>
+          <Plus size={18} />
+        </button>
+      </div>
+
       <p style={{ fontSize: 13, ...S.sub, marginBottom: 16, maxWidth: "70ch" }}>
         Finché è attiva, i residenti trovano la scheda "Grigliata" nel menu, dove
         aderiscono, scelgono il menu e dichiarano di aver pagato. Qui vedi il
@@ -205,108 +310,10 @@ export function GrigliataAdmin() {
 
       {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
 
-      {/* ── Riepilogo ────────────────────────────────────────────────────── */}
-      {evento ? (
-        <div style={{ ...S.card, padding: 16, marginBottom: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4 }}>
-            <p style={{ fontSize: 16, fontWeight: 700 }}>{evento.titolo}</p>
-            <span style={{
-              fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99, flexShrink: 0,
-              background: evento.attiva ? "color-mix(in srgb, #22c55e 18%, transparent)" : "var(--secondary)",
-              color: evento.attiva ? "#16a34a" : "var(--muted-foreground)",
-            }}>
-              {evento.attiva ? "ATTIVA" : "CHIUSA"}
-            </span>
-          </div>
-
-          {modificaScadenza ? (
-            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
-              <input style={{ ...S.input, width: "auto", flex: 1, minWidth: 180 }} type="datetime-local"
-                value={nuovaScadenza} onChange={(e) => setNuovaScadenza(e.target.value)} />
-              <button onClick={salvaScadenza} disabled={busy} style={{ ...S.btn, opacity: busy ? 0.5 : 1 }}>Salva</button>
-              <button onClick={() => setModificaScadenza(false)} style={S.btn}>Annulla</button>
-            </div>
-          ) : (
-            <button onClick={apriModificaScadenza}
-              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, ...S.sub, marginBottom: 14, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
-              Scade {fmtData(evento.scadenza)} <Pencil size={12} />
-            </button>
-          )}
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
-            <Statistica valore={partecipanti.length} etichetta="Partecipano" />
-            <Statistica valore={confermati} etichetta="Pagamenti confermati" />
-            <Statistica valore={classico} etichetta="Menu classico" />
-            <Statistica valore={vegano} etichetta="Menu vegano" />
-          </div>
-
-          {evento.attiva && (
-            <button onClick={chiudi} disabled={busy} style={{ ...S.danger, marginTop: 14, opacity: busy ? 0.5 : 1 }}>
-              Chiudi ora
-            </button>
-          )}
-        </div>
-      ) : (
-        <div style={{ ...S.card, padding: 16, marginBottom: 16, fontSize: 13, ...S.sub, textAlign: "center" }}>
-          Non c'è ancora nessuna grigliata. Falla partire qui sotto.
-        </div>
-      )}
-
-      {/* ── Chi ha risposto ──────────────────────────────────────────────── */}
-      {adesioni.length > 0 && (
-        <div style={{ ...S.card, padding: 14, marginBottom: 16 }}>
-          <p style={{ fontSize: 12, ...S.sub, marginBottom: 10 }}>Chi ha risposto:</p>
-          <div style={{ display: "grid", gap: 10 }}>
-            {adesioni.map((a) => (
-              <div key={a.id} style={{
-                display: "flex", justifyContent: "space-between", alignItems: "center",
-                gap: 10, paddingBottom: 10, borderBottom: "1px solid var(--border)",
-              }}>
-                <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 600 }}>
-                    Camera {a.room}
-                    {!a.partecipa && <span style={{ ...S.sub, fontWeight: 400 }}> — non partecipa</span>}
-                  </p>
-                  {a.partecipa && (
-                    <p style={{ fontSize: 12, ...S.sub }}>
-                      Menu: {a.menu === "vegano" ? "Vegano" : "Classico"}
-                      {a.pagamento_confermato
-                        ? " · pagamento confermato"
-                        : a.pagamento_dichiarato
-                          ? " · ha dichiarato di aver pagato"
-                          : " · non ha ancora pagato"}
-                    </p>
-                  )}
-                </div>
-                {a.partecipa && !a.pagamento_confermato && (
-                  <button onClick={() => confermaPagamento(a.id)} disabled={busy}
-                    style={{ ...S.btn, flexShrink: 0, opacity: busy ? 0.5 : 1 }}>
-                    Conferma pagamento
-                  </button>
-                )}
-                {a.pagamento_confermato && (
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "#22c55e", flexShrink: 0 }}>✓ confermato</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Fai partire una nuova grigliata ──────────────────────────────── */
-      /* In fondo, più piccola, e chiusa di default: è l'eccezione, non la
-         prima cosa che si vede aprendo la scheda — anche quando c'è già una
-         grigliata in corso, farne partire una nuova non è un pulsante che
-         deve saltare all'occhio quanto "conferma pagamento". */}
-      <div style={{ height: 1, background: "var(--border)", margin: "8px 0 16px" }} />
-
-      {!mostraForm ? (
-        <button onClick={() => setMostraForm(true)} style={{ ...S.btn, fontSize: 12 }}>
-          {evento ? "Fai partire una nuova grigliata" : "Fai partire la prima grigliata"}
-        </button>
-      ) : (
-        <div style={{ ...S.card, padding: 14, display: "grid", gap: 12 }}>
-          {evento?.attiva && (
+      {/* ── Fai partire una nuova grigliata (dal "+" qui sopra) ──────────── */}
+      {mostraForm && (
+        <div style={{ ...S.card, padding: 14, marginBottom: 16, display: "grid", gap: 12 }}>
+          {evento && !evento.chiuso && (
             <p style={{ fontSize: 12, color: "var(--destructive-text)" }}>
               C'è già una grigliata attiva: farne partire una nuova la chiude subito
               (le adesioni raccolte finora restano nello storico, ma la scheda
@@ -344,6 +351,107 @@ export function GrigliataAdmin() {
               {busy ? "Avvio…" : "Avvia"}
             </button>
             <button onClick={() => setMostraForm(false)} style={S.btn}>Annulla</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Riepilogo ────────────────────────────────────────────────────── */}
+      {evento ? (
+        <div style={{ ...S.card, padding: 16, marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 4 }}>
+            <p style={{ fontSize: 16, fontWeight: 700 }}>{evento.titolo}</p>
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99, flexShrink: 0,
+              background: evento.attiva ? "color-mix(in srgb, #22c55e 18%, transparent)" : "var(--secondary)",
+              color: evento.attiva ? "#16a34a" : "var(--muted-foreground)",
+            }}>
+              {evento.attiva ? "ATTIVA" : "CHIUSA"}
+            </span>
+          </div>
+
+          {modificaScadenza ? (
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+              <input style={{ ...S.input, width: "auto", flex: 1, minWidth: 180 }} type="datetime-local"
+                value={nuovaScadenza} onChange={(e) => setNuovaScadenza(e.target.value)} />
+              <button onClick={salvaScadenza} disabled={busy} style={{ ...S.btn, opacity: busy ? 0.5 : 1 }}>Salva</button>
+              <button onClick={() => setModificaScadenza(false)} style={S.btn}>Annulla</button>
+            </div>
+          ) : (
+            <button onClick={apriModificaScadenza}
+              style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, ...S.sub, marginBottom: 14, background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+              Scade {fmtData(evento.scadenza)} <Pencil size={12} />
+            </button>
+          )}
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+            <Statistica valore={partecipanti.length} etichetta="Partecipano" />
+            <Statistica valore={confermati} etichetta="Pagamenti confermati" />
+            <Statistica valore={`${classico.pagati}/${classico.totale}`} etichetta="Menu classico (pagati/tot.)" />
+            <Statistica valore={`${vegano.pagati}/${vegano.totale}`} etichetta="Menu vegano (pagati/tot.)" />
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
+            {!evento.chiuso && (
+              <button onClick={chiudi} disabled={busy} style={{ ...S.danger, opacity: busy ? 0.5 : 1 }}>
+                Chiudi ora
+              </button>
+            )}
+            {evento.chiuso && (
+              <>
+                <button onClick={riapri} disabled={busy} style={{ ...S.btn, opacity: busy ? 0.5 : 1 }}>
+                  Riapri
+                </button>
+                <button onClick={() => setDaEliminare(true)} disabled={busy} style={{ ...S.danger, opacity: busy ? 0.5 : 1 }}>
+                  Elimina
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div style={{ ...S.card, padding: 16, marginBottom: 16, fontSize: 13, ...S.sub, textAlign: "center" }}>
+          Non c'è ancora nessuna grigliata. Falla partire dal "+" qui sopra.
+        </div>
+      )}
+
+      {/* ── Chi ha risposto, per piano ───────────────────────────────────── */}
+      {adesioni.length > 0 && (
+        <div style={{ ...S.card, padding: 14 }}>
+          <p style={{ fontSize: 12, ...S.sub, marginBottom: 10 }}>Chi ha risposto:</p>
+          {PIANI.map((p) => (
+            <GruppoPiano key={p} piano={p} righe={adesioni.filter((a) => pianoDi(a.room) === p)} />
+          ))}
+          {fuoriSchema.length > 0 && (
+            <div>
+              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", ...S.sub, marginBottom: 4 }}>
+                Altre · {fuoriSchema.length}
+              </p>
+              {fuoriSchema.map((a) => <RigaAdesione key={a.id} a={a} />)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Conferma eliminazione — overlay in pagina, non window.confirm() */}
+      {daEliminare && evento && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 60, display: "flex",
+          alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.55)", padding: 20,
+        }} onClick={() => !busy && setDaEliminare(false)}>
+          <div style={{ ...S.card, padding: 20, maxWidth: 340, width: "100%" }} onClick={(e) => e.stopPropagation()}>
+            <p style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Eliminare "{evento.titolo}"?</p>
+            <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
+              Sparisce anche l'elenco di chi ha aderito, con menu e stato dei
+              pagamenti. Non si può annullare.
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={S.danger} disabled={busy} onClick={elimina}>
+                {busy ? "In corso…" : "Elimina"}
+              </button>
+              <button style={S.btn} disabled={busy} onClick={() => setDaEliminare(false)}>
+                Annulla
+              </button>
+            </div>
           </div>
         </div>
       )}
