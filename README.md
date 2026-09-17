@@ -1,7 +1,8 @@
 # EinaudiPlus
 
 App del Collegio Einaudi per prenotare **lavanderia**, **sala cinema** e **sala
-musica**. È una PWA: si installa dal browser e manda promemoria push.
+musica**, oltre a funzioni minori (bici, sala polivalente, cambio biancheria,
+grigliate). È una PWA: si installa dal browser e manda promemoria push.
 
 ## Com'è fatta
 
@@ -37,6 +38,7 @@ nelle sale).
 |---|---|
 | `api/laundry.js` | tutto ciò che riguarda la lavanderia |
 | `api/rooms.js` | cinema e musica |
+| `api/grigliata.js` | adesione, menu e dichiarazione di pagamento per una grigliata attiva |
 | `api/cron.js` | invia i promemoria dovuti. Lo chiama `pg_cron`, non Vercel |
 | `api/telegram.js` | webhook del bot |
 | `api/admin/auth.js` · `api/admin/data.js` | accesso e operazioni riservate |
@@ -62,8 +64,9 @@ quest'ordine, e nient'altro:
 | 9 | `bici.sql` | dichiarazione bici per camera, vista di portineria/sistemista |
 | 10 | `tema.sql` | tema stagionale decorativo (Halloween, Natale…), acceso/spento dal sistemista |
 | 11 | `cambio-biancheria.sql` | cambio biancheria del martedì (grande/piccolo), impostato da FDO e sistemista |
-| 12 | `cron.sql` | job `pg_cron` (va personalizzato: contiene dei segnaposto) |
-| 13 | **`permessi.sql`** | **restringe l'esecuzione a `service_role`. Non è facoltativo** |
+| 12 | `grigliata.sql` | evento grigliata: adesioni, menu, pagamenti — impostato dal delegato e dal sistemista |
+| 13 | `cron.sql` | job `pg_cron` (va personalizzato: contiene dei segnaposto) |
+| 14 | **`permessi.sql`** | **restringe l'esecuzione a `service_role`. Non è facoltativo** |
 
 `permessi.sql` va **per ultimo** e va eseguito: agisce su tutte le funzioni
 già create, e senza di lui ognuna resta invocabile via `/rest/v1/rpc/` da

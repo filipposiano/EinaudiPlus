@@ -12,7 +12,10 @@ create table if not exists admin_account (
   id             bigserial primary key,
   username       text not null unique check (username ~ '^[a-zA-Z0-9._-]{3,24}$'),
   password_hash  text not null,
-  ruolo          text not null check (ruolo in ('fdo', 'staff', 'sistemista')),
+  -- 'delegato' aggiunto per il modulo Grigliata: un ruolo stretto a
+  -- un'unica funzione, non un quarto livello generico di fiducia operativa
+  -- (vedi src/modules/identity/domain/roles.js e migrations/037).
+  ruolo          text not null check (ruolo in ('fdo', 'staff', 'sistemista', 'delegato')),
   -- Disattivare invece di cancellare, come le regole ricorrenti: l'account
   -- sparisce dal login ma il nome resta leggibile nell'audit log di chi ha
   -- fatto cosa in passato. L'eliminazione vera resta disponibile ma è un
@@ -53,7 +56,7 @@ create or replace function account_create(
 declare
   v_id bigint;
 begin
-  if p_ruolo not in ('fdo', 'staff', 'sistemista') then
+  if p_ruolo not in ('fdo', 'staff', 'sistemista', 'delegato') then
     return jsonb_build_object('ok', false, 'error', 'ruolo non valido');
   end if;
 

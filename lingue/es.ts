@@ -123,6 +123,8 @@ const es: Testi = {
   navMacchine: "Máquinas", navSegnalazioni: "Avisos",
   navRicorrenti: "Recurrentes", navNotifiche: "Notificaciones", navManutenzione: "Mantenimiento", navTema: "Tema",
   navCambioBiancheria: "Cambio de ropa blanca",
+  navGrigliata: "Barbacoa",
+  navGrigliataAdmin: "Barbacoa",
   amministrazione: "Administración",
   mesiBrevi: ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"],
   navLingua: "Idioma",

@@ -9,7 +9,7 @@ Il backend (`api/` + `src/`) è stato rifattorizzato da un flat di endpoint Verc
 ```
 api/                    # Adapter Vercel — SOLO istradamento HTTP, zero logica di dominio
   admin/{auth,data}.js
-  laundry.js  rooms.js  conferenze.js  telegram.js  cron.js  health.js
+  laundry.js  rooms.js  conferenze.js  grigliata.js  telegram.js  cron.js  health.js
   _lib/http.js          # ciò che resta di puramente HTTP (readBody, json, fail, methodOk)
 
 src/
@@ -28,7 +28,11 @@ src/
     audit/auditLog.js
 ```
 
-Nove moduli: **Identity, Laundry, Common Spaces, Theme, Notifications, Bikes, Feedback, Conference Room, Ops**. Ognuno possiede per intero la propria fetta di `admin/data.js` di un tempo (business logic + validazione + autorizzazione), non solo un pezzo di UI.
+Undici moduli: **Identity, Laundry, Common Spaces, Theme, Notifications, Bikes, Feedback, Conference Room, Ops, Linen Change, Grigliata**. Ognuno possiede per intero la propria fetta di `admin/data.js` di un tempo (business logic + validazione + autorizzazione), non solo un pezzo di UI.
+
+Gli ultimi due, aggiunti dopo il refactor iniziale, seguono lo stesso pattern parola per parola — sono la prova che regge oltre il caso originale: **Linen Change** (`src/modules/linen-change`) decide grande/piccolo/nessuno per il cambio biancheria del martedì; **Grigliata** (`src/modules/grigliata`) introduce anche il primo ruolo "stretto" dell'app, **delegato** — non un quarto livello generico di fiducia operativa come fdo/staff/sistemista, ma un ruolo confinato a un'unica funzionalità (vedi `src/modules/identity/domain/roles.js`).
+
+Un ruolo stretto introdotto dentro un sistema pensato per pochi ruoli generici apre quasi sempre lo stesso buco: OGNI policy esistente va riaperta e va deciso esplicitamente se escluderlo, perché un `return true` finale (comune a metà delle policy di questo progetto) lo concederebbe per default, non avendolo mai previsto. Non basta scrivere la policy del modulo nuovo: `laundry`, `common-spaces`, `ops`, `bikes`, `feedback`, `conference-room` e `linen-change` hanno tutti ricevuto `if (isDelegato(claims)) return false;` (o l'equivalente) per questo — vedi `laundry/domain/policy.js` per il commento esteso, e i test di ciascun modulo per la verifica.
 
 ## Regola di confine (imposta da ESLint, non solo a parole)
 
@@ -125,7 +129,9 @@ features/
     types.ts               # Role, Tab
 ```
 
-Nove domini lato admin: **Identity** (Login, Accounts, Session/AdminLoginSheet), **Laundry** (MacchineTab), **Feedback** (Segnalazioni), **Bikes** (BiciTab), **Ops** (Ricorrenti, Manutenzione — le due schede riservate al sistemista che toccano più domini insieme), **Notifications** (NotificheTab), **Theme** (Tema), **Conference Room** (GiornoSheetAdmin). `App.tsx` e `AdminPanel.tsx` restano solo il guscio: routing fra facility/schede, login, sidebar, sessione, tema stagionale — più i re-export che tengono invariata la superficie pubblica per chi importa da loro (`App.tsx`: `LoginScreen`/`DesktopSidebar`/... restano lì; `AdminPanel.tsx`: `Role`, `Tab`, `AdminScreens`, `AdminLoginSheet`, `adminLogout`, `CambiaPasswordObbligata`, `GiornoSheetAdmin`).
+Undici domini lato admin: **Identity** (Login, Accounts, Session/AdminLoginSheet), **Laundry** (MacchineTab), **Feedback** (Segnalazioni), **Bikes** (BiciTab), **Ops** (Ricorrenti, Manutenzione — le due schede riservate al sistemista che toccano più domini insieme), **Notifications** (NotificheTab), **Theme** (Tema), **Conference Room** (GiornoSheetAdmin), **Linen Change** (CambioBiancheriaTab), **Grigliata** (GrigliataAdmin — l'unico visibile anche al ruolo **delegato**, non solo al sistemista). `App.tsx` e `AdminPanel.tsx` restano solo il guscio: routing fra facility/schede, login, sidebar, sessione, tema stagionale — più i re-export che tengono invariata la superficie pubblica per chi importa da loro (`App.tsx`: `LoginScreen`/`DesktopSidebar`/... restano lì; `AdminPanel.tsx`: `Role`, `Tab`, `AdminScreens`, `AdminLoginSheet`, `adminLogout`, `CambiaPasswordObbligata`, `GiornoSheetAdmin`).
+
+`ADMIN_SECTIONS` in `App.tsx` (quali voci compaiono in navigazione, a chi) usa un elenco esplicito di ruoli per voce (`ruoli: Role[]`) e non due booleani di esclusione (`sistemistaOnly`/`staffEsclusa`, lo schema di prima): con quattro ruoli invece di tre un'esclusione sola non basta più a dire chi resta fuori. Aggiungendo un quinto ruolo, o una quinta voce, si estende quell'elenco — non si aggiunge un terzo booleano.
 
 `RuotaPicker.tsx` e `pannelli.tsx` restano alla radice: sono condivisi da più feature, non appartengono a una sola. Stessa cosa per `hooks.ts`/`icons.tsx` (condivisi fra la shell di `App.tsx` e `features/laundry/`).
 

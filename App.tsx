@@ -4,13 +4,14 @@ import {
   Delete, X, Wrench, Loader2,
   Film, Music, Menu,
   MessageSquare, LogOut,
-  Settings, Repeat, Eraser, Presentation, UserCog, Bike, Sparkles, Bell, Bed,
+  Settings, Repeat, Eraser, Presentation, UserCog, Bike, Sparkles, Bell, Bed, Flame,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
 import RoomView from "./features/common-spaces/Rooms";
 import BiciView from "./features/bikes/Bici";
 import Conferenze from "./features/conference-room/Conferenze";
+import GrigliataView from "./features/grigliata/Grigliata";
 import AccessibilityPanel from "./features/accessibility/AccessibilityPanel";
 import { loadPrefs, savePrefs, applyToDOM, type AccessibilityPrefs } from "./statusConfig";
 import type { Role as AdminRole, Tab as AdminTab } from "./AdminPanel";
@@ -49,10 +50,12 @@ const CambiaPasswordObbligata = lazy(() => import("./AdminPanel").then((m) => ({
 // "bike" e non "bici": l'id amministrativo "bici" (vedi ADMIN_TABS) e' gia'
 // preso — sono due schermate diverse (qui la camera dichiara la sua, li' la
 // portineria le vede tutte) e non possono condividere lo stesso id o
-// `isAdminFacility` scambierebbe l'una per l'altra.
-type Facility = "laundry" | "cinema" | "music" | "conferenze" | "bike" | "guasto" | "impostazioni" | "feedback" | AdminTab;
+// `isAdminFacility` scambierebbe l'una per l'altra. Stessa ragione per
+// "grigliata" (qui, il residente aderisce) e "grigliataAdmin" (li', il
+// delegato vede chi ha aderito).
+type Facility = "laundry" | "cinema" | "music" | "conferenze" | "bike" | "grigliata" | "guasto" | "impostazioni" | "feedback" | AdminTab;
 
-const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "bici", "account", "ricorrenti", "notifiche", "manutenzione", "tema", "cambiobiancheria"];
+const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "bici", "account", "ricorrenti", "notifiche", "manutenzione", "tema", "cambiobiancheria", "grigliataAdmin"];
 const isAdminFacility = (f: Facility): f is AdminTab => (ADMIN_TABS as string[]).includes(f);
 
 /** Etichetta della camera nell'intestazione. Chi amministra è la Direzione. */
@@ -167,12 +170,13 @@ function LoginScreen({ lang, onLogin, onAdmin }: {
 
 // ─── Sidebar desktop ──────────────────────────────────────────────────────────
 
-function DesktopSidebar({ lang, roomNumber, showNav, facility, onFacility, adminRole, onChangeRoom }: {
+function DesktopSidebar({ lang, roomNumber, showNav, facility, onFacility, adminRole, onChangeRoom, grigliataAttiva }: {
   lang: Lang;
   roomNumber: string | null; showNav: boolean;
   facility: Facility; onFacility: (f: Facility) => void;
   adminRole: AdminRole | null;
   onChangeRoom: () => void;
+  grigliataAttiva: boolean;
 }) {
   const t   = T[lang];
   const fg  = "var(--foreground)";
@@ -197,7 +201,7 @@ function DesktopSidebar({ lang, roomNumber, showNav, facility, onFacility, admin
             dashboard, e si torna indietro dall'interruttore in cima a
             ciascuna vista — e tenerle qui faceva del desktop una navigazione
             diversa da quella del telefono, per le stesse tre schermate. */}
-        {showNav && facilitiesFor(roomNumber).map(({ id, icon: Icon, chiave }) => {
+        {showNav && facilitiesFor(roomNumber, grigliataAttiva).map(({ id, icon: Icon, chiave }) => {
           const isActive = facility === id;
           return (
             <button key={id} onClick={()=>onFacility(id)}
@@ -292,7 +296,7 @@ function CenterState({ children }: { isDark?: boolean; children: React.ReactNode
 // lingue un oggetto { it, en } scritto qui dentro non reggeva piu'.
 const FACILITIES: {
   id: Facility; icon: any;
-  chiave: "navLavanderia" | "navCinema" | "navMusica" | "navConferenze" | "bici";
+  chiave: "navLavanderia" | "navCinema" | "navMusica" | "navConferenze" | "bici" | "navGrigliata";
 }[] = [
   { id: "laundry",    icon: WashingMachine, chiave: "navLavanderia" },
   { id: "cinema",     icon: Film,           chiave: "navCinema" },
@@ -305,54 +309,72 @@ const FACILITIES: {
   // la stessa specie delle altre: una struttura, non un'impostazione — per
   // questo sta qui e non piu' dentro Impostazioni.
   { id: "bike",       icon: Bike,           chiave: "bici" },
+  // Compare SOLO quando il delegato ha una grigliata attiva (vedi
+  // facilitiesFor): a differenza delle altre strutture, che esistono sempre,
+  // questa e' un evento con un inizio e una fine.
+  { id: "grigliata",  icon: Flame,          chiave: "navGrigliata" },
 ];
 
-// La Direzione non e' una camera: non ha una bici da dichiarare, quindi non
-// ha senso che veda la scheda. Nascondere la voce non e' una protezione (la
-// sezione stessa mostra gia' un messaggio se ci si arriva lo stesso, vedi
-// Bici.tsx) — e' solo per non promettere una cosa che DIREZIONE non puo' fare.
-const facilitiesFor = (roomNumber: string | null) =>
-  FACILITIES.filter((f) => f.id !== "bike" || roomNumber !== api.DIREZIONE);
+// La Direzione non e' una camera: non ha una bici da dichiarare ne' aderisce
+// a una grigliata, quindi non ha senso che veda quelle schede. Nascondere la
+// voce non e' una protezione (le sezioni stesse mostrano gia' un messaggio
+// se ci si arriva lo stesso) — e' solo per non promettere una cosa che
+// DIREZIONE non puo' fare.
+//
+// `grigliataAttiva` viene dal server (vedi App(), stato omonimo): senza
+// un evento in corso la scheda sparisce, non resta li' vuota o disabilitata.
+const facilitiesFor = (roomNumber: string | null, grigliataAttiva: boolean) =>
+  FACILITIES.filter((f) =>
+    (f.id !== "bike" || roomNumber !== api.DIREZIONE) &&
+    (f.id !== "grigliata" || (grigliataAttiva && roomNumber !== api.DIREZIONE))
+  );
 
-// Le voci riservate al sistemista non compaiono con la sessione FDO, ma il
+// Le voci fuori dall'elenco `ruoli` non compaiono con quella sessione, ma il
 // controllo vero resta sul server: nascondere una voce non è un'autorizzazione.
+//
+// Un elenco esplicito di ruoli, non due booleani di esclusione
+// (sistemistaOnly/staffEsclusa): con quattro ruoli invece di tre,
+// un'esclusione per staff da sola non basta piu' a dire chi resta fuori — il
+// delegato, che prima di questo elenco non era previsto affatto, sarebbe
+// passato dal `return true` implicito di ogni condizione negativa. Elencare
+// chi PUO' vedere una voce, invece di chi non puo', non lascia questo buco.
 const ADMIN_SECTIONS: {
   id: AdminTab; icon: any;
-  chiave: "navMacchine" | "navSegnalazioni" | "navBici" | "navAccount" | "navRicorrenti" | "navNotifiche" | "navManutenzione" | "navTema" | "navCambioBiancheria";
-  sistemistaOnly?: boolean;
+  chiave: "navMacchine" | "navSegnalazioni" | "navBici" | "navAccount" | "navRicorrenti" | "navNotifiche" | "navManutenzione" | "navTema" | "navCambioBiancheria" | "navGrigliataAdmin";
+  ruoli: AdminRole[];
+}[] = [
   // Macchine e segnalazioni restano affari di FDO e sistemista: lo staff
   // prenota per conto della Direzione come l'FDO, ma non deve vedere lo
-  // stato guasto/funzionante delle macchine ne' le segnalazioni.
-  staffEsclusa?: boolean;
-}[] = [
-  { id: "macchine",       icon: Wrench,        chiave: "navMacchine",     staffEsclusa: true },
+  // stato guasto/funzionante delle macchine ne' le segnalazioni. Il delegato
+  // no in ogni caso: i suoi permessi stanno per intero nella Grigliata.
+  { id: "macchine",       icon: Wrench,        chiave: "navMacchine",     ruoli: ["fdo", "sistemista"] },
   // Stesso livello di Macchine: decisione operativa di portineria (FDO e
   // sistemista), non un'estetica come Tema qui sotto.
-  { id: "cambiobiancheria", icon: Bed,         chiave: "navCambioBiancheria", staffEsclusa: true },
-  { id: "segnalazioni",   icon: MessageSquare, chiave: "navSegnalazioni", staffEsclusa: true },
+  { id: "cambiobiancheria", icon: Bed,         chiave: "navCambioBiancheria", ruoli: ["fdo", "sistemista"] },
+  { id: "segnalazioni",   icon: MessageSquare, chiave: "navSegnalazioni", ruoli: ["fdo", "sistemista"] },
   // Quali camere hanno una bici: la vede chi e' in portineria, come le
   // macchine e le segnalazioni. Cancellarle tutte (reset annuale) resta al
   // sistemista — il pulsante compare solo a lui dentro la sezione stessa.
-  { id: "bici",           icon: Bike,          chiave: "navBici",         staffEsclusa: true },
+  { id: "bici",           icon: Bike,          chiave: "navBici",         ruoli: ["fdo", "sistemista"] },
+  // Il delegato vede SOLO questa, oltre al sistemista che vede tutto.
+  { id: "grigliataAdmin", icon: Flame,         chiave: "navGrigliataAdmin", ruoli: ["delegato", "sistemista"] },
   // La programmazione della sala polivalente non e' piu' una scheda a se':
   // vive dentro la sezione "Polivalente" stessa (vedi Conferenze.tsx), visibile
   // li' a chiunque abbia una sessione admin — non serve piu' una voce qui.
   // Chi crea e disattiva gli account e' una decisione dello stesso livello di
   // "chi puo' cancellare tutto": resta al sistemista.
-  { id: "account",        icon: UserCog,       chiave: "navAccount",      sistemistaOnly: true },
-  { id: "ricorrenti",     icon: Repeat,        chiave: "navRicorrenti",   sistemistaOnly: true },
-  { id: "notifiche",      icon: Bell,          chiave: "navNotifiche",    sistemistaOnly: true },
-  { id: "manutenzione",   icon: Eraser,        chiave: "navManutenzione", sistemistaOnly: true },
+  { id: "account",        icon: UserCog,       chiave: "navAccount",      ruoli: ["sistemista"] },
+  { id: "ricorrenti",     icon: Repeat,        chiave: "navRicorrenti",   ruoli: ["sistemista"] },
+  { id: "notifiche",      icon: Bell,          chiave: "navNotifiche",    ruoli: ["sistemista"] },
+  { id: "manutenzione",   icon: Eraser,        chiave: "navManutenzione", ruoli: ["sistemista"] },
   // Decorazione dell'app (neve, pipistrelli...), acceso/spento a piacere:
   // stesso livello di privilegio di Account e Manutenzione, non perche' sia
   // rischioso quanto quelli, ma perche' cambia cosa vede OGNI residente.
-  { id: "tema",           icon: Sparkles,      chiave: "navTema",        sistemistaOnly: true },
+  { id: "tema",           icon: Sparkles,      chiave: "navTema",        ruoli: ["sistemista"] },
 ];
 
 const adminSectionsFor = (role: AdminRole | null) =>
-  role === null ? [] : ADMIN_SECTIONS.filter((s) =>
-    (!s.sistemistaOnly || role === "sistemista") && (!s.staffEsclusa || role !== "staff")
-  );
+  role === null ? [] : ADMIN_SECTIONS.filter((s) => s.ruoli.includes(role));
 
 // Le tre pagine di utilita', raggiunte dal fondo del menu: non sono
 // strutture ne' sezioni amministrative, ma il titolo in cima serve anche a
@@ -376,10 +398,11 @@ const PAGINE_UTILITA: { id: "guasto" | "impostazioni" | "feedback"; chiave: "rep
 // regole su chi vede cosa. Manca solo l'annidamento delle schede della
 // lavanderia: quelle non ci sono piu' da nessuna parte, si arriva al
 // giornaliero e alla settimana dai due pulsanti della dashboard.
-function MenuStrutture({ aperto, onClose, facility, onChange, lang, adminRole, roomNumber }: {
+function MenuStrutture({ aperto, onClose, facility, onChange, lang, adminRole, roomNumber, grigliataAttiva }: {
   aperto: boolean; onClose: ()=>void;
   facility: Facility; onChange: (f: Facility)=>void;
   lang: Lang; adminRole: AdminRole | null; roomNumber: string | null;
+  grigliataAttiva: boolean;
 }) {
   const sub      = "var(--gray-accessible-text)";
   const div      = "var(--border)";
@@ -422,7 +445,7 @@ function MenuStrutture({ aperto, onClose, facility, onChange, lang, adminRole, r
         </div>
 
         <div className="flex-1 overflow-y-auto overscroll-contain px-3 py-2 flex flex-col gap-0.5">
-          {facilitiesFor(roomNumber).map(({ id, icon, chiave }) => (
+          {facilitiesFor(roomNumber, grigliataAttiva).map(({ id, icon, chiave }) => (
             <Voce key={id} id={id} icon={icon} label={T[lang][chiave]}/>
           ))}
 
@@ -580,6 +603,9 @@ export default function App() {
   // Cambio biancheria del martedì (vedi AdminPanel → Cambio biancheria):
   // stessa provenienza di tema, arriva dal server a ogni caricamento.
   const [cambioBiancheria, setCambioBiancheria] = useState<api.CambioBiancheria>(null);
+  // Solo se mostrare la voce "Grigliata" in navigazione: il contenuto vero
+  // lo legge la scheda stessa quando si apre (vedi features/grigliata).
+  const [grigliataAttiva, setGrigliataAttiva] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error,  setError]    = useState<string | null>(null);
   // Preferiti caricati in base alla camera corrente (vedi loadFavs).
@@ -632,7 +658,7 @@ export default function App() {
     try {
       const s = await api.getSnapshot();
       setWeek(s.week); setStatus(s.status); setTema(s.tema);
-      setCambioBiancheria(s.cambioBiancheria); setError(null);
+      setCambioBiancheria(s.cambioBiancheria); setGrigliataAttiva(s.grigliataAttiva); setError(null);
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -932,6 +958,8 @@ export default function App() {
     bodyContent = <RoomView room={facility} lang={lang} roomNumber={roomNumber}/>;
   } else if (facility === "bike") {
     bodyContent = <BiciView lang={lang} roomNumber={roomNumber}/>;
+  } else if (facility === "grigliata") {
+    bodyContent = <GrigliataView lang={lang} roomNumber={roomNumber}/>;
   } else if (facility === "guasto") {
     bodyContent = (
       <SegnalaGuastoSheet lang={lang} status={status} onStatus={handleStatus}
@@ -1025,6 +1053,7 @@ export default function App() {
           facility={facility} onFacility={setFacility}
           adminRole={adminRole}
           onChangeRoom={changeRoom}
+          grigliataAttiva={grigliataAttiva}
         />
         <main className="flex-1 h-dvh min-h-0 flex flex-col overflow-y-auto overscroll-contain">
           {/* Era max-w-6xl (1152px): su uno schermo grande restavano centinaia
@@ -1125,7 +1154,8 @@ export default function App() {
         </div>
 
         <MenuStrutture aperto={menuAperto} onClose={() => setMenuAperto(false)}
-          facility={facility} onChange={setFacility} lang={lang} adminRole={adminRole} roomNumber={roomNumber}/>
+          facility={facility} onChange={setFacility} lang={lang} adminRole={adminRole} roomNumber={roomNumber}
+          grigliataAttiva={grigliataAttiva}/>
 
         <div className="flex-1 overflow-y-auto overscroll-contain min-h-0 flex flex-col mt-2">
           {bodyContent}

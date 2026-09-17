@@ -90,6 +90,10 @@ section("authorize() — policy del modulo Feedback");
   const fdo = { u: "mario", r: "fdo" };
   const staff = { u: "luigi", r: "staff" };
   const sistemista = { u: "peach", r: "sistemista" };
+  const delegato = { u: "toad", r: "delegato" };
+
+  // I permessi del delegato stanno per intero nel modulo Grigliata.
+  check("il delegato NON può leggere le segnalazioni", authorize(delegato, "feedback") === false);
 
   check("FDO può leggere le segnalazioni", authorize(fdo, "feedback") === true);
   check("staff NON può leggere le segnalazioni", authorize(staff, "feedback") === false);

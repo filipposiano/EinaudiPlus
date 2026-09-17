@@ -24,7 +24,7 @@ import {
   listAccounts as _listAccounts,
 } from "./application/manageAccounts.js";
 
-export { RUOLI, isValidRole, isSysadmin, isStaff, authorize } from "./domain/roles.js";
+export { RUOLI, isValidRole, isSysadmin, isStaff, isDelegato, authorize } from "./domain/roles.js";
 export { sessioneAncoraValida } from "./domain/sessionState.js";
 
 // Le dipendenze reali (repository su Supabase, hasher scrypt) sono cablate

@@ -19,7 +19,7 @@ import type { Role as AdminRole } from "./AdminPanel";
 
 /** Come si chiama un ruolo quando lo si mostra a chi ha fatto l'accesso. */
 export const etichettaRuolo = (r: AdminRole | null) =>
-  r === "sistemista" ? "sistemista" : r === "staff" ? "staff" : "FDO";
+  r === "sistemista" ? "sistemista" : r === "staff" ? "staff" : r === "delegato" ? "delegato" : "FDO";
 
 // ─── Toast ───────────────────────────────────────────────────────────────────
 //

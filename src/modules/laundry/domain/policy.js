@@ -9,7 +9,7 @@
 // esattamente la dipendenza fra moduli che l'architettura ammette — un
 // modulo può usare un altro modulo solo tramite il suo index.ts.
 
-import { isStaff, isSysadmin } from "../../identity/index.js";
+import { isStaff, isSysadmin, isDelegato } from "../../identity/index.js";
 
 /** Azioni amministrative di dominio Laundry, riconosciute da authorize(). */
 const AZIONI_LAUNDRY = new Set([
@@ -51,6 +51,12 @@ export function authorize(claims, action) {
   if (!AZIONI_LAUNDRY.has(action)) return null;
   if (!claims) return false;
   if (SOLO_SISTEMISTA.has(action)) return isSysadmin(claims);
+  // Il delegato non è "un altro FDO": i suoi permessi stanno per intero nel
+  // modulo Grigliata (vedi src/modules/grigliata/domain/policy.js) e in
+  // nessun altro. Senza questa riga, prima dell'introduzione del ruolo,
+  // ogni azione qui sotto cadeva sul `return true` finale — un delegato
+  // avrebbe potuto liberare turni e segnare macchine guaste.
+  if (isDelegato(claims)) return false;
   if (VIETATE_A_STAFF.has(action) && isStaff(claims)) return false;
   return true;
 }

@@ -5,5 +5,9 @@
 
 // `staff` ha gli stessi poteri di `fdo`; solo `sistemista` puo' di piu'.
 // Restano account distinti perche' l'audit log registra chi ha fatto cosa.
-export type Role = "fdo" | "staff" | "sistemista";
-export type Tab = "macchine" | "segnalazioni" | "bici" | "account" | "ricorrenti" | "notifiche" | "manutenzione" | "tema" | "cambiobiancheria";
+//
+// `delegato` e' diverso in natura: non un quarto livello di fiducia
+// operativa, ma un ruolo stretto a una sola cosa (la Grigliata, vedi
+// src/modules/grigliata) — vede solo quella scheda, nessun'altra.
+export type Role = "fdo" | "staff" | "sistemista" | "delegato";
+export type Tab = "macchine" | "segnalazioni" | "bici" | "account" | "ricorrenti" | "notifiche" | "manutenzione" | "tema" | "cambiobiancheria" | "grigliataAdmin";

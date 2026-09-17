@@ -16,8 +16,15 @@
  * "l'ha fatto lo staff" sono due risposte diverse in caso di dubbio su una
  * macchina segnata guasta. `sistemista` può in più le regole ricorrenti,
  * la pulizia dei dati e la gestione degli altri account.
+ *
+ * `delegato` è diverso in natura dagli altri tre: non è un livello in più di
+ * fiducia operativa, è un ruolo STRETTO a una sola cosa — organizzare una
+ * Grigliata (vedi src/modules/grigliata). Un delegato non vede macchine,
+ * segnalazioni, bici, ne' nessun'altra sezione: la sua policy vive nel
+ * modulo Grigliata, non qui. Il sistemista resta sopra a tutti, delegato
+ * compreso, e vede anche la Grigliata.
  */
-export const RUOLI = new Set(["fdo", "staff", "sistemista"]);
+export const RUOLI = new Set(["fdo", "staff", "sistemista", "delegato"]);
 
 export function isValidRole(role) {
   return RUOLI.has(role);
@@ -29,6 +36,10 @@ export function isSysadmin(claims) {
 
 export function isStaff(claims) {
   return claims?.r === "staff";
+}
+
+export function isDelegato(claims) {
+  return claims?.r === "delegato";
 }
 
 // Azioni di gestione account riservate al sistemista.

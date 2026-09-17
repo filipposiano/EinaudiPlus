@@ -66,6 +66,7 @@ async function postAction(action: string, payload: Record<string, unknown>) {
 
 export async function getSnapshot(): Promise<{
   week: WeekData; status: StatusData; tema: TemaStagionale; cambioBiancheria: CambioBiancheria;
+  grigliataAttiva: boolean;
 }> {
   const qs = `?token=${TOKEN}&room=${encodeURIComponent(currentRoom())}`;
   const res = await fetch(`${ENDPOINT}${qs}`);
@@ -80,6 +81,10 @@ export async function getSnapshot(): Promise<{
     // deve_cambiare_password): niente da rimappare, solo il fallback per un
     // campo assente (backend non ancora aggiornato) o non configurato.
     cambioBiancheria: (data.cambio_biancheria as CambioBiancheria) ?? null,
+    // Solo il booleano: decide se la scheda Grigliata compare in
+    // navigazione. Il contenuto vero lo legge getGrigliataStato() quando la
+    // scheda si apre — vedi grigliata_attiva_bool() in SQL.
+    grigliataAttiva: Boolean(data.grigliata_attiva),
   };
 }
 
@@ -275,4 +280,76 @@ export async function bookAsDirezione(day: number, slot: number, machine: string
  */
 export async function clearAsDirezione(day: number, slot: number, machine: string) {
   return adminAction("clearDirezione", { room: currentRoom(), day, slot, machine });
+}
+
+// ─── Grigliata ───────────────────────────────────────────────────────────────
+//
+// Percorso pubblico, endpoint a sé (/api/grigliata): stesso modello di
+// fiducia di /api/laundry (camera autodichiarata), ma un dominio diverso —
+// non ha senso farlo transitare dall'endpoint della lavanderia solo perché
+// esiste già. Nessun vincolo di compatibilità con un client precedente,
+// quindi qui il corpo viaggia come JSON vero, non il text/plain storico di
+// postAction() sopra.
+
+export type GrigliataMenu = "classico" | "vegano";
+
+export interface GrigliataEvento {
+  id: number; titolo: string; scadenza: string;
+  paypalLink: string | null; satispayLink: string | null;
+}
+
+export interface GrigliataMiaAdesione {
+  partecipa: boolean; menu: GrigliataMenu | null;
+  pagamentoDichiarato: boolean; pagamentoConfermato: boolean;
+}
+
+export interface GrigliataStato {
+  attiva: boolean; evento: GrigliataEvento | null; miaAdesione: GrigliataMiaAdesione | null;
+}
+
+const GRIGLIATA_ENDPOINT = "/api/grigliata";
+
+async function postGrigliataAction(action: string, payload: Record<string, unknown>) {
+  const res = await fetch(GRIGLIATA_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: TOKEN, action, room: currentRoom(), ...payload }),
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || "Errore durante l'operazione");
+  return data;
+}
+
+export async function getGrigliataStato(): Promise<GrigliataStato> {
+  const qs = `?token=${TOKEN}&room=${encodeURIComponent(currentRoom())}`;
+  const res = await fetch(`${GRIGLIATA_ENDPOINT}${qs}`);
+  if (!res.ok) throw new Error("Errore di rete durante il caricamento");
+
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || "Errore restituito dal server.");
+
+  if (!data.attiva) return { attiva: false, evento: null, miaAdesione: null };
+
+  return {
+    attiva: true,
+    evento: {
+      id: data.evento.id, titolo: data.evento.titolo, scadenza: data.evento.scadenza,
+      paypalLink: data.evento.paypal_link ?? null, satispayLink: data.evento.satispay_link ?? null,
+    },
+    miaAdesione: data.mia_adesione ? {
+      partecipa: Boolean(data.mia_adesione.partecipa),
+      menu: (data.mia_adesione.menu as GrigliataMenu) ?? null,
+      pagamentoDichiarato: Boolean(data.mia_adesione.pagamento_dichiarato),
+      pagamentoConfermato: Boolean(data.mia_adesione.pagamento_confermato),
+    } : null,
+  };
+}
+
+/** Aderisce o declina. `menu` è ignorato dal server se `partecipa` è falso. */
+export async function grigliataIscriviti(partecipa: boolean, menu: GrigliataMenu | null) {
+  return postGrigliataAction("iscrivi", { partecipa, menu });
+}
+
+export async function grigliataDichiaraPagamento() {
+  return postGrigliataAction("dichiaraPagamento", {});
 }

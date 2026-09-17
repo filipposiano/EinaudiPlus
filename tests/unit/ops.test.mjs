@@ -107,6 +107,11 @@ section("authorize() — policy del modulo Ops");
   const fdo = { u: "mario", r: "fdo" };
   const staff = { u: "luigi", r: "staff" };
   const sistemista = { u: "peach", r: "sistemista" };
+  const delegato = { u: "toad", r: "delegato" };
+
+  // I permessi del delegato stanno per intero nel modulo Grigliata.
+  check("il delegato NON può leggere la panoramica", authorize(delegato, "overview") === false);
+  check("il delegato non può fare la pulizia", authorize(delegato, "purge") === false);
 
   check("FDO può leggere la panoramica", authorize(fdo, "overview") === true);
   check("staff NON può leggere la panoramica", authorize(staff, "overview") === false);

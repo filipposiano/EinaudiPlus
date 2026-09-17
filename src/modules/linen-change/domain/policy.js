@@ -7,9 +7,10 @@
 // no — la stessa distinzione che laundry/domain/policy.js applica a
 // setMachineStatus, e per lo stesso motivo (vedi VIETATE_A_STAFF lì: "lo
 // staff prenota e libera turni per conto della Direzione come l'FDO, ma non
-// tocca" le decisioni operative della lavanderia).
+// tocca" le decisioni operative della lavanderia). Il delegato nemmeno: i
+// suoi permessi stanno per intero nel modulo Grigliata.
 
-import { isStaff } from "../../identity/index.js";
+import { isStaff, isDelegato } from "../../identity/index.js";
 
 const AZIONI_LINEN_CHANGE = new Set(["cambioBiancheriaGet", "cambioBiancheriaSet", "cambioBiancheriaSkip"]);
 
@@ -21,5 +22,5 @@ const AZIONI_LINEN_CHANGE = new Set(["cambioBiancheriaGet", "cambioBiancheriaSet
 export function authorize(claims, action) {
   if (!AZIONI_LINEN_CHANGE.has(action)) return null;
   if (!claims) return false;
-  return !isStaff(claims);
+  return !isStaff(claims) && !isDelegato(claims);
 }

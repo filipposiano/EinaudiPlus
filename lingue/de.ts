@@ -123,6 +123,8 @@ const de: Testi = {
   navMacchine: "Maschinen", navSegnalazioni: "Meldungen",
   navRicorrenti: "Wiederkehrend", navNotifiche: "Benachrichtigungen", navManutenzione: "Wartung", navTema: "Design",
   navCambioBiancheria: "Wäschewechsel",
+  navGrigliata: "Grillfest",
+  navGrigliataAdmin: "Grillfest",
   amministrazione: "Verwaltung",
   mesiBrevi: ["Jan","Feb","Mär","Apr","Mai","Jun","Jul","Aug","Sep","Okt","Nov","Dez"],
   navLingua: "Sprache",
