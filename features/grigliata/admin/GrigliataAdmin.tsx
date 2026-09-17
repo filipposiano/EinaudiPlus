@@ -89,6 +89,13 @@ export function GrigliataAdmin() {
   const [nuovaCamera, setNuovaCamera] = useState("");
   const [nuovoMenuCamera, setNuovoMenuCamera] = useState<Menu>("classico");
 
+  // Stesso menu da scegliere quando, dal popup di una camera che ha detto
+  // di no, il delegato la segna come partecipante — ha cambiato idea, o la
+  // risposta "no" era sbagliata. Una select a parte da quella del form
+  // "Aggiungi" qui sopra: sono due punti diversi da cui si può arrivare a
+  // chiamare la stessa azione (grigliataAggiungiAdesione).
+  const [menuConversione, setMenuConversione] = useState<Menu>("classico");
+
   // "Elimina" chiede conferma DENTRO la pagina, non con window.confirm():
   // e' bloccato in diversi contesti (PWA installata, iframe senza
   // allow-modals) e in quel caso torna false senza mostrare niente — il
@@ -276,6 +283,34 @@ export function GrigliataAdmin() {
     if (await rimuoviAdesione(adesioneSelezionata.id)) setAdesioneSelezionata(null);
   }
 
+  /** Segna come partecipante, col menu scelto nel popup, una camera che
+   *  aveva risposto di no — è la stessa azione di "Aggiungi" (upsert), solo
+   *  raggiunta da un'altra pastiglia invece che da un numero scritto a mano. */
+  async function segnaPartecipante() {
+    if (!overview?.evento || !adesioneSelezionata || busy) return;
+    setBusy(true); setMsg(null);
+    try {
+      await call("grigliataAggiungiAdesione", {
+        evento_id: overview.evento.id, room: adesioneSelezionata.room, menu: menuConversione,
+      });
+      setAdesioneSelezionata(null);
+      await carica();
+      setMsg("Camera segnata come partecipante.");
+    } catch (e: any) {
+      setMsg("Non è riuscito: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Apre il popup di una camera, azzerando la scelta di menu della
+   *  conversione precedente — altrimenti riaprendolo su una camera diversa
+   *  poteva ritrovare "vegano" ancora selezionato da un tocco di prima. */
+  function apriPopup(a: Adesione) {
+    setMenuConversione("classico");
+    setAdesioneSelezionata(a);
+  }
+
   const evento = overview?.evento ?? null;
   const adesioni = overview?.adesioni ?? [];
 
@@ -316,7 +351,7 @@ export function GrigliataAdmin() {
       opacity: busy ? 0.6 : 1,
     } as const;
     return (
-      <button onClick={() => setAdesioneSelezionata(a)} disabled={busy} style={stile}>
+      <button onClick={() => apriPopup(a)} disabled={busy} style={stile}>
         <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "monospace" }}>{a.room}</span>
         <span style={{
           fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.02em",
@@ -342,11 +377,26 @@ export function GrigliataAdmin() {
     );
   };
 
+  // Chi ha detto di no è comunque cliccabile — apre lo stesso popup di
+  // AdesioneChip, che per un'adesione con partecipa=false propone di
+  // segnarla come partecipante (ha cambiato idea) invece di confermare un
+  // pagamento. Una pastiglia più piccola e senza colore: non porta uno
+  // stato di pagamento da mostrare, solo un nome su cui poter tornare.
+  const NonPartecipaChip = ({ a }: { a: Adesione }) => (
+    <button onClick={() => apriPopup(a)} disabled={busy}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        padding: "6px 8px", borderRadius: 10, minHeight: 32,
+        background: "var(--secondary)", border: "1px solid var(--border)",
+        color: "var(--muted-foreground)", cursor: "pointer", opacity: busy ? 0.6 : 1,
+      }}>
+      <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "monospace" }}>{a.room}</span>
+    </button>
+  );
+
   // Un gruppo per piano — stesso ordine e stessa idea di BiciTab.tsx:
   // "Manica" (un edificio a se') prima dei piani veri e propri, che
-  // salgono dal primo al quarto, poi il basso fabbricato. Chi non
-  // partecipa resta una riga di testo, non una pastiglia: non porta uno
-  // stato di pagamento da mostrare a colpo d'occhio.
+  // salgono dal primo al quarto, poi il basso fabbricato.
   const GruppoPiano = ({ piano, righe }: { piano: Piano; righe: Adesione[] }) => {
     if (righe.length === 0) return null;
     const partecipanoQui = righe.filter((a) => a.partecipa);
@@ -369,9 +419,9 @@ export function GrigliataAdmin() {
           </div>
         )}
         {nonPartecipanoQui.length > 0 && (
-          <p style={{ fontSize: 11, ...S.sub }}>
-            Non partecipano: camera {nonPartecipanoQui.map((a) => a.room).join(", ")}
-          </p>
+          <div style={{ display: "grid", gap: 6, gridTemplateColumns: "repeat(auto-fill, minmax(52px, 1fr))" }}>
+            {nonPartecipanoQui.map((a) => <NonPartecipaChip key={a.id} a={a} />)}
+          </div>
         )}
       </div>
     );
@@ -571,16 +621,17 @@ export function GrigliataAdmin() {
                 </div>
               )}
               {fuoriSchemaNonPartecipano.length > 0 && (
-                <p style={{ fontSize: 11, ...S.sub }}>
-                  Non partecipano: camera {fuoriSchemaNonPartecipano.map((a) => a.room).join(", ")}
-                </p>
+                <div style={{ display: "grid", gap: 6, gridTemplateColumns: "repeat(auto-fill, minmax(52px, 1fr))" }}>
+                  {fuoriSchemaNonPartecipano.map((a) => <NonPartecipaChip key={a.id} a={a} />)}
+                </div>
               )}
             </div>
           )}
         </div>
       )}
 
-      {/* ── Una camera: conferma il pagamento o toglila — dalla pastiglia ── */}
+      {/* ── Una camera: conferma il pagamento, segnala come partecipante
+          se aveva detto di no, o toglila — dalla pastiglia ────────────── */}
       {adesioneSelezionata && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 60, display: "flex",
@@ -588,29 +639,66 @@ export function GrigliataAdmin() {
         }} onClick={() => !busy && setAdesioneSelezionata(null)}>
           <div style={{ ...S.card, padding: 20, maxWidth: 320, width: "100%" }} onClick={(e) => e.stopPropagation()}>
             <p style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Camera {adesioneSelezionata.room}</p>
-            <p style={{ fontSize: 13, ...S.sub, marginBottom: 4 }}>
-              Menu: {adesioneSelezionata.menu === "vegano" ? "Vegano" : "Classico"}
-            </p>
-            <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
-              {adesioneSelezionata.pagamento_confermato
-                ? "Pagamento confermato."
-                : adesioneSelezionata.pagamento_dichiarato
-                  ? "Ha dichiarato di aver pagato."
-                  : "Non ha ancora dichiarato di aver pagato — puoi confermarlo comunque, ad esempio se ha pagato in mano o senza usare l'app."}
-            </p>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {!adesioneSelezionata.pagamento_confermato && (
-                <button style={S.btn} disabled={busy} onClick={confermaSelezionata}>
-                  {busy ? "In corso…" : "Conferma pagamento"}
-                </button>
-              )}
-              <button style={S.danger} disabled={busy} onClick={rimuoviSelezionata}>
-                {busy ? "In corso…" : "Rimuovi camera"}
-              </button>
-              <button style={S.btn} disabled={busy} onClick={() => setAdesioneSelezionata(null)}>
-                Annulla
-              </button>
-            </div>
+
+            {adesioneSelezionata.partecipa ? (
+              <>
+                <p style={{ fontSize: 13, ...S.sub, marginBottom: 4 }}>
+                  Menu: {adesioneSelezionata.menu === "vegano" ? "Vegano" : "Classico"}
+                </p>
+                <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
+                  {adesioneSelezionata.pagamento_confermato
+                    ? "Pagamento confermato."
+                    : adesioneSelezionata.pagamento_dichiarato
+                      ? "Ha dichiarato di aver pagato."
+                      : "Non ha ancora dichiarato di aver pagato — puoi confermarlo comunque, ad esempio se ha pagato in mano o senza usare l'app."}
+                </p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {!adesioneSelezionata.pagamento_confermato && (
+                    <button style={S.btn} disabled={busy} onClick={confermaSelezionata}>
+                      {busy ? "In corso…" : "Conferma pagamento"}
+                    </button>
+                  )}
+                  <button style={S.danger} disabled={busy} onClick={rimuoviSelezionata}>
+                    {busy ? "In corso…" : "Rimuovi camera"}
+                  </button>
+                  <button style={S.btn} disabled={busy} onClick={() => setAdesioneSelezionata(null)}>
+                    Annulla
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
+                  Ha detto che non parteciperà. Se ha cambiato idea (o la risposta era
+                  sbagliata), puoi segnarla come partecipante scegliendo il menu, oppure
+                  toglierla del tutto.
+                </p>
+                <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+                  {(["classico", "vegano"] as Menu[]).map((m) => (
+                    <button key={m} onClick={() => setMenuConversione(m)}
+                      style={{
+                        ...S.btn, flex: 1,
+                        background: menuConversione === m ? "var(--primary)" : "var(--secondary)",
+                        color: menuConversione === m ? "var(--primary-foreground)" : "var(--foreground)",
+                        border: "none",
+                      }}>
+                      {m === "vegano" ? "Vegano" : "Classico"}
+                    </button>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button style={S.btn} disabled={busy} onClick={segnaPartecipante}>
+                    {busy ? "In corso…" : "Segna come partecipante"}
+                  </button>
+                  <button style={S.danger} disabled={busy} onClick={rimuoviSelezionata}>
+                    {busy ? "In corso…" : "Rimuovi camera"}
+                  </button>
+                  <button style={S.btn} disabled={busy} onClick={() => setAdesioneSelezionata(null)}>
+                    Annulla
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
