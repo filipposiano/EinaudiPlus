@@ -17,7 +17,7 @@ function check(name, cond, detail = "") {
 }
 const section = (s) => console.log(`\n── ${s} ${"─".repeat(Math.max(0, 60 - s.length))}`);
 
-function fakeRepository(initial = { ancora_data: null, ancora_tipo: null }) {
+function fakeRepository(initial = { ok: true, ancora_data: null, ancora_tipo: null }) {
   const calls = [];
   let stato = initial;
   return {
@@ -81,10 +81,18 @@ section("isTuesdayISO()");
 
 section("getLinenChangeAnchor()");
 {
-  const repo = fakeRepository({ ancora_data: "2026-09-01", ancora_tipo: "grande" });
+  const repo = fakeRepository({ ok: true, ancora_data: "2026-09-01", ancora_tipo: "grande" });
   const res = await getLinenChangeAnchor({}, { linenChangeRepository: repo });
   check("legge l'ancora salvata, non un valore ricalcolato",
     res.ancora_data === "2026-09-01" && res.ancora_tipo === "grande", JSON.stringify(res));
+  // linen_change_admin_get() non ha mai avuto 'ok' nel suo jsonb_build_object
+  // (bug corretto in migrations/041): senza, il client (adminApi.ts, che
+  // controlla `data.ok`) leggeva un fallimento su OGNI lettura riuscita, e
+  // mostrava "errore" invece del pannello — vedi il commento nella
+  // migrazione. Qui si verifica solo che il campo, una volta che la SQL lo
+  // manda, arrivi inalterato fino al client: non può tornare a sparire senza
+  // che questo test se ne accorga.
+  check("'ok' arriva inalterato dal repository", res.ok === true, JSON.stringify(res));
 }
 
 // ─── setLinenChangeAnchor() ──────────────────────────────────────────────────

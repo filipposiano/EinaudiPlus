@@ -21,10 +21,24 @@ import { S } from "../../admin-shared/adminStyles";
 // pulsante grande/piccolo/nessuno nel form qui sopra: mischiarlo lì avrebbe
 // fatto sembrare "nessuno" un valore della sequenza, quando invece è
 // un'eccezione puntuale che non la tocca.
+//
+// v1.1 — restyling: la vista era ambigua (non si capiva se la lista di date
+// in basso fosse il calendario definitivo o un'anteprima di una modifica non
+// ancora salvata), e in cima compariva sempre una scatola con scritto
+// "errore". Le due cose avevano la STESSA causa: linen_change_admin_get()
+// in SQL non ha mai restituito il campo 'ok' che ogni altra RPC restituisce
+// (bug corretto in migrations/041) — il client lo legge come un fallimento
+// SEMPRE, quindi `setSalvata(r)` non veniva mai eseguito (vive dentro il
+// `.then()` che quella lettura non raggiungeva mai) e la card "stato
+// attuale" non compariva MAI: l'unica cosa visibile era il form, coi suoi
+// valori di default, che per questo sembrava l'unica fonte di verità. Corretto
+// il bug, il resto di questo file separa comunque le due cose ESPLICITAMENTE
+// (due card distinte, con intestazioni diverse) invece di contare sul fatto
+// che una delle due semplicemente non compaia mai.
 
 type Tipo = "grande" | "piccolo";
 type TipoOSalto = Tipo | "nessuno";
-type Ancora = { ancora_data: string | null; ancora_tipo: Tipo | null; salta: string[] };
+type Ancora = { ok?: boolean; ancora_data: string | null; ancora_tipo: Tipo | null; salta: string[] };
 
 /**
  * "YYYY-MM-DD" del prossimo martedì da oggi (oggi compreso, se oggi è già
@@ -46,11 +60,12 @@ function eMartedi(dataISO: string): boolean {
 }
 
 /**
- * Anteprima locale, SOLO per far vedere all'admin cosa sta per salvare prima
- * che lo salvi — la stessa alternanza per parità di settimane calcolata in
- * SQL da linen_change_type_for(), duplicata qui apposta: se questa anteprima
- * avesse un difetto il peggio è un'anteprima sbagliata, non un cambio
- * biancheria sbagliato — quello lo decide sempre e solo il server.
+ * La sequenza di martedì e il loro tipo, a partire da un'ancora — stessa
+ * alternanza per parità di settimane calcolata in SQL da
+ * linen_change_type_for(), duplicata qui apposta: usata sia per "stato
+ * attuale" (dall'ancora SALVATA) sia per "anteprima" (dall'ancora che si sta
+ * per salvare) — la stessa funzione, chiamata con input diversi, non due
+ * copie della stessa logica.
  *
  * `salti` interviene PRIMA dell'alternanza e non la sposta, esattamente come
  * in SQL: un martedì saltato mostra "nessuno" ma non cambia cosa mostrano
@@ -76,10 +91,18 @@ function fmtData(dataISO: string): string {
 
 export function CambioBiancheria() {
   const [salvata, setSalvata] = useState<Ancora | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  // Il form di modifica è chiuso di default: la prima cosa che si vede è lo
+  // stato attuale (sotto), non un modulo da compilare. Si apre da sola solo
+  // la prima volta, quando non c'è ancora nessuna ancora salvata — in quel
+  // caso non esiste uno "stato attuale" da mostrare, quindi nasconderlo
+  // dietro un pulsante lascerebbe la scheda vuota senza dire cosa fare.
+  const [modificaAperta, setModificaAperta] = useState(false);
+  const [primoCaricamentoFatto, setPrimoCaricamentoFatto] = useState(false);
   const [data, setData] = useState<string>(prossimoMartedi());
   const [tipo, setTipo] = useState<Tipo>("grande");
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
 
   // Sezione "salta un martedì": stato a parte, così segnare o annullare un
   // salto non sporca il messaggio di esito del form dell'ancora qui sopra.
@@ -94,14 +117,27 @@ export function CambioBiancheria() {
         // Riparte da cosa è salvato, non dal valore di comodo: se un'ancora
         // esiste già, il form la mostra invece di suggerire di spostarla.
         if (r.ancora_data && r.ancora_tipo) { setData(r.ancora_data); setTipo(r.ancora_tipo); }
+        else setModificaAperta(true);
       })
-      .catch((e: any) => setMsg(e.message));
+      .catch((e: any) => setMsg(e.message))
+      .finally(() => setPrimoCaricamentoFatto(true));
 
   useEffect(() => { carica(); }, []);
 
   const salti = useMemo(() => new Set(salvata?.salta ?? []), [salvata]);
+
+  // Stato attuale: dall'ancora COME SALVATA — non cambia finché non si
+  // preme "Salva" nel form qui sotto, qualunque cosa si stia digitando lì.
+  const anteprimaAttuale = useMemo(
+    () => (salvata?.ancora_data && salvata.ancora_tipo) ? alternanza(salvata.ancora_data, salvata.ancora_tipo, 6, salti) : [],
+    [salvata, salti],
+  );
+
   const dataValida = eMartedi(data);
-  const anteprima = useMemo(() => dataValida ? alternanza(data, tipo, 6, salti) : [], [data, tipo, dataValida, salti]);
+  // Anteprima delle MODIFICHE: dal form che si sta compilando — può differire
+  // da quella sopra finché non si salva, ed è marcata esplicitamente come
+  // "non salvata" nel JSX, non lasciata all'utente da dedurre dal contesto.
+  const anteprimaModifica = useMemo(() => dataValida ? alternanza(data, tipo, 6, salti) : [], [data, tipo, dataValida, salti]);
 
   const dataSaltoValida = eMartedi(dataSalto);
   const giaSaltato = salti.has(dataSalto);
@@ -113,8 +149,9 @@ export function CambioBiancheria() {
       const r = await call<{ ancora_data: string; ancora_tipo: Tipo }>("cambioBiancheriaSet", {
         ancora_data: data, ancora_tipo: tipo,
       });
-      setSalvata((prev) => ({ ancora_data: r.ancora_data, ancora_tipo: r.ancora_tipo, salta: prev?.salta ?? [] }));
-      setMsg("Salvato.");
+      setSalvata((prev) => ({ ok: true, ancora_data: r.ancora_data, ancora_tipo: r.ancora_tipo, salta: prev?.salta ?? [] }));
+      setModificaAperta(false);
+      setMsg("Salvato: il calendario qui sopra è aggiornato.");
     } catch (e: any) {
       setMsg("Non è riuscito: " + e.message);
     } finally {
@@ -142,87 +179,147 @@ export function CambioBiancheria() {
     }
   }
 
+  const configurato = Boolean(salvata?.ancora_data && salvata?.ancora_tipo);
+
   return (
     <>
       <p style={{ fontSize: 13, ...S.sub, marginBottom: 16, maxWidth: "70ch" }}>
         Il martedì, dalle 5:00 alle 14:00, la Dashboard dei residenti mostra un
         avviso con il tipo di cambio biancheria. Si alterna da solo ogni
-        settimana: qui non si sceglie "questa settimana", si sposta il
-        martedì da cui ricominciare a contare — serve solo quando la sequenza
-        va corretta o riparte dopo una chiusura del collegio.
+        settimana a partire da un punto di riferimento che imposti qui sotto.
       </p>
 
-      {salvata && (
-        <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>
-          {salvata.ancora_data && salvata.ancora_tipo ? (
-            <>Configurazione attuale: dal <b>{fmtData(salvata.ancora_data)}</b> (martedì)
-               è il cambio <b>{salvata.ancora_tipo.toUpperCase()}</b>, e da lì si alterna.</>
+      {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
+
+      {/* ── Stato attuale — quello che i residenti vedono davvero ───────── */}
+      {primoCaricamentoFatto && (
+        <div style={{ ...S.card, padding: 16, marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: configurato ? 12 : 4 }}>
+            <p style={{ fontSize: 15, fontWeight: 700 }}>Prossimi cambi programmati</p>
+            {configurato && (
+              <button onClick={() => setModificaAperta((v) => !v)}
+                style={{ ...S.btn, padding: "6px 12px", fontSize: 12, flexShrink: 0 }}>
+                {modificaAperta ? "Chiudi" : "Modifica"}
+              </button>
+            )}
+          </div>
+
+          {configurato ? (
+            <>
+              <p style={{ fontSize: 12, ...S.sub, marginBottom: 12 }}>
+                Dal <b>{fmtData(salvata!.ancora_data!)}</b> è il cambio{" "}
+                <b>{salvata!.ancora_tipo!.toUpperCase()}</b>, e da lì si alterna ogni settimana —
+                questo è quello che vedono davvero i residenti, non una simulazione.
+              </p>
+              <div style={{ display: "grid", gap: 6 }}>
+                {anteprimaAttuale.map((r) => (
+                  <div key={r.data} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "4px 0" }}>
+                    <span style={S.sub}>{fmtData(r.data)}</span>
+                    <span style={{ fontWeight: 700, textTransform: "capitalize", color: r.tipo === "nessuno" ? "var(--gray-accessible-text)" : "var(--foreground)" }}>
+                      {r.tipo === "nessuno" ? "Nessun cambio" : r.tipo}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
           ) : (
-            <>Non ancora configurato: finché non si salva qui sotto, la
-               Dashboard dei residenti non mostra alcun avviso il martedì.</>
+            <p style={{ fontSize: 13, ...S.sub }}>
+              Non ancora configurato: finché non si salva qui sotto, la Dashboard
+              dei residenti non mostra alcun avviso il martedì.
+            </p>
           )}
         </div>
       )}
 
-      {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
-
-      <div style={{ display: "grid", gap: 12, marginBottom: 16 }}>
-        <div>
-          <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>
-            Martedì da cui ricominciare
-          </label>
-          <input style={S.input} type="date" value={data} onChange={(e) => setData(e.target.value)} />
-          {!dataValida && (
-            <p style={{ fontSize: 12, marginTop: 4, color: "var(--destructive-text)" }}>
-              Dev'essere un martedì.
-            </p>
-          )}
-        </div>
-
-        <div style={{ display: "grid", gap: 8 }}>
-          {(["grande", "piccolo"] as Tipo[]).map((id) => {
-            const scelto = tipo === id;
-            return (
-              <button key={id} onClick={() => setTipo(id)} disabled={busy}
-                style={{
-                  ...S.card, padding: 14, textAlign: "left", cursor: busy ? "default" : "pointer",
-                  display: "flex", alignItems: "center", gap: 12,
-                  borderColor: scelto ? "var(--primary)" : "var(--border)",
-                  background: scelto ? "color-mix(in srgb, var(--primary) 8%, var(--card))" : "var(--card)",
-                }}>
-                <div style={{
-                  width: 20, height: 20, borderRadius: 99, flexShrink: 0,
-                  border: `2px solid ${scelto ? "var(--primary)" : "var(--border)"}`,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  {scelto && <div style={{ width: 10, height: 10, borderRadius: 99, background: "var(--primary)" }} />}
-                </div>
-                <p style={{ fontSize: 14, fontWeight: 600, textTransform: "capitalize" }}>{id}</p>
-              </button>
-            );
-          })}
-        </div>
-
-        <button onClick={salva} disabled={!dataValida || busy} style={{ ...S.btn, opacity: !dataValida || busy ? 0.5 : 1 }}>
-          {busy ? "Salvo…" : "Salva"}
-        </button>
-      </div>
-
-      {anteprima.length > 0 && (
-        <div style={{ ...S.card, padding: 14, marginBottom: 16 }}>
-          <p style={{ fontSize: 12, ...S.sub, marginBottom: 8 }}>
-            Anteprima di cosa verrebbe salvato (le prossime settimane):
+      {/* ── Modifica — collassata di default, con la propria anteprima ──── */}
+      {modificaAperta && (
+        <div style={{
+          ...S.card, padding: 16, marginBottom: 16,
+          border: "1px dashed var(--border)", background: "var(--secondary)",
+        }}>
+          <p style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>
+            {configurato ? "Sposta il punto di partenza" : "Configura il primo cambio"}
           </p>
-          <div style={{ display: "grid", gap: 4 }}>
-            {anteprima.map((r) => (
-              <div key={r.data} style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                <span style={S.sub}>{fmtData(r.data)}</span>
-                <span style={{ fontWeight: 600, textTransform: "capitalize", color: r.tipo === "nessuno" ? "var(--gray-accessible-text)" : "var(--foreground)" }}>
-                  {r.tipo === "nessuno" ? "Nessun cambio" : r.tipo}
+          <p style={{ fontSize: 12, ...S.sub, marginBottom: 14, maxWidth: "60ch" }}>
+            Qui non si sceglie "questa settimana": si sceglie DA QUALE martedì
+            ricominciare a contare, e di che tipo è. Serve solo per correggere la
+            sequenza o per ripartire dopo una chiusura del collegio — niente
+            cambia finché non premi "Salva".
+          </p>
+
+          <div style={{ display: "grid", gap: 12, marginBottom: 16 }}>
+            <div>
+              <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>
+                Martedì da cui ricominciare
+              </label>
+              <input style={S.input} type="date" value={data} onChange={(e) => setData(e.target.value)} />
+              {!dataValida && (
+                <p style={{ fontSize: 12, marginTop: 4, color: "var(--destructive-text)" }}>
+                  Dev'essere un martedì.
+                </p>
+              )}
+            </div>
+
+            <div style={{ display: "grid", gap: 8 }}>
+              {(["grande", "piccolo"] as Tipo[]).map((id) => {
+                const scelto = tipo === id;
+                return (
+                  <button key={id} onClick={() => setTipo(id)} disabled={busy}
+                    style={{
+                      ...S.card, padding: 14, textAlign: "left", cursor: busy ? "default" : "pointer",
+                      display: "flex", alignItems: "center", gap: 12,
+                      borderColor: scelto ? "var(--primary)" : "var(--border)",
+                      background: scelto ? "color-mix(in srgb, var(--primary) 8%, var(--card))" : "var(--card)",
+                    }}>
+                    <div style={{
+                      width: 20, height: 20, borderRadius: 99, flexShrink: 0,
+                      border: `2px solid ${scelto ? "var(--primary)" : "var(--border)"}`,
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}>
+                      {scelto && <div style={{ width: 10, height: 10, borderRadius: 99, background: "var(--primary)" }} />}
+                    </div>
+                    <p style={{ fontSize: 14, fontWeight: 600, textTransform: "capitalize" }}>{id}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={salva} disabled={!dataValida || busy} style={{ ...S.btn, opacity: !dataValida || busy ? 0.5 : 1 }}>
+                {busy ? "Salvo…" : "Salva"}
+              </button>
+              {configurato && (
+                <button onClick={() => setModificaAperta(false)} style={S.btn}>Annulla</button>
+              )}
+            </div>
+          </div>
+
+          {anteprimaModifica.length > 0 && (
+            <div style={{ ...S.card, padding: 14, background: "var(--card)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase",
+                  padding: "2px 8px", borderRadius: 99,
+                  background: "color-mix(in srgb, var(--primary) 15%, transparent)", color: "var(--primary)",
+                }}>
+                  Anteprima · non salvato
                 </span>
               </div>
-            ))}
-          </div>
+              <p style={{ fontSize: 12, ...S.sub, marginBottom: 8 }}>
+                Se premi "Salva" ora, il calendario diventerebbe questo:
+              </p>
+              <div style={{ display: "grid", gap: 4 }}>
+                {anteprimaModifica.map((r) => (
+                  <div key={r.data} style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                    <span style={S.sub}>{fmtData(r.data)}</span>
+                    <span style={{ fontWeight: 600, textTransform: "capitalize", color: r.tipo === "nessuno" ? "var(--gray-accessible-text)" : "var(--foreground)" }}>
+                      {r.tipo === "nessuno" ? "Nessun cambio" : r.tipo}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

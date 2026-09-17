@@ -126,6 +126,7 @@ $$;
 create or replace function linen_change_admin_get()
 returns jsonb language sql stable as $$
   select jsonb_build_object(
+    'ok', true,
     'ancora_data', (select anchor_date from linen_change_anchor where id = true),
     'ancora_tipo', (select anchor_type from linen_change_anchor where id = true),
     'salta', coalesce((
