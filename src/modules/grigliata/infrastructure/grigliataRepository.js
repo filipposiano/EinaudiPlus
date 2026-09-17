@@ -9,9 +9,9 @@ export const grigliataRepository = {
     return rpc("grigliata_stato_pubblico", { p_room: room || null });
   },
 
-  /** Percorso pubblico: aderisce o declina, con il menu se partecipa. */
-  async iscrivi({ room, partecipa, menu }) {
-    return rpc("grigliata_iscrivi", { p_room: room, p_partecipa: partecipa, p_menu: menu });
+  /** Percorso pubblico: aderisce, con un menu — vedi la nota in application/iscriviti.js. */
+  async iscrivi({ room, menu }) {
+    return rpc("grigliata_iscrivi", { p_room: room, p_menu: menu });
   },
 
   /** Percorso pubblico: "ho pagato". */

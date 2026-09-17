@@ -19,8 +19,12 @@ import { PIANI, pianoDi, nomePiano, colorePiano, type Piano } from "../../../pia
 
 type Menu = "classico" | "vegano";
 
+// v1.1: un'adesione è, per definizione, una camera che partecipa — non
+// esiste più "partecipa=false" (vedi la nota gemella in
+// src/modules/grigliata/application/iscriviti.js). Il menu quindi non è
+// più opzionale.
 type Adesione = {
-  id: number; room: string; partecipa: boolean; menu: Menu | null;
+  id: number; room: string; menu: Menu;
   pagamento_dichiarato: boolean; pagamento_confermato: boolean;
   confermato_da: string | null; confermato_at: string | null;
 };
@@ -277,9 +281,9 @@ export function GrigliataAdmin() {
   }
 
   const evento = overview?.evento ?? null;
-  const adesioni = overview?.adesioni ?? [];
+  // Ogni adesione è già una camera che partecipa — non serve più filtrarle.
+  const partecipanti = overview?.adesioni ?? [];
 
-  const partecipanti = adesioni.filter((a) => a.partecipa);
   const confermati = partecipanti.filter((a) => a.pagamento_confermato).length;
   const perMenu = (m: Menu) => {
     const del = partecipanti.filter((a) => a.menu === m);
@@ -365,11 +369,7 @@ export function GrigliataAdmin() {
     );
   };
 
-  // Solo chi partecipa: una risposta "no" non ha un menu né un pagamento da
-  // seguire, e non c'è modo di intervenire su di lei da qui — chi vuole
-  // farla partecipare la aggiunge dal form "Aggiungi" qui sopra, che
-  // sovrascrive una risposta precedente qualunque essa fosse.
-  const fuoriSchema = adesioni.filter((a) => a.partecipa && pianoDi(a.room) === null);
+  const fuoriSchema = partecipanti.filter((a) => pianoDi(a.room) === null);
 
   return (
     <>

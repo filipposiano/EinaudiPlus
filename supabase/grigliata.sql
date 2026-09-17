@@ -40,11 +40,11 @@ create table if not exists grigliata_adesione (
   -- Come ogni altra identità in quest'app: la camera è autodichiarata, non
   -- verificata (vedi README, "L'identità è autodichiarata").
   room                 text not null,
-  partecipa            boolean not null,
-  -- null per chi non partecipa: non ha un menu da ricordare (vedi
-  -- src/modules/grigliata/application/iscriviti.js, che lo azzera prima
-  -- ancora di arrivare qui).
-  menu                 text check (menu in ('classico', 'vegano')),
+  -- Una riga qui = una camera che partecipa: non esiste "adesione con
+  -- partecipa=false" (v1.1 ha tolto la possibilità di rispondere "non
+  -- parteciperò" — vedi la nota in grigliata_iscrivi più sotto). Un menu è
+  -- quindi sempre presente, non opzionale come prima.
+  menu                 text not null check (menu in ('classico', 'vegano')),
   pagamento_dichiarato boolean not null default false,
   pagamento_confermato boolean not null default false,
   confermato_da        text,
@@ -107,7 +107,6 @@ begin
       'satispay_link', v_evento.satispay_link
     ),
     'mia_adesione', case when v_adesione.id is null then null else jsonb_build_object(
-      'partecipa', v_adesione.partecipa,
       'menu', v_adesione.menu,
       'pagamento_dichiarato', v_adesione.pagamento_dichiarato,
       'pagamento_confermato', v_adesione.pagamento_confermato
@@ -116,12 +115,14 @@ begin
 end;
 $$;
 
--- Aderisce o declina, con il menu se partecipa. Upsert: aderire due volte
--- aggiorna la stessa riga, non ne crea una seconda (vedi il vincolo unique
--- sulla tabella). I flag di pagamento NON si toccano qui apposta: cambiare
--- idea sulla partecipazione non deve far sparire in silenzio una conferma
--- di pagamento già data dal delegato.
-create or replace function grigliata_iscrivi(p_room text, p_partecipa boolean, p_menu text)
+-- Aderisce, col menu — non c'è più modo di "declinare" (v1.1: tolta la
+-- possibilità di rispondere "non parteciperò", vedi la nota gemella in
+-- src/modules/grigliata/application/iscriviti.js). Upsert: aderire due
+-- volte aggiorna la stessa riga (per cambiare menu), non ne crea una
+-- seconda (vedi il vincolo unique sulla tabella). I flag di pagamento NON
+-- si toccano qui apposta: cambiare menu non deve far sparire in silenzio
+-- una conferma di pagamento già data dal delegato.
+create or replace function grigliata_iscrivi(p_room text, p_menu text)
 returns jsonb language plpgsql as $$
 declare
   v_evento_id bigint;
@@ -136,18 +137,14 @@ begin
   end if;
 
   v_menu := nullif(btrim(coalesce(p_menu, '')), '');
-  if p_partecipa and (v_menu is null or v_menu not in ('classico', 'vegano')) then
+  if v_menu is null or v_menu not in ('classico', 'vegano') then
     return jsonb_build_object('ok', false, 'error', 'scegli un menu');
   end if;
-  if not p_partecipa then
-    v_menu := null;
-  end if;
 
-  insert into grigliata_adesione (evento_id, room, partecipa, menu, updated_at)
-  values (v_evento_id, p_room, p_partecipa, v_menu, now())
+  insert into grigliata_adesione (evento_id, room, menu, updated_at)
+  values (v_evento_id, p_room, v_menu, now())
   on conflict (evento_id, room) do update
-    set partecipa = excluded.partecipa,
-        menu = excluded.menu,
+    set menu = excluded.menu,
         updated_at = now();
 
   return jsonb_build_object('ok', true);
@@ -162,7 +159,6 @@ returns jsonb language plpgsql as $$
 declare
   v_evento_id bigint;
   v_id bigint;
-  v_partecipa boolean;
 begin
   select id into v_evento_id from grigliata_evento
     where not chiuso and now() < scadenza
@@ -172,10 +168,10 @@ begin
     return jsonb_build_object('ok', false, 'error', 'nessuna grigliata attiva');
   end if;
 
-  select id, partecipa into v_id, v_partecipa
+  select id into v_id
     from grigliata_adesione where evento_id = v_evento_id and room = p_room;
 
-  if v_id is null or not v_partecipa then
+  if v_id is null then
     return jsonb_build_object('ok', false, 'error', 'devi prima aderire');
   end if;
 
@@ -287,7 +283,7 @@ begin
     ),
     'adesioni', coalesce((
       select jsonb_agg(jsonb_build_object(
-        'id', a.id, 'room', a.room, 'partecipa', a.partecipa, 'menu', a.menu,
+        'id', a.id, 'room', a.room, 'menu', a.menu,
         'pagamento_dichiarato', a.pagamento_dichiarato, 'pagamento_confermato', a.pagamento_confermato,
         'confermato_da', a.confermato_da, 'confermato_at', a.confermato_at
       ) order by a.room)
@@ -326,8 +322,6 @@ $$;
 -- l'app, o per registrare chi ha dato la sua parola di persona. Upsert come
 -- grigliata_iscrivi: se la camera aveva già risposto, la sua riga si
 -- aggiorna invece di duplicarsi (stesso vincolo unique(evento_id, room)).
--- Sempre partecipa = true: non ha senso che un delegato aggiunga a mano
--- qualcuno che non partecipa, quella è l'assenza di una riga.
 create or replace function grigliata_admin_aggiungi_adesione(p_evento_id bigint, p_room text, p_menu text)
 returns jsonb language plpgsql as $$
 begin
@@ -341,19 +335,18 @@ begin
     return jsonb_build_object('ok', false, 'error', 'scegli un menu');
   end if;
 
-  insert into grigliata_adesione (evento_id, room, partecipa, menu, updated_at)
-  values (p_evento_id, btrim(p_room), true, p_menu, now())
+  insert into grigliata_adesione (evento_id, room, menu, updated_at)
+  values (p_evento_id, btrim(p_room), p_menu, now())
   on conflict (evento_id, room) do update
-    set partecipa = true, menu = excluded.menu, updated_at = now();
+    set menu = excluded.menu, updated_at = now();
 
   return jsonb_build_object('ok', true);
 end;
 $$;
 
--- Toglie un'adesione — la riga sparisce del tutto, non solo "partecipa =
--- false": la camera torna come se non avesse mai risposto. Per correggere
--- un'adesione aggiunta per sbaglio, o una camera che il delegato sa per
--- certo non parteciperà più.
+-- Toglie un'adesione — la riga sparisce del tutto: la camera torna come se
+-- non avesse mai risposto. Per correggere un'adesione aggiunta per sbaglio,
+-- o una camera che il delegato sa per certo non parteciperà più.
 create or replace function grigliata_admin_rimuovi_adesione(p_adesione_id bigint)
 returns jsonb language plpgsql as $$
 begin
@@ -429,7 +422,7 @@ $$;
 
 revoke all on function grigliata_attiva_bool() from public, anon, authenticated;
 revoke all on function grigliata_stato_pubblico(text) from public, anon, authenticated;
-revoke all on function grigliata_iscrivi(text, boolean, text) from public, anon, authenticated;
+revoke all on function grigliata_iscrivi(text, text) from public, anon, authenticated;
 revoke all on function grigliata_dichiara_pagamento(text) from public, anon, authenticated;
 revoke all on function grigliata_normalizza_link(text) from public, anon, authenticated;
 revoke all on function grigliata_admin_crea(text, timestamptz, text, text, text) from public, anon, authenticated;
@@ -444,7 +437,7 @@ revoke all on function grigliata_admin_elimina(bigint) from public, anon, authen
 
 grant execute on function grigliata_attiva_bool() to service_role;
 grant execute on function grigliata_stato_pubblico(text) to service_role;
-grant execute on function grigliata_iscrivi(text, boolean, text) to service_role;
+grant execute on function grigliata_iscrivi(text, text) to service_role;
 grant execute on function grigliata_dichiara_pagamento(text) to service_role;
 grant execute on function grigliata_normalizza_link(text) to service_role;
 grant execute on function grigliata_admin_crea(text, timestamptz, text, text, text) to service_role;

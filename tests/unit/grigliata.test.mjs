@@ -106,30 +106,26 @@ section("getStatoPubblico()");
 
 section("iscriviti()");
 {
+  // v1.1: non esiste più "declinare" — aderire con un menu è l'unica azione.
   const repo = fakeRepository();
-  await iscriviti({ room: "214", partecipa: true, menu: "vegano" }, { grigliataRepository: repo });
-  check("partecipa=true con menu valido passa al repository",
-    repo.calls[0].name === "iscrivi" && repo.calls[0].args.partecipa === true && repo.calls[0].args.menu === "vegano");
-
-  const repo2 = fakeRepository();
-  await iscriviti({ room: "214", partecipa: false, menu: "vegano" }, { grigliataRepository: repo2 });
-  check("chi non partecipa non porta un menu, anche se ne aveva mandato uno",
-    repo2.calls[0].args.partecipa === false && repo2.calls[0].args.menu === null);
+  await iscriviti({ room: "214", menu: "vegano" }, { grigliataRepository: repo });
+  check("camera e menu passano al repository",
+    repo.calls[0].name === "iscrivi" && repo.calls[0].args.room === "214" && repo.calls[0].args.menu === "vegano");
 
   const errMenu = await throws(() =>
-    iscriviti({ room: "214", partecipa: true, menu: "" }, { grigliataRepository: fakeRepository() }));
-  check("partecipa=true senza menu viene respinto", errMenu?.message === "scegli un menu");
+    iscriviti({ room: "214", menu: "" }, { grigliataRepository: fakeRepository() }));
+  check("senza menu viene respinto", errMenu?.message === "scegli un menu");
 
   const errMenuInvalido = await throws(() =>
-    iscriviti({ room: "214", partecipa: true, menu: "piccante" }, { grigliataRepository: fakeRepository() }));
+    iscriviti({ room: "214", menu: "piccante" }, { grigliataRepository: fakeRepository() }));
   check("un menu non riconosciuto viene respinto", errMenuInvalido?.message === "scegli un menu");
 
   const errCamera = await throws(() =>
-    iscriviti({ room: "", partecipa: true, menu: "classico" }, { grigliataRepository: fakeRepository() }));
+    iscriviti({ room: "", menu: "classico" }, { grigliataRepository: fakeRepository() }));
   check("camera mancante viene respinta", errCamera?.message === "camera mancante");
 
   const repoNonToccato = fakeRepository();
-  await throws(() => iscriviti({ room: "214", partecipa: true, menu: "" }, { grigliataRepository: repoNonToccato }));
+  await throws(() => iscriviti({ room: "214", menu: "" }, { grigliataRepository: repoNonToccato }));
   check("e il repository non viene chiamato", repoNonToccato.calls.length === 0);
 }
 

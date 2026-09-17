@@ -36,8 +36,8 @@ export async function getStatoPubblico(room) {
   return _getStatoPubblico({ room }, deps);
 }
 
-export async function iscriviti(room, partecipa, menu) {
-  return _iscriviti({ room, partecipa, menu }, deps);
+export async function iscriviti(room, menu) {
+  return _iscriviti({ room, menu }, deps);
 }
 
 export async function dichiaraPagamento(room) {

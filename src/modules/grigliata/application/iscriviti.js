@@ -1,22 +1,16 @@
-// Use-case: il residente dà (o ritira) l'adesione, con il menu se partecipa.
-//
-// Chi non partecipa non ha un menu da ricordare: il valore si azzera qui,
-// prima ancora di arrivare al database — non ha senso salvare "vegano" per
-// chi ha appena detto che non viene.
+// Use-case: il residente aderisce, con un menu. v1.1: non esiste più la
+// possibilità di "declinare" — l'app tiene il conto solo di chi manifesta
+// un interesse attivo (vedi la nota gemella in grigliata_iscrivi, in SQL).
 
 import { ValidationError } from "../../../shared/errors/AppError.js";
 import { isValidMenu } from "../domain/validazione.js";
 
-export async function iscriviti({ room, partecipa, menu }, { grigliataRepository }) {
+export async function iscriviti({ room, menu }, { grigliataRepository }) {
   const trimmedRoom = String(room || "").trim();
   if (!trimmedRoom) throw new ValidationError("camera mancante");
 
-  const partecipaBool = Boolean(partecipa);
-  const menuValue = partecipaBool ? String(menu || "") : "";
+  const menuValue = String(menu || "");
+  if (!isValidMenu(menuValue)) throw new ValidationError("scegli un menu");
 
-  if (partecipaBool && !isValidMenu(menuValue)) {
-    throw new ValidationError("scegli un menu");
-  }
-
-  return grigliataRepository.iscrivi({ room: trimmedRoom, partecipa: partecipaBool, menu: menuValue || null });
+  return grigliataRepository.iscrivi({ room: trimmedRoom, menu: menuValue });
 }

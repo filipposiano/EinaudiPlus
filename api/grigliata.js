@@ -40,7 +40,7 @@ export default wrapHandler("grigliata", async (req, res) => {
 
   switch (action) {
     case "iscrivi":
-      return json(res, 200, await iscriviti(room, body.partecipa, body.menu));
+      return json(res, 200, await iscriviti(room, body.menu));
 
     case "dichiaraPagamento":
       return json(res, 200, await dichiaraPagamento(room));

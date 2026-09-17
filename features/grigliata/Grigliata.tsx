@@ -29,19 +29,16 @@ const T = {
     soloCamere: "Questa sezione è per le camere: la Direzione non partecipa.",
     nessunaAttiva: "Non c'è nessuna grigliata attiva al momento.",
     scadeIl: (d: string) => `Le adesioni chiudono il ${d}`,
-    domanda: "Parteciperai?",
-    si: "Sì, parteciperò",
-    no: "No, non parteciperò",
-    cambiaScelta: "Cambia scelta",
     menuLabel: "Che menu preferisci?",
     menuClassico: "Classico",
     menuVegano: "Vegano",
-    conferma: "Conferma",
+    partecipaBtn: "Partecipo",
+    cambiaScelta: "Cambia menu",
     partecipi: "Partecipi!",
     menuScelto: (m: string) => `Menu: ${m}`,
-    nonPartecipi: "Hai detto che non parteciperai.",
     pagamentoTitolo: "Invia la tua quota",
     pagamentoDesc: "Usa uno dei link qui sotto per inviare la quota al delegato, poi tocca \"Ho pagato\".",
+    causalePagamento: "Importante: scrivi il numero della tua camera nella causale (nota) del pagamento, così il delegato può abbinarlo a te.",
     paypalBtn: "Paga con PayPal",
     satispayBtn: "Paga con Satispay",
     dichiaraPagamento: "Ho pagato",
@@ -57,19 +54,16 @@ const T = {
     soloCamere: "This section is for rooms: the front desk doesn't take part.",
     nessunaAttiva: "There's no barbecue running right now.",
     scadeIl: (d: string) => `Sign-ups close on ${d}`,
-    domanda: "Will you join?",
-    si: "Yes, I'll join",
-    no: "No, I won't join",
-    cambiaScelta: "Change your answer",
     menuLabel: "Which menu?",
     menuClassico: "Classic",
     menuVegano: "Vegan",
-    conferma: "Confirm",
+    partecipaBtn: "I'm in",
+    cambiaScelta: "Change menu",
     partecipi: "You're in!",
     menuScelto: (m: string) => `Menu: ${m}`,
-    nonPartecipi: "You said you won't join.",
     pagamentoTitolo: "Send your share",
     pagamentoDesc: "Use one of the links below to send your share to the organizer, then tap \"I've paid\".",
+    causalePagamento: "Important: put your room number in the payment note, so the organizer can match it to you.",
     paypalBtn: "Pay with PayPal",
     satispayBtn: "Pay with Satispay",
     dichiaraPagamento: "I've paid",
@@ -85,19 +79,16 @@ const T = {
     soloCamere: "Cette section est pour les chambres : la Direction n'y participe pas.",
     nessunaAttiva: "Il n'y a aucun barbecue en cours.",
     scadeIl: (d: string) => `Les inscriptions ferment le ${d}`,
-    domanda: "Tu participes ?",
-    si: "Oui, je participe",
-    no: "Non, je ne participe pas",
-    cambiaScelta: "Changer de réponse",
     menuLabel: "Quel menu ?",
     menuClassico: "Classique",
     menuVegano: "Végétalien",
-    conferma: "Confirmer",
+    partecipaBtn: "Je participe",
+    cambiaScelta: "Changer de menu",
     partecipi: "Tu es inscrit·e !",
     menuScelto: (m: string) => `Menu : ${m}`,
-    nonPartecipi: "Tu as dit que tu ne participais pas.",
     pagamentoTitolo: "Envoie ta part",
     pagamentoDesc: "Utilise un des liens ci-dessous pour envoyer ta part à l'organisateur, puis touche \"J'ai payé\".",
+    causalePagamento: "Important : indique le numéro de ta chambre dans la note du paiement, pour que l'organisateur puisse te retrouver.",
     paypalBtn: "Payer avec PayPal",
     satispayBtn: "Payer avec Satispay",
     dichiaraPagamento: "J'ai payé",
@@ -113,19 +104,16 @@ const T = {
     soloCamere: "Dieser Bereich ist für Zimmer: die Verwaltung nimmt nicht teil.",
     nessunaAttiva: "Gerade läuft kein Grillfest.",
     scadeIl: (d: string) => `Anmeldeschluss ist der ${d}`,
-    domanda: "Machst du mit?",
-    si: "Ja, ich mache mit",
-    no: "Nein, ich mache nicht mit",
-    cambiaScelta: "Antwort ändern",
     menuLabel: "Welches Menü?",
     menuClassico: "Klassisch",
     menuVegano: "Vegan",
-    conferma: "Bestätigen",
+    partecipaBtn: "Ich mache mit",
+    cambiaScelta: "Menü ändern",
     partecipi: "Du bist dabei!",
     menuScelto: (m: string) => `Menü: ${m}`,
-    nonPartecipi: "Du hast gesagt, dass du nicht mitmachst.",
     pagamentoTitolo: "Sende deinen Anteil",
     pagamentoDesc: "Nutze einen der Links unten, um deinen Anteil an den Organisator zu senden, und tippe dann auf \"Bezahlt\".",
+    causalePagamento: "Wichtig: Gib deine Zimmernummer in der Zahlungsnotiz an, damit der Organisator sie dir zuordnen kann.",
     paypalBtn: "Mit PayPal bezahlen",
     satispayBtn: "Mit Satispay bezahlen",
     dichiaraPagamento: "Bezahlt",
@@ -141,19 +129,16 @@ const T = {
     soloCamere: "Esta sección es para las habitaciones: la Dirección no participa.",
     nessunaAttiva: "No hay ninguna barbacoa activa ahora mismo.",
     scadeIl: (d: string) => `Las inscripciones cierran el ${d}`,
-    domanda: "¿Participarás?",
-    si: "Sí, participaré",
-    no: "No, no participaré",
-    cambiaScelta: "Cambiar respuesta",
     menuLabel: "¿Qué menú prefieres?",
     menuClassico: "Clásico",
     menuVegano: "Vegano",
-    conferma: "Confirmar",
+    partecipaBtn: "Participo",
+    cambiaScelta: "Cambiar menú",
     partecipi: "¡Estás dentro!",
     menuScelto: (m: string) => `Menú: ${m}`,
-    nonPartecipi: "Has dicho que no participarás.",
     pagamentoTitolo: "Envía tu parte",
     pagamentoDesc: "Usa uno de los enlaces de abajo para enviar tu parte al organizador, luego toca \"Ya he pagado\".",
+    causalePagamento: "Importante: escribe el número de tu habitación en la nota del pago, para que el organizador pueda identificarte.",
     paypalBtn: "Pagar con PayPal",
     satispayBtn: "Pagar con Satispay",
     dichiaraPagamento: "Ya he pagado",
@@ -169,19 +154,16 @@ const T = {
     soloCamere: "Chesta sezione è pe' 'e cammere: 'a Direzione nun ce sta.",
     nessunaAttiva: "Mo nun ce sta nisciuna grigliata.",
     scadeIl: (d: string) => `'E adesioni chiudono ô ${d}`,
-    domanda: "Vien'?",
-    si: "Sì, vengo",
-    no: "No, nun vengo",
-    cambiaScelta: "Cagna risposta",
     menuLabel: "Che menu vuò?",
     menuClassico: "Classico",
     menuVegano: "Vegano",
-    conferma: "Conferma",
+    partecipaBtn: "Ce sto",
+    cambiaScelta: "Cagna menu",
     partecipi: "Staje dinto!",
     menuScelto: (m: string) => `Menu: ${m}`,
-    nonPartecipi: "Hê ditto ca nun vien'.",
     pagamentoTitolo: "Manna 'a quota toja",
     pagamentoDesc: "Adopera uno d''e link ccà sotto pe' mannà 'a quota, po' tocca \"Aggio pagato\".",
+    causalePagamento: "Importante: scrive 'o nummero d''a cammera toja dint''a nota d''o pagamento, accussì 'o delegato te ricanosce.",
     paypalBtn: "Paga cu PayPal",
     satispayBtn: "Paga cu Satispay",
     dichiaraPagamento: "Aggio pagato",
@@ -218,9 +200,11 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   const [msg, setMsg] = useState<string | null>(null);
 
   // Form di adesione, precompilato da mia_adesione una volta caricata — ma
-  // resta modificabile: "cambia scelta" lo riapre senza dover ricaricare.
+  // resta modificabile: "cambia menu" lo riapre senza dover ricaricare. Non
+  // c'è più una scelta sì/no da ricordare: aderire è l'unica azione,
+  // dichiarare un interesse attivo — vedi la nota gemella in
+  // src/modules/grigliata/application/iscriviti.js.
   const [modificaScelta, setModificaScelta] = useState(false);
-  const [partecipaScelta, setPartecipaScelta] = useState(true);
   const [menuScelta, setMenuScelta] = useState<Menu>("classico");
 
   const load = useCallback(async () => {
@@ -229,10 +213,7 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
     try {
       const s = await api.getGrigliataStato();
       setStato(s);
-      if (s.miaAdesione) {
-        setPartecipaScelta(s.miaAdesione.partecipa);
-        if (s.miaAdesione.menu) setMenuScelta(s.miaAdesione.menu);
-      }
+      if (s.miaAdesione) setMenuScelta(s.miaAdesione.menu);
     } catch { setError(true); }
     finally { setLoading(false); }
   }, [camera]);
@@ -254,7 +235,7 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
     if (busy) return;
     setBusy(true); setMsg(null);
     try {
-      await api.grigliataIscriviti(partecipaScelta, partecipaScelta ? menuScelta : null);
+      await api.grigliataIscriviti(menuScelta);
       setModificaScelta(false);
       await load();
     } catch {
@@ -354,12 +335,12 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
       {mostraForm ? (
         <div className="rounded-2xl border p-4 flex flex-col gap-4" style={{ background: surf, borderColor: div }}>
           <div>
-            <p className="text-sm font-semibold mb-2" style={{ color: fg }}>{t.domanda}</p>
+            <p className="text-sm font-semibold mb-2" style={{ color: fg }}>{t.menuLabel}</p>
             <div className="grid grid-cols-2 gap-2">
-              {([[true, t.si], [false, t.no]] as [boolean, string][]).map(([val, label]) => {
-                const scelto = partecipaScelta === val;
+              {([["classico", t.menuClassico], ["vegano", t.menuVegano]] as [Menu, string][]).map(([val, label]) => {
+                const scelto = menuScelta === val;
                 return (
-                  <button key={String(val)} onClick={() => setPartecipaScelta(val)}
+                  <button key={val} onClick={() => setMenuScelta(val)}
                     className="rounded-xl py-2.5 text-sm font-semibold transition-all"
                     style={scelto
                       ? { background: RED, color: RED_FG }
@@ -371,54 +352,30 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
             </div>
           </div>
 
-          {partecipaScelta && (
-            <div>
-              <p className="text-sm font-semibold mb-2" style={{ color: fg }}>{t.menuLabel}</p>
-              <div className="grid grid-cols-2 gap-2">
-                {([["classico", t.menuClassico], ["vegano", t.menuVegano]] as [Menu, string][]).map(([val, label]) => {
-                  const scelto = menuScelta === val;
-                  return (
-                    <button key={val} onClick={() => setMenuScelta(val)}
-                      className="rounded-xl py-2.5 text-sm font-semibold transition-all"
-                      style={scelto
-                        ? { background: RED, color: RED_FG }
-                        : { background: "var(--secondary)", color: fg }}>
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           <button onClick={salvaAdesione} disabled={busy}
             className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
             style={{ background: RED, color: RED_FG, opacity: busy ? 0.6 : 1 }}>
-            {t.conferma}
+            {t.partecipaBtn}
           </button>
         </div>
       ) : (
         <div className="rounded-2xl border p-4 flex flex-col gap-3" style={{ background: surf, borderColor: div }}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1.5">
-              {miaAdesione!.partecipa && <Check size={16} style={{ color: RED }} />}
-              <p className="text-sm font-semibold" style={{ color: miaAdesione!.partecipa ? RED : fg }}>
-                {miaAdesione!.partecipa ? t.partecipi : t.nonPartecipi}
-              </p>
+              <Check size={16} style={{ color: RED }} />
+              <p className="text-sm font-semibold" style={{ color: RED }}>{t.partecipi}</p>
             </div>
             <button onClick={() => setModificaScelta(true)} className="text-xs font-semibold underline" style={{ color: sub }}>
               {t.cambiaScelta}
             </button>
           </div>
-          {miaAdesione!.partecipa && miaAdesione!.menu && (
-            <p className="text-xs" style={{ color: sub }}>{t.menuScelto(miaAdesione!.menu === "vegano" ? t.menuVegano : t.menuClassico)}</p>
-          )}
+          <p className="text-xs" style={{ color: sub }}>{t.menuScelto(miaAdesione!.menu === "vegano" ? t.menuVegano : t.menuClassico)}</p>
         </div>
       )}
 
-      {/* Il pagamento compare solo per chi partecipa davvero (non mentre si
-          sta ancora decidendo, e non per chi ha detto di no). */}
-      {miaAdesione?.partecipa && !modificaScelta && (
+      {/* Il pagamento compare solo per chi ha già aderito (non mentre si sta
+          ancora scegliendo il menu). */}
+      {miaAdesione && !modificaScelta && (
         <div className="rounded-2xl border p-4 mt-4 flex flex-col gap-3" style={{ background: surf, borderColor: div }}>
           <p className="text-sm font-bold" style={{ color: fg }}>{t.pagamentoTitolo}</p>
 
@@ -430,6 +387,11 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
           ) : (
             <>
               <p className="text-xs leading-relaxed" style={{ color: sub }}>{t.pagamentoDesc}</p>
+
+              <p className="text-xs leading-relaxed rounded-xl px-3 py-2 font-medium"
+                style={{ background: "color-mix(in srgb, var(--primary) 10%, transparent)", color: fg }}>
+                {t.causalePagamento}
+              </p>
 
               <div className="flex flex-col gap-2">
                 {evento.paypalLink && (

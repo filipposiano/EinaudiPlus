@@ -299,7 +299,7 @@ export interface GrigliataEvento {
 }
 
 export interface GrigliataMiaAdesione {
-  partecipa: boolean; menu: GrigliataMenu | null;
+  menu: GrigliataMenu;
   pagamentoDichiarato: boolean; pagamentoConfermato: boolean;
 }
 
@@ -337,17 +337,16 @@ export async function getGrigliataStato(): Promise<GrigliataStato> {
       paypalLink: data.evento.paypal_link ?? null, satispayLink: data.evento.satispay_link ?? null,
     },
     miaAdesione: data.mia_adesione ? {
-      partecipa: Boolean(data.mia_adesione.partecipa),
-      menu: (data.mia_adesione.menu as GrigliataMenu) ?? null,
+      menu: data.mia_adesione.menu as GrigliataMenu,
       pagamentoDichiarato: Boolean(data.mia_adesione.pagamento_dichiarato),
       pagamentoConfermato: Boolean(data.mia_adesione.pagamento_confermato),
     } : null,
   };
 }
 
-/** Aderisce o declina. `menu` è ignorato dal server se `partecipa` è falso. */
-export async function grigliataIscriviti(partecipa: boolean, menu: GrigliataMenu | null) {
-  return postGrigliataAction("iscrivi", { partecipa, menu });
+/** Aderisce (o cambia menu se aveva già aderito) — non c'è più un modo di declinare. */
+export async function grigliataIscriviti(menu: GrigliataMenu) {
+  return postGrigliataAction("iscrivi", { menu });
 }
 
 export async function grigliataDichiaraPagamento() {
