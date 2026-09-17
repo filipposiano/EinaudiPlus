@@ -10,6 +10,7 @@ import { adminCreaEvento } from "../../src/modules/grigliata/application/adminCr
 import { adminOverview } from "../../src/modules/grigliata/application/adminOverview.js";
 import { adminConfermaPagamento } from "../../src/modules/grigliata/application/adminConfermaPagamento.js";
 import { adminChiudiEvento } from "../../src/modules/grigliata/application/adminChiudiEvento.js";
+import { adminModificaScadenza } from "../../src/modules/grigliata/application/adminModificaScadenza.js";
 import { authorize } from "../../src/modules/grigliata/domain/policy.js";
 import { isValidMenu, isFutureDateTime } from "../../src/modules/grigliata/domain/validazione.js";
 
@@ -39,6 +40,7 @@ function fakeRepository() {
       return { ok: true, room: "214", titolo: "Grigliata di prova" };
     },
     async adminChiudi(id) { calls.push({ name: "adminChiudi", id }); return { ok: true }; },
+    async adminModificaScadenza(args) { calls.push({ name: "adminModificaScadenza", args }); return { ok: true }; },
   };
 }
 
@@ -58,6 +60,7 @@ function repositoryCheRompe(messaggio = "Could not find the function") {
     async adminOverview() { throw err; },
     async adminConfermaPagamento() { throw err; },
     async adminChiudi() { throw err; },
+    async adminModificaScadenza() { throw err; },
   };
 }
 
@@ -208,6 +211,27 @@ section("adminChiudiEvento()");
   check("un id non numerico viene respinto", err?.message === "evento non valido");
 }
 
+section("adminModificaScadenza()");
+{
+  const futuro = new Date(Date.now() + 3600_000).toISOString();
+  const repo = fakeRepository();
+  await adminModificaScadenza({ eventoId: "7", scadenza: futuro }, { grigliataRepository: repo });
+  check("l'id arriva convertito in numero e la data come ISO",
+    repo.calls[0].args.id === 7 && repo.calls[0].args.scadenza === new Date(futuro).toISOString());
+
+  const errId = await throws(() =>
+    adminModificaScadenza({ eventoId: "x", scadenza: futuro }, { grigliataRepository: fakeRepository() }));
+  check("un id non numerico viene respinto", errId?.message === "evento non valido");
+
+  const errData = await throws(() =>
+    adminModificaScadenza({ eventoId: "7", scadenza: "2020-01-01T00:00:00Z" }, { grigliataRepository: fakeRepository() }));
+  check("una scadenza nel passato viene respinta", errData?.message === "la scadenza deve essere una data futura");
+
+  const repoNonToccato = fakeRepository();
+  await throws(() => adminModificaScadenza({ eventoId: "7", scadenza: "2020-01-01" }, { grigliataRepository: repoNonToccato }));
+  check("e il repository non viene chiamato", repoNonToccato.calls.length === 0);
+}
+
 // ─── Un fallimento della RPC arriva all'admin come diagnosi, non generico ────
 
 section("un errore della RPC è esponibile all'admin, non generico");
@@ -231,6 +255,10 @@ section("un errore della RPC è esponibile all'admin, non generico");
 
   const errChiudi = await throws(() => adminChiudiEvento({ eventoId: "1" }, { grigliataRepository: repoRotto }));
   check("adminChiudiEvento: stesso comportamento dopo la validazione", errChiudi?.expose === true);
+
+  const errScadenza = await throws(() =>
+    adminModificaScadenza({ eventoId: "1", scadenza: futuro }, { grigliataRepository: repoRotto }));
+  check("adminModificaScadenza: stesso comportamento dopo la validazione", errScadenza?.expose === true);
 }
 
 // ─── Policy di autorizzazione ────────────────────────────────────────────────
@@ -242,7 +270,7 @@ section("authorize() — policy del modulo Grigliata");
   const sistemista = { u: "peach", r: "sistemista" };
   const delegato = { u: "toad", r: "delegato" };
 
-  for (const azione of ["grigliataCrea", "grigliataOverview", "grigliataConfermaPagamento", "grigliataChiudi"]) {
+  for (const azione of ["grigliataCrea", "grigliataOverview", "grigliataConfermaPagamento", "grigliataChiudi", "grigliataModificaScadenza"]) {
     check(`il delegato può '${azione}'`, authorize(delegato, azione) === true);
     check(`il sistemista può '${azione}'`, authorize(sistemista, azione) === true);
     check(`FDO NON può '${azione}'`, authorize(fdo, azione) === false);

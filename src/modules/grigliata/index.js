@@ -19,6 +19,7 @@ import { adminCreaEvento as _adminCreaEvento } from "./application/adminCreaEven
 import { adminOverview as _adminOverview } from "./application/adminOverview.js";
 import { adminConfermaPagamento as _adminConfermaPagamento } from "./application/adminConfermaPagamento.js";
 import { adminChiudiEvento as _adminChiudiEvento } from "./application/adminChiudiEvento.js";
+import { adminModificaScadenza as _adminModificaScadenza } from "./application/adminModificaScadenza.js";
 
 export { authorize } from "./domain/policy.js";
 export { MENU, isValidMenu } from "./domain/validazione.js";
@@ -55,4 +56,8 @@ export async function adminConfermaPagamento(adesioneId, attore) {
 
 export async function adminChiudiEvento(eventoId) {
   return _adminChiudiEvento({ eventoId }, deps);
+}
+
+export async function adminModificaScadenza(eventoId, scadenza) {
+  return _adminModificaScadenza({ eventoId, scadenza }, deps);
 }

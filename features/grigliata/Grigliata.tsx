@@ -193,6 +193,19 @@ const T = {
 
 type Menu = api.GrigliataMenu;
 
+/**
+ * Un link "paypal.me/mario", senza schema, è un URL RELATIVO per un
+ * `<a href>`: il browser lo risolve contro la pagina corrente invece di
+ * aprire PayPal — il bug per cui i link di pagamento non funzionavano.
+ * grigliata_admin_crea() in SQL ora normalizza già quel che salva, ma
+ * questo resta comunque: un dato salvato prima di quella correzione, o
+ * scritto da un altro punto in futuro, deve aprirsi correttamente lo
+ * stesso — costa una riga, non vale lasciarlo alla disciplina di chi scrive.
+ */
+function href(link: string): string {
+  return /^https?:\/\//i.test(link) ? link : `https://${link}`;
+}
+
 export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNumber: string | null }) {
   const t = T[lang];
   // Come Bici: e' una scelta di camera, non della Direzione.
@@ -417,14 +430,14 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
 
               <div className="flex flex-col gap-2">
                 {evento.paypalLink && (
-                  <a href={evento.paypalLink} target="_blank" rel="noopener noreferrer"
+                  <a href={href(evento.paypalLink)} target="_blank" rel="noopener noreferrer"
                     className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold"
                     style={{ background: "var(--secondary)", color: fg }}>
                     {t.paypalBtn}<ExternalLink size={14} />
                   </a>
                 )}
                 {evento.satispayLink && (
-                  <a href={evento.satispayLink} target="_blank" rel="noopener noreferrer"
+                  <a href={href(evento.satispayLink)} target="_blank" rel="noopener noreferrer"
                     className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold"
                     style={{ background: "var(--secondary)", color: fg }}>
                     {t.satispayBtn}<ExternalLink size={14} />

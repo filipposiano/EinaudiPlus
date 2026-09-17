@@ -188,6 +188,20 @@ $$;
 -- Percorso amministrativo (delegato, sistemista)
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- Un link "paypal.me/mario", senza schema, è un URL RELATIVO per un <a href>:
+-- il browser lo risolve contro la pagina corrente invece che aprire PayPal.
+-- Qui si aggiunge https:// se manca, così quel che finisce nel database è
+-- sempre assoluto — il residente non deve mai pensarci, e non conta se lo
+-- dimentica anche il delegato compilando il form.
+create or replace function grigliata_normalizza_link(p_link text)
+returns text language sql immutable as $$
+  select case
+    when p_link is null or btrim(p_link) = '' then null
+    when btrim(p_link) ~* '^https?://' then btrim(p_link)
+    else 'https://' || btrim(p_link)
+  end;
+$$;
+
 -- Fa partire una nuova grigliata. Chiude da sola qualunque evento ancora
 -- attivo prima di crearne uno: una alla volta, sempre — la scheda residenti
 -- non deve mai scegliere fra due.
@@ -196,13 +210,17 @@ create or replace function grigliata_admin_crea(
 ) returns jsonb language plpgsql as $$
 declare
   v_id bigint;
+  v_paypal text;
+  v_satispay text;
 begin
   if p_scadenza is null or p_scadenza <= now() then
     return jsonb_build_object('ok', false, 'error', 'la scadenza deve essere nel futuro');
   end if;
 
-  if nullif(btrim(coalesce(p_paypal, '')), '') is null
-     and nullif(btrim(coalesce(p_satispay, '')), '') is null then
+  v_paypal := grigliata_normalizza_link(p_paypal);
+  v_satispay := grigliata_normalizza_link(p_satispay);
+
+  if v_paypal is null and v_satispay is null then
     return jsonb_build_object('ok', false, 'error', 'inserisci almeno un link per il pagamento (PayPal o Satispay)');
   end if;
 
@@ -211,13 +229,32 @@ begin
   insert into grigliata_evento (titolo, creato_da, scadenza, paypal_link, satispay_link)
   values (
     coalesce(nullif(btrim(coalesce(p_titolo, '')), ''), 'Grigliata'),
-    p_attore, p_scadenza,
-    nullif(btrim(coalesce(p_paypal, '')), ''),
-    nullif(btrim(coalesce(p_satispay, '')), '')
+    p_attore, p_scadenza, v_paypal, v_satispay
   )
   returning id into v_id;
 
   return jsonb_build_object('ok', true, 'id', v_id);
+end;
+$$;
+
+-- Cambia SOLO la scadenza di un evento esistente — non tocca chiuso: se il
+-- delegato aveva chiuso l'evento a mano, spostare la scadenza non lo
+-- riapre. Serve a correggere una data sbagliata o a dare più tempo, senza
+-- dover chiudere e far ripartire tutto da capo (perdendo le adesioni già
+-- raccolte, che grigliata_admin_crea invece azzera sempre).
+create or replace function grigliata_admin_modifica_scadenza(p_evento_id bigint, p_scadenza timestamptz)
+returns jsonb language plpgsql as $$
+begin
+  if p_scadenza is null or p_scadenza <= now() then
+    return jsonb_build_object('ok', false, 'error', 'la scadenza deve essere nel futuro');
+  end if;
+
+  update grigliata_evento set scadenza = p_scadenza where id = p_evento_id;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'evento non trovato');
+  end if;
+
+  return jsonb_build_object('ok', true, 'scadenza', p_scadenza);
 end;
 $$;
 
@@ -300,7 +337,9 @@ revoke all on function grigliata_attiva_bool() from public, anon, authenticated;
 revoke all on function grigliata_stato_pubblico(text) from public, anon, authenticated;
 revoke all on function grigliata_iscrivi(text, boolean, text) from public, anon, authenticated;
 revoke all on function grigliata_dichiara_pagamento(text) from public, anon, authenticated;
+revoke all on function grigliata_normalizza_link(text) from public, anon, authenticated;
 revoke all on function grigliata_admin_crea(text, timestamptz, text, text, text) from public, anon, authenticated;
+revoke all on function grigliata_admin_modifica_scadenza(bigint, timestamptz) from public, anon, authenticated;
 revoke all on function grigliata_admin_overview() from public, anon, authenticated;
 revoke all on function grigliata_admin_conferma_pagamento(bigint, text) from public, anon, authenticated;
 revoke all on function grigliata_admin_chiudi(bigint) from public, anon, authenticated;
@@ -309,7 +348,9 @@ grant execute on function grigliata_attiva_bool() to service_role;
 grant execute on function grigliata_stato_pubblico(text) to service_role;
 grant execute on function grigliata_iscrivi(text, boolean, text) to service_role;
 grant execute on function grigliata_dichiara_pagamento(text) to service_role;
+grant execute on function grigliata_normalizza_link(text) to service_role;
 grant execute on function grigliata_admin_crea(text, timestamptz, text, text, text) to service_role;
+grant execute on function grigliata_admin_modifica_scadenza(bigint, timestamptz) to service_role;
 grant execute on function grigliata_admin_overview() to service_role;
 grant execute on function grigliata_admin_conferma_pagamento(bigint, text) to service_role;
 grant execute on function grigliata_admin_chiudi(bigint) to service_role;

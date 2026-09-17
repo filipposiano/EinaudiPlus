@@ -40,4 +40,9 @@ export const grigliataRepository = {
   async adminChiudi(id) {
     return rpc("grigliata_admin_chiudi", { p_evento_id: id });
   },
+
+  /** Admin: sposta la scadenza di un evento esistente, senza toccare altro. */
+  async adminModificaScadenza({ id, scadenza }) {
+    return rpc("grigliata_admin_modifica_scadenza", { p_evento_id: id, p_scadenza: scadenza });
+  },
 };
