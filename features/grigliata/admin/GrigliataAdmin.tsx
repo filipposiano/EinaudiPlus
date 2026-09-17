@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pencil, Plus } from "lucide-react";
+import { Pencil, Plus, Check } from "lucide-react";
 import { call } from "../../admin-shared/adminApi";
 import { S } from "../../admin-shared/adminStyles";
 import { PIANI, pianoDi, nomePiano, colorePiano, type Piano } from "../../../piani";
@@ -86,6 +86,15 @@ export function GrigliataAdmin() {
   // pulsante sembra semplicemente non funzionare. Stessa scelta già fatta
   // in Manutenzione.tsx per lo stesso motivo.
   const [daEliminare, setDaEliminare] = useState(false);
+
+  // La pastiglia di chi non ha ancora il pagamento confermato è cliccabile:
+  // apre questo popup invece di confermare al primo tocco — confermare un
+  // incasso è un'azione reale (avvisa la camera), merita un passaggio in
+  // più, come "Elimina" qui sopra. Il popup dice esplicitamente che si può
+  // confermare anche se la camera non ha ancora toccato "Ho pagato" da sé
+  // (es. ha pagato in mano, o al bancomat): non è un requisito, solo
+  // un'informazione che il delegato può usare o no.
+  const [adesioneSelezionata, setAdesioneSelezionata] = useState<Adesione | null>(null);
 
   // Form "fai partire una nuova grigliata" — chiuso di default, si apre dal
   // "+" in alto: è l'azione eccezionale, non quella di ogni giorno.
@@ -196,17 +205,26 @@ export function GrigliataAdmin() {
     }
   }
 
-  async function confermaPagamento(adesioneId: number) {
-    if (busy) return;
+  /** Torna true/false: il popup che la chiama si chiude solo se è andata a
+   *  buon fine, altrimenti resta aperto con l'errore già mostrato sotto. */
+  async function confermaPagamento(adesioneId: number): Promise<boolean> {
+    if (busy) return false;
     setBusy(true); setMsg(null);
     try {
       await call("grigliataConfermaPagamento", { adesione_id: adesioneId });
       await carica();
+      return true;
     } catch (e: any) {
       setMsg("Non è riuscito: " + e.message);
+      return false;
     } finally {
       setBusy(false);
     }
+  }
+
+  async function confermaSelezionata() {
+    if (!adesioneSelezionata) return;
+    if (await confermaPagamento(adesioneSelezionata.id)) setAdesioneSelezionata(null);
   }
 
   const evento = overview?.evento ?? null;
@@ -228,64 +246,91 @@ export function GrigliataAdmin() {
     </div>
   );
 
-  // Una riga "camera 214 — menu / stato pagamento", riusata nei tre
-  // sottogruppi qui sotto (confermati, da confermare, non partecipano).
-  const RigaAdesione = ({ a }: { a: Adesione }) => (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "6px 0" }}>
-      <div style={{ minWidth: 0 }}>
-        <p style={{ fontSize: 13, fontWeight: 600 }}>Camera {a.room}</p>
-        {a.partecipa && <p style={{ fontSize: 12, ...S.sub }}>Menu: {a.menu === "vegano" ? "Vegano" : "Classico"}</p>}
-      </div>
-      {a.partecipa && !a.pagamento_confermato && (
-        <button onClick={() => confermaPagamento(a.id)} disabled={busy}
-          style={{ ...S.btn, flexShrink: 0, opacity: busy ? 0.5 : 1 }}>
-          Conferma pagamento
-        </button>
-      )}
-      {a.pagamento_confermato && (
-        <span style={{ fontSize: 12, fontWeight: 700, color: "#22c55e", flexShrink: 0 }}>✓ confermato</span>
-      )}
-    </div>
-  );
-
-  const Sottogruppo = ({ etichetta, righe }: { etichetta: string; righe: Adesione[] }) =>
-    righe.length === 0 ? null : (
-      <div style={{ marginBottom: 6 }}>
-        <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.03em", textTransform: "uppercase", ...S.sub, marginTop: 8 }}>
-          {etichetta} · {righe.length}
-        </p>
-        {righe.map((a) => <RigaAdesione key={a.id} a={a} />)}
-      </div>
+  // Una pastiglia per adesione — stessa famiglia grafica di CameraChip in
+  // BiciTab.tsx (colore del piano, distintivo in un angolo), con una
+  // differenza voluta: qui il colore stesso PORTA il significato. In
+  // bianco e nero finché il pagamento non è confermato, colorata col colore
+  // del piano appena lo è — un solo sguardo sulla griglia dice quanto
+  // manca, senza dover leggere ogni riga. Cliccabile solo finché è ancora
+  // grigia: confermare è un'azione, non serve un tocco su una pastiglia già
+  // a posto.
+  const AdesioneChip = ({ a, colore }: { a: Adesione; colore: string }) => {
+    const confermato = a.pagamento_confermato;
+    const stile = {
+      position: "relative" as const,
+      display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", gap: 2,
+      padding: "10px 8px", borderRadius: 12, minHeight: 56,
+      background: confermato ? `color-mix(in srgb, ${colore} 12%, var(--card))` : "var(--secondary)",
+      border: `1px solid ${confermato ? `color-mix(in srgb, ${colore} 32%, var(--border))` : "var(--border)"}`,
+      color: "var(--foreground)",
+      cursor: confermato ? "default" : "pointer",
+      opacity: busy ? 0.6 : 1,
+    } as const;
+    return (
+      <button onClick={() => !confermato && setAdesioneSelezionata(a)} disabled={busy} style={stile}>
+        <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "monospace" }}>{a.room}</span>
+        <span style={{
+          fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.02em",
+          color: confermato ? colore : "var(--muted-foreground)",
+        }}>
+          {a.menu === "vegano" ? "Vegano" : "Classico"}
+        </span>
+        {/* Non confermato ma già dichiarato: un'informazione in più, non un
+            terzo colore — resta grigia, dice solo "questa ha priorità". */}
+        {!confermato && a.pagamento_dichiarato && (
+          <span style={{ fontSize: 8, color: "var(--muted-foreground)" }}>dichiarato</span>
+        )}
+        {confermato && (
+          <span style={{
+            position: "absolute", top: -5, right: -5, width: 15, height: 15, borderRadius: 99,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: colore, color: "#fff", border: "2px solid var(--card)",
+          }}>
+            <Check size={9} />
+          </span>
+        )}
+      </button>
     );
+  };
 
   // Un gruppo per piano — stesso ordine e stessa idea di BiciTab.tsx:
   // "Manica" (un edificio a se') prima dei piani veri e propri, che
-  // salgono dal primo al quarto, poi il basso fabbricato. Dentro ogni
-  // piano, tre sotto-elenchi: confermati, da confermare, non partecipano —
-  // le due domande che il delegato si fa girando per i piani.
+  // salgono dal primo al quarto, poi il basso fabbricato. Chi non
+  // partecipa resta una riga di testo, non una pastiglia: non porta uno
+  // stato di pagamento da mostrare a colpo d'occhio.
   const GruppoPiano = ({ piano, righe }: { piano: Piano; righe: Adesione[] }) => {
     if (righe.length === 0) return null;
     const partecipanoQui = righe.filter((a) => a.partecipa);
-    const confermatiQui = partecipanoQui.filter((a) => a.pagamento_confermato);
-    const daConfermareQui = partecipanoQui.filter((a) => !a.pagamento_confermato);
     const nonPartecipanoQui = righe.filter((a) => !a.partecipa);
     const colore = colorePiano(piano);
     return (
-      <div style={{ marginBottom: 14 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 2 }}>
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
           <span style={{ width: 9, height: 9, borderRadius: 99, background: colore, flexShrink: 0 }} />
           <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", ...S.sub }}>
             {nomePiano(piano)} · {righe.length}
           </p>
         </div>
-        <Sottogruppo etichetta="Confermati" righe={confermatiQui} />
-        <Sottogruppo etichetta="Da confermare" righe={daConfermareQui} />
-        <Sottogruppo etichetta="Non partecipano" righe={nonPartecipanoQui} />
+        {partecipanoQui.length > 0 && (
+          <div style={{
+            display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(84px, 1fr))",
+            marginBottom: nonPartecipanoQui.length > 0 ? 8 : 0,
+          }}>
+            {partecipanoQui.map((a) => <AdesioneChip key={a.id} a={a} colore={colore} />)}
+          </div>
+        )}
+        {nonPartecipanoQui.length > 0 && (
+          <p style={{ fontSize: 11, ...S.sub }}>
+            Non partecipano: camera {nonPartecipanoQui.map((a) => a.room).join(", ")}
+          </p>
+        )}
       </div>
     );
   };
 
   const fuoriSchema = adesioni.filter((a) => pianoDi(a.room) === null);
+  const fuoriSchemaPartecipano = fuoriSchema.filter((a) => a.partecipa);
+  const fuoriSchemaNonPartecipano = fuoriSchema.filter((a) => !a.partecipa);
 
   return (
     <>
@@ -423,12 +468,52 @@ export function GrigliataAdmin() {
           ))}
           {fuoriSchema.length > 0 && (
             <div>
-              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", ...S.sub, marginBottom: 4 }}>
+              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", ...S.sub, marginBottom: 8 }}>
                 Altre · {fuoriSchema.length}
               </p>
-              {fuoriSchema.map((a) => <RigaAdesione key={a.id} a={a} />)}
+              {fuoriSchemaPartecipano.length > 0 && (
+                <div style={{
+                  display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(84px, 1fr))",
+                  marginBottom: fuoriSchemaNonPartecipano.length > 0 ? 8 : 0,
+                }}>
+                  {fuoriSchemaPartecipano.map((a) => <AdesioneChip key={a.id} a={a} colore="var(--foreground)" />)}
+                </div>
+              )}
+              {fuoriSchemaNonPartecipano.length > 0 && (
+                <p style={{ fontSize: 11, ...S.sub }}>
+                  Non partecipano: camera {fuoriSchemaNonPartecipano.map((a) => a.room).join(", ")}
+                </p>
+              )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Conferma un pagamento — overlay in pagina, dalla pastiglia ──── */}
+      {adesioneSelezionata && (
+        <div style={{
+          position: "fixed", inset: 0, zIndex: 60, display: "flex",
+          alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.55)", padding: 20,
+        }} onClick={() => !busy && setAdesioneSelezionata(null)}>
+          <div style={{ ...S.card, padding: 20, maxWidth: 320, width: "100%" }} onClick={(e) => e.stopPropagation()}>
+            <p style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Camera {adesioneSelezionata.room}</p>
+            <p style={{ fontSize: 13, ...S.sub, marginBottom: 4 }}>
+              Menu: {adesioneSelezionata.menu === "vegano" ? "Vegano" : "Classico"}
+            </p>
+            <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
+              {adesioneSelezionata.pagamento_dichiarato
+                ? "Ha dichiarato di aver pagato."
+                : "Non ha ancora dichiarato di aver pagato — puoi confermarlo comunque, ad esempio se ha pagato in mano o senza usare l'app."}
+            </p>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button style={S.btn} disabled={busy} onClick={confermaSelezionata}>
+                {busy ? "In corso…" : "Conferma pagamento"}
+              </button>
+              <button style={S.btn} disabled={busy} onClick={() => setAdesioneSelezionata(null)}>
+                Annulla
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
