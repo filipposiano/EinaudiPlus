@@ -330,11 +330,14 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
 
   return (
     <div className="flex flex-col h-full md:max-w-lg md:mx-auto md:w-full px-5 pt-3 pb-6 overflow-y-auto">
+      {/* Nome della SEZIONE ("Grigliata", generico), non dell'evento: quello
+          compare subito sotto, nella card. Ripetere qui evento.titolo lo
+          mostrava due volte sullo stesso schermo su desktop. */}
       <div className="hidden md:flex items-center gap-2.5 mb-3">
         <div className="p-2 rounded-xl" style={{ background: "color-mix(in srgb, var(--primary) 15%, transparent)", color: RED }}>
           <Flame size={18} />
         </div>
-        <h2 className="text-base font-bold" style={{ color: fg }}>{evento.titolo}</h2>
+        <h2 className="text-base font-bold" style={{ color: fg }}>{t.titolo}</h2>
       </div>
 
       <div className="rounded-2xl border p-4 mb-4" style={{ background: surf, borderColor: div }}>

@@ -18,7 +18,8 @@ import { isSysadmin, isDelegato } from "../../identity/index.js";
 
 const AZIONI_GRIGLIATA = new Set([
   "grigliataCrea", "grigliataOverview", "grigliataConfermaPagamento", "grigliataChiudi",
-  "grigliataModificaScadenza", "grigliataRiapri", "grigliataElimina",
+  "grigliataModifica", "grigliataAggiungiAdesione", "grigliataRimuoviAdesione",
+  "grigliataRiapri", "grigliataElimina",
 ]);
 
 /**

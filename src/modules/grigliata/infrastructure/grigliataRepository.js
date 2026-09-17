@@ -41,9 +41,19 @@ export const grigliataRepository = {
     return rpc("grigliata_admin_chiudi", { p_evento_id: id });
   },
 
-  /** Admin: sposta la scadenza di un evento esistente, senza toccare altro. */
-  async adminModificaScadenza({ id, scadenza }) {
-    return rpc("grigliata_admin_modifica_scadenza", { p_evento_id: id, p_scadenza: scadenza });
+  /** Admin: cambia titolo e scadenza di un evento esistente, senza toccare altro. */
+  async adminModifica({ id, titolo, scadenza }) {
+    return rpc("grigliata_admin_modifica", { p_evento_id: id, p_titolo: titolo, p_scadenza: scadenza });
+  },
+
+  /** Admin: aggiunge (o corregge) a mano l'adesione di una camera. */
+  async adminAggiungiAdesione({ eventoId, room, menu }) {
+    return rpc("grigliata_admin_aggiungi_adesione", { p_evento_id: eventoId, p_room: room, p_menu: menu });
+  },
+
+  /** Admin: toglie un'adesione — la camera torna come se non avesse mai risposto. */
+  async adminRimuoviAdesione(id) {
+    return rpc("grigliata_admin_rimuovi_adesione", { p_adesione_id: id });
   },
 
   /** Admin: riapre un evento chiuso (chiude prima qualunque altro ancora attivo). */

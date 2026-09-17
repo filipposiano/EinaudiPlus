@@ -19,7 +19,9 @@ import { adminCreaEvento as _adminCreaEvento } from "./application/adminCreaEven
 import { adminOverview as _adminOverview } from "./application/adminOverview.js";
 import { adminConfermaPagamento as _adminConfermaPagamento } from "./application/adminConfermaPagamento.js";
 import { adminChiudiEvento as _adminChiudiEvento } from "./application/adminChiudiEvento.js";
-import { adminModificaScadenza as _adminModificaScadenza } from "./application/adminModificaScadenza.js";
+import { adminModificaEvento as _adminModificaEvento } from "./application/adminModificaEvento.js";
+import { adminAggiungiAdesione as _adminAggiungiAdesione } from "./application/adminAggiungiAdesione.js";
+import { adminRimuoviAdesione as _adminRimuoviAdesione } from "./application/adminRimuoviAdesione.js";
 import { adminRiapriEvento as _adminRiapriEvento } from "./application/adminRiapriEvento.js";
 import { adminEliminaEvento as _adminEliminaEvento } from "./application/adminEliminaEvento.js";
 
@@ -60,8 +62,16 @@ export async function adminChiudiEvento(eventoId) {
   return _adminChiudiEvento({ eventoId }, deps);
 }
 
-export async function adminModificaScadenza(eventoId, scadenza) {
-  return _adminModificaScadenza({ eventoId, scadenza }, deps);
+export async function adminModificaEvento(eventoId, titolo, scadenza) {
+  return _adminModificaEvento({ eventoId, titolo, scadenza }, deps);
+}
+
+export async function adminAggiungiAdesione(eventoId, room, menu) {
+  return _adminAggiungiAdesione({ eventoId, room, menu }, deps);
+}
+
+export async function adminRimuoviAdesione(adesioneId) {
+  return _adminRimuoviAdesione({ adesioneId }, deps);
 }
 
 export async function adminRiapriEvento(eventoId) {

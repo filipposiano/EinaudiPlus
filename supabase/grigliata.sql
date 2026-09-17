@@ -237,19 +237,24 @@ begin
 end;
 $$;
 
--- Cambia SOLO la scadenza di un evento esistente — non tocca chiuso: se il
--- delegato aveva chiuso l'evento a mano, spostare la scadenza non lo
--- riapre. Serve a correggere una data sbagliata o a dare più tempo, senza
--- dover chiudere e far ripartire tutto da capo (perdendo le adesioni già
--- raccolte, che grigliata_admin_crea invece azzera sempre).
-create or replace function grigliata_admin_modifica_scadenza(p_evento_id bigint, p_scadenza timestamptz)
+-- Cambia titolo e scadenza di un evento esistente — non tocca chiuso: se il
+-- delegato aveva chiuso l'evento a mano, modificarlo non lo riapre (vedi
+-- grigliata_admin_riapri per quello). Serve a correggere un nome o una data
+-- sbagliata, o a dare più tempo, senza dover chiudere e far ripartire tutto
+-- da capo (perdendo le adesioni già raccolte, che grigliata_admin_crea
+-- invece azzera sempre). Il titolo ricade su 'Grigliata' se lasciato vuoto,
+-- stessa regola di grigliata_admin_crea.
+create or replace function grigliata_admin_modifica(p_evento_id bigint, p_titolo text, p_scadenza timestamptz)
 returns jsonb language plpgsql as $$
 begin
   if p_scadenza is null or p_scadenza <= now() then
     return jsonb_build_object('ok', false, 'error', 'la scadenza deve essere nel futuro');
   end if;
 
-  update grigliata_evento set scadenza = p_scadenza where id = p_evento_id;
+  update grigliata_evento
+    set titolo = coalesce(nullif(btrim(coalesce(p_titolo, '')), ''), 'Grigliata'),
+        scadenza = p_scadenza
+    where id = p_evento_id;
   if not found then
     return jsonb_build_object('ok', false, 'error', 'evento non trovato');
   end if;
@@ -317,6 +322,49 @@ begin
 end;
 $$;
 
+-- Aggiunge (o corregge) a mano l'adesione di una camera — per chi non usa
+-- l'app, o per registrare chi ha dato la sua parola di persona. Upsert come
+-- grigliata_iscrivi: se la camera aveva già risposto, la sua riga si
+-- aggiorna invece di duplicarsi (stesso vincolo unique(evento_id, room)).
+-- Sempre partecipa = true: non ha senso che un delegato aggiunga a mano
+-- qualcuno che non partecipa, quella è l'assenza di una riga.
+create or replace function grigliata_admin_aggiungi_adesione(p_evento_id bigint, p_room text, p_menu text)
+returns jsonb language plpgsql as $$
+begin
+  if not exists (select 1 from grigliata_evento where id = p_evento_id) then
+    return jsonb_build_object('ok', false, 'error', 'evento non trovato');
+  end if;
+  if p_room is null or btrim(p_room) = '' then
+    return jsonb_build_object('ok', false, 'error', 'camera mancante');
+  end if;
+  if p_menu is null or p_menu not in ('classico', 'vegano') then
+    return jsonb_build_object('ok', false, 'error', 'scegli un menu');
+  end if;
+
+  insert into grigliata_adesione (evento_id, room, partecipa, menu, updated_at)
+  values (p_evento_id, btrim(p_room), true, p_menu, now())
+  on conflict (evento_id, room) do update
+    set partecipa = true, menu = excluded.menu, updated_at = now();
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+-- Toglie un'adesione — la riga sparisce del tutto, non solo "partecipa =
+-- false": la camera torna come se non avesse mai risposto. Per correggere
+-- un'adesione aggiunta per sbaglio, o una camera che il delegato sa per
+-- certo non parteciperà più.
+create or replace function grigliata_admin_rimuovi_adesione(p_adesione_id bigint)
+returns jsonb language plpgsql as $$
+begin
+  delete from grigliata_adesione where id = p_adesione_id;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'adesione non trovata');
+  end if;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
 -- Chiude un evento a mano, prima della scadenza naturale.
 create or replace function grigliata_admin_chiudi(p_evento_id bigint)
 returns jsonb language plpgsql as $$
@@ -336,7 +384,7 @@ $$;
 --
 -- Non tocca la scadenza: se era già passata, l'evento torna "non chiuso"
 -- ma resta comunque non attivo finché non si sposta anche la data (vedi
--- grigliata_admin_modifica_scadenza) — due decisioni separate, non una.
+-- grigliata_admin_modifica) — due decisioni separate, non una.
 create or replace function grigliata_admin_riapri(p_evento_id bigint)
 returns jsonb language plpgsql as $$
 begin
@@ -385,9 +433,11 @@ revoke all on function grigliata_iscrivi(text, boolean, text) from public, anon,
 revoke all on function grigliata_dichiara_pagamento(text) from public, anon, authenticated;
 revoke all on function grigliata_normalizza_link(text) from public, anon, authenticated;
 revoke all on function grigliata_admin_crea(text, timestamptz, text, text, text) from public, anon, authenticated;
-revoke all on function grigliata_admin_modifica_scadenza(bigint, timestamptz) from public, anon, authenticated;
+revoke all on function grigliata_admin_modifica(bigint, text, timestamptz) from public, anon, authenticated;
 revoke all on function grigliata_admin_overview() from public, anon, authenticated;
 revoke all on function grigliata_admin_conferma_pagamento(bigint, text) from public, anon, authenticated;
+revoke all on function grigliata_admin_aggiungi_adesione(bigint, text, text) from public, anon, authenticated;
+revoke all on function grigliata_admin_rimuovi_adesione(bigint) from public, anon, authenticated;
 revoke all on function grigliata_admin_chiudi(bigint) from public, anon, authenticated;
 revoke all on function grigliata_admin_riapri(bigint) from public, anon, authenticated;
 revoke all on function grigliata_admin_elimina(bigint) from public, anon, authenticated;
@@ -398,9 +448,11 @@ grant execute on function grigliata_iscrivi(text, boolean, text) to service_role
 grant execute on function grigliata_dichiara_pagamento(text) to service_role;
 grant execute on function grigliata_normalizza_link(text) to service_role;
 grant execute on function grigliata_admin_crea(text, timestamptz, text, text, text) to service_role;
-grant execute on function grigliata_admin_modifica_scadenza(bigint, timestamptz) to service_role;
+grant execute on function grigliata_admin_modifica(bigint, text, timestamptz) to service_role;
 grant execute on function grigliata_admin_overview() to service_role;
 grant execute on function grigliata_admin_conferma_pagamento(bigint, text) to service_role;
+grant execute on function grigliata_admin_aggiungi_adesione(bigint, text, text) to service_role;
+grant execute on function grigliata_admin_rimuovi_adesione(bigint) to service_role;
 grant execute on function grigliata_admin_chiudi(bigint) to service_role;
 grant execute on function grigliata_admin_riapri(bigint) to service_role;
 grant execute on function grigliata_admin_elimina(bigint) to service_role;
