@@ -89,8 +89,13 @@ export const DaySchedule = memo(function DaySchedule({ lang, week, status, roomN
                 style={{ background:isActive?RED:"transparent", color:isActive?RED_FG:prossima?ORANGE:isPast?"color-mix(in srgb, var(--muted-foreground) 40%, transparent)":sub }}>
                 <span className="text-[9px] font-mono uppercase leading-none mb-0.5">{t.days[giorno]}</span>
                 <span className="text-sm font-bold leading-none">{DAYS_DATE[giorno]}</span>
-                {prossima && !isActive && (
-                  <span className="text-[6px] font-bold uppercase tracking-wide leading-none mt-0.5" style={{ color:ORANGE }}>
+                {/* Resta visibile anche da selezionato: è l'unico modo in cui
+                    questa scheda dice "stai guardando lunedì della settimana
+                    PROSSIMA, non quello di sempre" — sparire al tocco
+                    lasciava proprio la vista attiva, quella che si guarda più
+                    a lungo, senza quell'avviso. */}
+                {prossima && (
+                  <span className="text-[6px] font-bold uppercase tracking-wide leading-none mt-0.5" style={{ color:isActive?RED_FG:ORANGE }}>
                     {t.prossimaSettimana}
                   </span>
                 )}
