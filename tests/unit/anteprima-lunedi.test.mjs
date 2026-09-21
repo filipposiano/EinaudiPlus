@@ -5,7 +5,7 @@
 //
 // Cosa testa e perché è duplicato invece che importato:
 //
-// La finestra ("da sabato 20:00 a lunedì 07:00, domenica intera compresa")
+// La finestra ("da sabato 16:00 a lunedì 07:00, domenica intera compresa")
 // esiste in DUE punti che devono restare d'accordo:
 //   - modello.ts, computaAnteprimaLunedi() — decide cosa mostra la griglia
 //   - supabase/functions.sql, laundry_preview_active() — decide su quale
@@ -32,7 +32,7 @@ const section = (s) => console.log(`\n── ${s} ${"─".repeat(Math.max(0, 60 
 function anteprimaAttiva(d) {
   const dow = d.getDay();   // 0=domenica … 6=sabato (nativo di Date)
   const hh  = d.getHours();
-  if (dow === 6) return hh >= 20;   // sabato sera
+  if (dow === 6) return hh >= 16;   // sabato pomeriggio
   if (dow === 0) return true;       // domenica, tutta
   if (dow === 1) return hh < 7;     // lunedì presto: la settimana non è ancora girata
   return false;
@@ -40,14 +40,14 @@ function anteprimaAttiva(d) {
 
 section("Fuori dalla finestra");
 check("venerdì sera",            anteprimaAttiva(new Date(2026, 8, 11, 23, 59)) === false);
-check("sabato pomeriggio",       anteprimaAttiva(new Date(2026, 8, 12, 15, 0))  === false);
-check("sabato un minuto prima",  anteprimaAttiva(new Date(2026, 8, 12, 19, 59)) === false);
+check("sabato mattina",          anteprimaAttiva(new Date(2026, 8, 12, 10, 0))  === false);
+check("sabato un minuto prima",  anteprimaAttiva(new Date(2026, 8, 12, 15, 59)) === false);
 check("lunedì dopo le 07:00",    anteprimaAttiva(new Date(2026, 8, 14, 7, 0))   === false);
 check("lunedì mattina inoltrata", anteprimaAttiva(new Date(2026, 8, 14, 10, 0)) === false);
 check("martedì",                 anteprimaAttiva(new Date(2026, 8, 15, 3, 0))  === false);
 
 section("Dentro la finestra");
-check("sabato alle 20:00 esatte", anteprimaAttiva(new Date(2026, 8, 12, 20, 0))  === true);
+check("sabato alle 16:00 esatte", anteprimaAttiva(new Date(2026, 8, 12, 16, 0))  === true);
 check("sabato notte",             anteprimaAttiva(new Date(2026, 8, 12, 23, 59)) === true);
 check("domenica appena iniziata", anteprimaAttiva(new Date(2026, 8, 13, 0, 0))   === true);
 check("domenica pomeriggio",      anteprimaAttiva(new Date(2026, 8, 13, 15, 0))  === true);

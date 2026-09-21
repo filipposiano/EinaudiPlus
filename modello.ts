@@ -11,6 +11,7 @@
 // cambierebbe perché è cambiata l'app, no.
 
 import * as api from "./api";
+import { version as PACKAGE_VERSION } from "./package.json";
 
 // ─── Tipi ────────────────────────────────────────────────────────────────────
 
@@ -60,7 +61,11 @@ export const TIME_SLOTS = buildSlots();
  */
 export const WEEKLY_QUOTA = 2;
 
-export const APP_VERSION = "1.1.0";
+// Una sola fonte di verità: package.json. Prima era una stringa ripetuta a
+// mano qui dentro, e la v1.1 aveva dimostrato il rischio — build e deploy
+// erano già a posto, solo questa riga era rimasta a "1.0.0" perché nessuno
+// aveva pensato di aggiornarla insieme al resto.
+export const APP_VERSION = PACKAGE_VERSION;
 
 // ─── "Adesso" ────────────────────────────────────────────────────────────────
 //
@@ -89,7 +94,7 @@ export const CUR_SLOT  = NOW.slotIdx;
 export const PREV_SLOT = CUR_SLOT - 1;
 
 /**
- * Anteprima del lunedì della settimana prossima: da sabato alle 20:00 a
+ * Anteprima del lunedì della settimana prossima: da sabato alle 16:00 a
  * lunedì alle 07:00 (domenica intera compresa) — lo stesso confine finale di
  * nowInfo/current_laundry_week_start lato server (vedi supabase/functions.sql
  * e migrations/033). In questa finestra il server risolve già le scritture e
@@ -111,7 +116,7 @@ export const PREV_SLOT = CUR_SLOT - 1;
 function computaAnteprimaLunedi(d = new Date()) {
   const dow = d.getDay();   // 0=domenica … 6=sabato (nativo di Date)
   const hh  = d.getHours();
-  if (dow === 6) return hh >= 20;   // sabato sera
+  if (dow === 6) return hh >= 16;   // sabato pomeriggio
   if (dow === 0) return true;       // domenica, tutta
   if (dow === 1) return hh < 7;     // lunedì presto: la settimana non è ancora girata
   return false;

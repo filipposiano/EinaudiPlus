@@ -52,11 +52,11 @@ returns date language sql stable as $$
   where l.id = p_laundry_id;
 $$;
 
--- Anteprima del lunedì della settimana prossima. Vedi migrations/033: da
--- sabato alle 20:00 a domenica intera a lunedì fino alle 07:00 — lo stesso
--- confine finale di current_laundry_week_start — il giorno 0 (lunedì) di
--- laundry_week_start_for_day() smette di puntare alla settimana corrente e
--- punta a quella dopo.
+-- Anteprima del lunedì della settimana prossima. Vedi migrations/033 e 042:
+-- da sabato alle 16:00 a domenica intera a lunedì fino alle 07:00 — lo
+-- stesso confine finale di current_laundry_week_start — il giorno 0 (lunedì)
+-- di laundry_week_start_for_day() smette di puntare alla settimana corrente
+-- e punta a quella dopo.
 --
 -- Tre copie della stessa finestra, da tenere allineate a mano: questa,
 -- computaAnteprimaLunedi() in modello.ts, e il test che la verifica in
@@ -65,7 +65,7 @@ $$;
 create or replace function laundry_preview_active(p_tz text default 'Europe/Rome')
 returns boolean language sql stable as $$
   select case extract(isodow from now() at time zone p_tz)::int
-    when 6 then (now() at time zone p_tz)::time >= time '20:00'  -- sabato sera
+    when 6 then (now() at time zone p_tz)::time >= time '16:00'  -- sabato pomeriggio
     when 7 then true                                              -- domenica, tutta
     when 1 then (now() at time zone p_tz)::time <  time '07:00'   -- lunedì presto
     else false
