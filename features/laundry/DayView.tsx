@@ -58,10 +58,14 @@ export const DaySchedule = memo(function DaySchedule({ lang, week, status, roomN
     catch (e) { setToast(errMsg(e, lang)); setToastUndo(null); }
   }
 
-  // Piu' largo di prima (era 3xl, 768px) ma non a tutta pagina: qui le colonne
-  // sono solo le lavatrici, e oltre un certo punto diventano bande vuote.
+  // Nessun tetto di larghezza, come la Settimana (vedi WeekView.tsx): un
+  // limite qui lasciava vuoto ai lati esattamente come lo lasciava lì prima
+  // di toglierlo. Le colonne sono solo le lavatrici (2-3), non sette giorni,
+  // ma è la stessa scelta: più spazio hanno, più sono leggibili, e il
+  // contenitore esterno non deve restare vuoto ai lati di un contenuto più
+  // stretto.
   return (
-    <div className="flex flex-col h-full lg:max-w-5xl lg:mx-auto lg:w-full">
+    <div className="flex flex-col h-full w-full">
       {toast     && <Toast msg={toast} onClose={()=>{setToast(null); setToastUndo(null);}} undo={toastUndo ? { label: t.cancel, onUndo: toastUndo } : undefined}/>}
       {target    && <BookModal target={{...target,dayIdx:selDay}} bookings={week} status={status} isDark={false} lang={lang} myRoom={sessionRoom} isAdmin={isAdmin} onConfirm={confirmBooking} onClose={()=>setTarget(null)}/>}
       {modTarget && (
