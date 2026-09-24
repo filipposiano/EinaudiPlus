@@ -183,32 +183,20 @@ begin
 end;
 $$;
 
--- Tutte le prenotazioni sale della settimana, entrambe le sale insieme —
--- più 'sale', lo stato (chiusa o no) di ciascuna sala: aggiunto per il
--- pannello "Sale" (v1.2), non tocca la forma di 'items' che il chiamante
--- esistente già legge.
+-- Tutte le prenotazioni sale della settimana, entrambe le sale insieme.
 create or replace function admin_spaces()
 returns jsonb language sql stable as $$
-  select jsonb_build_object(
-    'ok', true,
-    'items', coalesce((
-      select jsonb_agg(x order by x->>'space', x->>'day')
-      from (
-        select jsonb_build_object(
-          'id', b.id, 'space', s.slug, 'day', b.day,
-          'start', b.start_min, 'end', b.end_min,
-          'name', b.name, 'type', b.btype
-        ) as x
-        from space_booking b
-        join room_space s on s.id = b.space_id
-        where b.week_start = current_week_start('Europe/Rome')
-      ) t
-    ), '[]'::jsonb),
-    'sale', coalesce((
-      select jsonb_agg(jsonb_build_object('slug', s.slug, 'name', s.name, 'chiuso', s.chiuso) order by s.slug)
-      from room_space s
-    ), '[]'::jsonb)
-  );
+  select jsonb_build_object('ok', true, 'items', coalesce(jsonb_agg(x order by x->>'space', x->>'day'), '[]'::jsonb))
+  from (
+    select jsonb_build_object(
+      'id', b.id, 'space', s.slug, 'day', b.day,
+      'start', b.start_min, 'end', b.end_min,
+      'name', b.name, 'type', b.btype
+    ) as x
+    from space_booking b
+    join room_space s on s.id = b.space_id
+    where b.week_start = current_week_start('Europe/Rome')
+  ) t;
 $$;
 
 -- Chiude o riapre una sala (es. per il deposito dei pacchi): mentre è

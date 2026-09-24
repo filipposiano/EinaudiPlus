@@ -17,6 +17,8 @@ import type { RoomKind, RoomBooking, CinemaType } from "../../roomsApi";
 import RuotaPicker from "../../RuotaPicker";
 import { Toast } from "../../pannelli";
 import { pianoDi, colorePiano } from "../../piani";
+import { call as adminCall } from "../admin-shared/adminApi";
+import type { Role as AdminRole } from "../../AdminPanel";
 
 // Le stesse sei lingue dell'app: il tipo arriva da i18n, cosi' non si puo'
 // aggiungere una lingua di la' e dimenticarla di qua.
@@ -161,6 +163,7 @@ const T = {
     errorGeneric: "Errore, riprova.",
     loading: "Carico…", retry: "Riprova", netError: "Impossibile contattare il server.",
     closedNotice: "La sala è chiusa per via del deposito dei pacchi.",
+    closeRoomBtn: "Chiudi per il deposito dei pacchi", reopenRoomBtn: "Riapri la sala",
     rulesTitle: "Regolamento", tipsTitle: "Problemi di connessione",
     musicNote: "Strumenti non in cuffia: consentiti solo 16:00–20:00.",
     overnightPart: "serata a cavallo della mezzanotte",
@@ -188,6 +191,7 @@ const T = {
     errorGeneric: "Error, try again.",
     loading: "Loading…", retry: "Retry", netError: "Couldn't reach the server.",
     closedNotice: "The room is closed because it's being used to store packages.",
+    closeRoomBtn: "Close for package storage", reopenRoomBtn: "Reopen the room",
     rulesTitle: "Rules", tipsTitle: "Connection tips",
     musicNote: "Instruments without headphones: allowed only 16:00–20:00.",
     overnightPart: "overnight booking",
@@ -215,6 +219,7 @@ const T = {
     errorGeneric: "Erreur, réessaie.",
     loading: "Chargement…", retry: "Réessayer", netError: "Impossible de joindre le serveur.",
     closedNotice: "La salle est fermée : elle sert à stocker des colis.",
+    closeRoomBtn: "Fermer pour stocker des colis", reopenRoomBtn: "Rouvrir la salle",
     rulesTitle: "Règlement", tipsTitle: "Problèmes de connexion",
     musicNote: "Instruments sans casque : autorisés seulement de 16h00 à 20h00.",
     overnightPart: "soirée à cheval sur minuit",
@@ -242,6 +247,7 @@ const T = {
     errorGeneric: "Fehler, versuch es nochmal.",
     loading: "Wird geladen…", retry: "Nochmal versuchen", netError: "Server nicht erreichbar.",
     closedNotice: "Der Raum ist geschlossen: er wird gerade als Paketlager genutzt.",
+    closeRoomBtn: "Für Paketlagerung schließen", reopenRoomBtn: "Raum wieder öffnen",
     rulesTitle: "Hausordnung", tipsTitle: "Verbindungsprobleme",
     musicNote: "Instrumente ohne Kopfhörer: nur von 16:00 bis 20:00 erlaubt.",
     overnightPart: "Abend über Mitternacht",
@@ -269,6 +275,7 @@ const T = {
     errorGeneric: "Error, inténtalo otra vez.",
     loading: "Cargando…", retry: "Reintentar", netError: "No se puede contactar con el servidor.",
     closedNotice: "La sala está cerrada: se está usando para guardar paquetes.",
+    closeRoomBtn: "Cerrar para guardar paquetes", reopenRoomBtn: "Reabrir la sala",
     rulesTitle: "Reglamento", tipsTitle: "Problemas de conexión",
     musicNote: "Instrumentos sin auriculares: permitidos solo de 16:00 a 20:00.",
     overnightPart: "velada que pasa la medianoche",
@@ -296,6 +303,7 @@ const T = {
     errorGeneric: "Errore, prova n'ata vota.",
     loading: "Sto' carrecanno…", retry: "Prova n'ata vota", netError: "Nun riesco a parla' cu 'o server.",
     closedNotice: "'A sala è chiusa pecché ce stanno tenenno 'e pacche 'a dinto.",
+    closeRoomBtn: "Chiure pe' tené 'e pacche", reopenRoomBtn: "Arape n'ata vota 'a sala",
     rulesTitle: "Regulamento", tipsTitle: "Guaje 'e connessione",
     musicNote: "Strumenti senza cuffie: se ponno sunà sulo 'a 16:00 ê 20:00.",
     overnightPart: "serata ca passa 'a mezanotte",
@@ -569,7 +577,9 @@ function Timeline({ room, bookings, myRoom }: { room: RoomKind; bookings: RoomBo
 }
 
 // ─── Vista sala ────────────────────────────────────────────────────────────────
-export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; lang: Lang; roomNumber?: string | null }) {
+export default function RoomView({ room, lang, roomNumber, adminRole }: {
+  room: RoomKind; lang: Lang; roomNumber?: string | null; adminRole?: AdminRole | null;
+}) {
   const t = T[lang];
   const gt = T_APP[lang];   // testi condivisi con la lavanderia: conferma/cancellazione
   const cfg = ROOM_CFG[room];
@@ -592,12 +602,20 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   // diventa testo libero e chiede il nome dell'iniziativa invece del numero.
   const direzione = myRoom === "DIREZIONE";
 
+  // Chiudere la sala (es. per il deposito dei pacchi) resta allo stesso
+  // livello dello stato guasto/funzionante delle macchine: FDO e
+  // sistemista, non lo staff — stessa policy lato server
+  // (src/modules/common-spaces/domain/policy.js), qui serve solo a
+  // decidere se mostrare il pulsante.
+  const canLockSpace = adminRole === "fdo" || adminRole === "sistemista";
+
   const [bookings, setBookings] = useState<RoomBooking[]>([]);
   // FDO/sistemista può chiudere la sala (es. per il deposito dei pacchi):
   // mentre lo è, niente forma di prenotazione — solo l'avviso. Il blocco
   // vero resta lato server (book_space() rifiuta comunque), questo è solo
   // per non mostrare un form che finirebbe respinto.
   const [chiuso, setChiuso]     = useState(false);
+  const [lockBusy, setLockBusy] = useState(false);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(false);
   const [selDay, setSelDay]     = useState(TODAY);
@@ -639,6 +657,24 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   }, [room]);
 
   useEffect(() => { setLoading(true); refresh(); }, [refresh]);
+
+  // Passa dal pannello admin (/api/admin/data, sessione con cookie), non
+  // dall'endpoint pubblico delle sale: è un'azione riservata, non una
+  // prenotazione. Il server la respinge comunque a chi non è FDO/sistemista
+  // (stessa policy di setMachineStatus) — canLockSpace qui sopra decide solo
+  // se il pulsante compare, non se l'azione è permessa.
+  async function toggleChiuso() {
+    if (lockBusy) return;
+    setLockBusy(true);
+    try {
+      await adminCall("spaceSetChiuso", { space: room, chiuso: !chiuso });
+      await refresh();
+    } catch {
+      setToast(t.errorGeneric);
+    } finally {
+      setLockBusy(false);
+    }
+  }
 
   // Cambiando sala il modulo torna agli orari tipici di QUELLA sala.
   //
@@ -813,17 +849,36 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
           <div className="rounded-2xl border p-4 mb-4 flex items-start gap-3"
             style={{ background: "color-mix(in srgb, var(--destructive) 8%, transparent)", borderColor: div }}>
             <Package size={18} style={{ color: OOS, flexShrink: 0, marginTop: 1 }} />
-            <p className="text-sm leading-relaxed" style={{ color: fg }}>{t.closedNotice}</p>
+            <p className="text-sm leading-relaxed flex-1" style={{ color: fg }}>{t.closedNotice}</p>
+            {canLockSpace && (
+              <button onClick={toggleChiuso} disabled={lockBusy} aria-label={t.reopenRoomBtn} title={t.reopenRoomBtn}
+                className="rounded-xl px-3 py-2 text-xs font-semibold shrink-0 transition-all active:scale-95"
+                style={{ background: RED, color: RED_FG, opacity: lockBusy ? 0.6 : 1 }}>
+                {t.reopenRoomBtn}
+              </button>
+            )}
           </div>
         ) : (
         <div className="rounded-2xl border p-4 mb-4" style={{ background: surf, borderColor: div }}>
           <div className="flex items-center justify-between mb-3">
             <p className="text-[11px] font-mono tracking-widest uppercase" style={{ color: sub }}>{t.newBooking}</p>
-            <button onClick={() => setRulesOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border transition-all active:scale-95"
-              style={{ background: chip, borderColor: div, color: fg }}>
-              <Info size={14} />{t.rules}
-            </button>
+            <div className="flex items-center gap-1.5">
+              {/* Solo FDO/sistemista: stessa policy di setMachineStatus.
+                  Un'icona sola (a pacco), non un'etichetta — sta accanto a
+                  "Regole" senza allargare la riga su schermi stretti. */}
+              {canLockSpace && (
+                <button onClick={toggleChiuso} disabled={lockBusy} aria-label={t.closeRoomBtn} title={t.closeRoomBtn}
+                  className="flex items-center justify-center rounded-xl p-2 border transition-all active:scale-95"
+                  style={{ background: chip, borderColor: div, color: fg, opacity: lockBusy ? 0.6 : 1 }}>
+                  <Package size={14} />
+                </button>
+              )}
+              <button onClick={() => setRulesOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border transition-all active:scale-95"
+                style={{ background: chip, borderColor: div, color: fg }}>
+                <Info size={14} />{t.rules}
+              </button>
+            </div>
           </div>
 
           {/* Le stesse ruote del turno preferito, al posto di due tendine.

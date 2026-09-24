@@ -181,7 +181,6 @@ const en: Testi = {
   autoReservedLabel: "included",
   giornoDopo: "(the next day)",
   navBici: "Bikes",
-  navSale: "Rooms",
   bici: "Bike",
   biciSi: "Yes, I have one",
   biciNo: "No",

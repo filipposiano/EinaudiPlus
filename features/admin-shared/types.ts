@@ -10,4 +10,4 @@
 // operativa, ma un ruolo stretto a una sola cosa (la Grigliata, vedi
 // src/modules/grigliata) — vede solo quella scheda, nessun'altra.
 export type Role = "fdo" | "staff" | "sistemista" | "delegato";
-export type Tab = "macchine" | "segnalazioni" | "bici" | "account" | "ricorrenti" | "notifiche" | "manutenzione" | "tema" | "cambiobiancheria" | "grigliataAdmin" | "sale";
+export type Tab = "macchine" | "segnalazioni" | "bici" | "account" | "ricorrenti" | "notifiche" | "manutenzione" | "tema" | "cambiobiancheria" | "grigliataAdmin";
