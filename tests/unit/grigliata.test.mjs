@@ -16,7 +16,7 @@ import { adminRimuoviAdesione } from "../../src/modules/grigliata/application/ad
 import { adminRiapriEvento } from "../../src/modules/grigliata/application/adminRiapriEvento.js";
 import { adminEliminaEvento } from "../../src/modules/grigliata/application/adminEliminaEvento.js";
 import { authorize } from "../../src/modules/grigliata/domain/policy.js";
-import { controllaMenu, idValido, isFutureDateTime } from "../../src/modules/grigliata/domain/validazione.js";
+import { controllaMenu, idValido, dietaValida, isFutureDateTime } from "../../src/modules/grigliata/domain/validazione.js";
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -105,6 +105,14 @@ section("controllaMenu() / idValido() / isFutureDateTime()");
   check("idValido: zero, negativi, decimali, testo -> null",
     idValido(0) === null && idValido(-1) === null && idValido(1.5) === null && idValido("x") === null && idValido(undefined) === null);
 
+  // v1.3.1: "vegetariano"/"vegano" non sono un menu, sono un campo a sé —
+  // un valore mancante o non riconosciuto ricade su "classico", senza errore.
+  check("dietaValida: vegetariano/vegano passano invariati",
+    dietaValida("vegetariano") === "vegetariano" && dietaValida("vegano") === "vegano");
+  check("dietaValida: 'classico' resta 'classico'", dietaValida("classico") === "classico");
+  check("dietaValida: mancante, vuoto o non riconosciuto ricadono su 'classico'",
+    dietaValida(undefined) === "classico" && dietaValida("") === "classico" && dietaValida("piccante") === "classico");
+
   const futuro = new Date(Date.now() + 3600_000).toISOString();
   const passato = new Date(Date.now() - 3600_000).toISOString();
   check("una data futura passa", isFutureDateTime(futuro) === true);
@@ -128,19 +136,30 @@ section("iscriviti()");
 {
   // v1.1: non esiste più "declinare" — aderire con un menu è l'unica azione.
   // v1.3: il menu è un id fra quelli dell'evento — che appartenga davvero
-  // all'evento attivo lo controlla la SQL, qui solo la forma.
+  // all'evento attivo lo controlla la SQL, qui solo la forma. v1.3.1: dieta
+  // è un campo A SÉ, indipendente dal menu (si può scegliere "Carne" e
+  // dichiararsi vegani).
   const repo = fakeRepository();
   await iscriviti({ room: "214", menuId: "3" }, { grigliataRepository: repo });
   check("camera e id del menu (in numero) passano al repository",
     repo.calls[0].name === "iscrivi" && repo.calls[0].args.room === "214" && repo.calls[0].args.menuId === 3);
   check("senza glutine assente -> false, nota assente -> null",
     repo.calls[0].args.senzaGlutine === false && repo.calls[0].args.note === null, JSON.stringify(repo.calls[0].args));
+  check("dieta assente -> 'classico'", repo.calls[0].args.dieta === "classico");
 
   const repoV13 = fakeRepository();
-  await iscriviti({ room: "214", menuId: 2, senzaGlutine: true, note: "  allergia alle noci  " }, { grigliataRepository: repoV13 });
-  check("menu, senza glutine e nota (ripulita) passano al repository",
-    repoV13.calls[0].args.menuId === 2 && repoV13.calls[0].args.senzaGlutine === true
+  await iscriviti({ room: "214", menuId: 2, dieta: "vegano", senzaGlutine: true, note: "  allergia alle noci  " }, { grigliataRepository: repoV13 });
+  check("menu, dieta, senza glutine e nota (ripulita) passano tutti al repository, indipendenti fra loro",
+    repoV13.calls[0].args.menuId === 2 && repoV13.calls[0].args.dieta === "vegano" && repoV13.calls[0].args.senzaGlutine === true
     && repoV13.calls[0].args.note === "allergia alle noci", JSON.stringify(repoV13.calls[0].args));
+
+  // Un menu qualunque (non necessariamente "di base") con una dieta non
+  // riconosciuta: la dieta ricade su 'classico' senza bloccare l'adesione,
+  // il menu scelto resta quello che era (i due campi non si influenzano).
+  const repoDietaInvalida = fakeRepository();
+  await iscriviti({ room: "214", menuId: 5, dieta: "piccante" }, { grigliataRepository: repoDietaInvalida });
+  check("una dieta non riconosciuta ricade su 'classico', il menu resta quello scelto",
+    repoDietaInvalida.calls[0].args.menuId === 5 && repoDietaInvalida.calls[0].args.dieta === "classico");
 
   const repoNotaVuota = fakeRepository();
   await iscriviti({ room: "214", menuId: 1, note: "   " }, { grigliataRepository: repoNotaVuota });
@@ -326,10 +345,15 @@ section("adminModificaEvento()");
 section("adminAggiungiAdesione()");
 {
   const repo = fakeRepository();
-  await adminAggiungiAdesione({ eventoId: "7", room: " 214 ", menuId: "12" }, { grigliataRepository: repo });
-  check("l'id arriva convertito in numero, la camera ripulita, l'id del menu passato",
-    repo.calls[0].args.eventoId === 7 && repo.calls[0].args.room === "214" && repo.calls[0].args.menuId === 12,
+  await adminAggiungiAdesione({ eventoId: "7", room: " 214 ", menuId: "12", dieta: "vegetariano" }, { grigliataRepository: repo });
+  check("l'id arriva convertito in numero, la camera ripulita, menu e dieta passati",
+    repo.calls[0].args.eventoId === 7 && repo.calls[0].args.room === "214" && repo.calls[0].args.menuId === 12
+    && repo.calls[0].args.dieta === "vegetariano",
     JSON.stringify(repo.calls[0].args));
+
+  const repoDietaAssente = fakeRepository();
+  await adminAggiungiAdesione({ eventoId: "7", room: "214", menuId: 1 }, { grigliataRepository: repoDietaAssente });
+  check("dieta assente -> 'classico', come iscriviti()", repoDietaAssente.calls[0].args.dieta === "classico");
 
   const errId = await throws(() =>
     adminAggiungiAdesione({ eventoId: "x", room: "214", menuId: 1 }, { grigliataRepository: fakeRepository() }));

@@ -30,6 +30,10 @@ const T = {
     nessunaAttiva: "Non c'è nessuna grigliata attiva al momento.",
     scadeIl: (d: string) => `Le adesioni chiudono il ${d}`,
     menuLabel: "Cosa mangi?",
+    dietaLabel: "Segui una dieta particolare?",
+    dietaClassico: "Mangio di tutto",
+    dietaVegetariano: "Vegetariano",
+    dietaVegano: "Vegano",
     senzaGlutine: "Senza glutine",
     senzaGlutineHint: "Celiachia o intolleranza al glutine",
     noteLabel: "Note (facoltative)",
@@ -58,6 +62,10 @@ const T = {
     nessunaAttiva: "There's no barbecue running right now.",
     scadeIl: (d: string) => `Sign-ups close on ${d}`,
     menuLabel: "What do you eat?",
+    dietaLabel: "Any dietary preference?",
+    dietaClassico: "I eat everything",
+    dietaVegetariano: "Vegetarian",
+    dietaVegano: "Vegan",
     senzaGlutine: "Gluten-free",
     senzaGlutineHint: "Coeliac disease or gluten intolerance",
     noteLabel: "Notes (optional)",
@@ -86,6 +94,10 @@ const T = {
     nessunaAttiva: "Il n'y a aucun barbecue en cours.",
     scadeIl: (d: string) => `Les inscriptions ferment le ${d}`,
     menuLabel: "Tu manges quoi ?",
+    dietaLabel: "Un régime particulier ?",
+    dietaClassico: "Je mange de tout",
+    dietaVegetariano: "Végétarien",
+    dietaVegano: "Végétalien",
     senzaGlutine: "Sans gluten",
     senzaGlutineHint: "Maladie cœliaque ou intolérance au gluten",
     noteLabel: "Remarques (facultatif)",
@@ -114,6 +126,10 @@ const T = {
     nessunaAttiva: "Gerade läuft kein Grillfest.",
     scadeIl: (d: string) => `Anmeldeschluss ist der ${d}`,
     menuLabel: "Was isst du?",
+    dietaLabel: "Ernährst du dich besonders?",
+    dietaClassico: "Ich esse alles",
+    dietaVegetariano: "Vegetarisch",
+    dietaVegano: "Vegan",
     senzaGlutine: "Glutenfrei",
     senzaGlutineHint: "Zöliakie oder Glutenunverträglichkeit",
     noteLabel: "Hinweise (optional)",
@@ -142,6 +158,10 @@ const T = {
     nessunaAttiva: "No hay ninguna barbacoa activa ahora mismo.",
     scadeIl: (d: string) => `Las inscripciones cierran el ${d}`,
     menuLabel: "¿Qué comes?",
+    dietaLabel: "¿Sigues alguna dieta?",
+    dietaClassico: "Como de todo",
+    dietaVegetariano: "Vegetariano",
+    dietaVegano: "Vegano",
     senzaGlutine: "Sin gluten",
     senzaGlutineHint: "Celiaquía o intolerancia al gluten",
     noteLabel: "Notas (opcionales)",
@@ -170,6 +190,10 @@ const T = {
     nessunaAttiva: "Mo nun ce sta nisciuna grigliata.",
     scadeIl: (d: string) => `'E adesioni chiudono ô ${d}`,
     menuLabel: "Che magne?",
+    dietaLabel: "Tiene 'na dieta particolare?",
+    dietaClassico: "Magno 'e tutto",
+    dietaVegetariano: "Vegetariano",
+    dietaVegano: "Vegano",
     senzaGlutine: "Senza glutine",
     senzaGlutineHint: "Celiachia o intolleranza ô glutine",
     noteLabel: "Note (si vuò)",
@@ -226,6 +250,11 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   // null = nessuna scelta ancora: vale il primo menu dell'evento (vedi
   // menuEffettivo più sotto) — gli id li conosciamo solo dopo il load().
   const [menuScelta, setMenuScelta] = useState<number | null>(null);
+  // Indipendente dal menu: si può scegliere "Carne" (uno dei menu del
+  // delegato) e dichiararsi comunque vegani — non è una quarta scelta di
+  // menu, è un'informazione a parte (vedi la nota gemella in
+  // src/modules/grigliata/domain/validazione.js).
+  const [dieta, setDieta] = useState<api.GrigliataDieta>("classico");
   const [senzaGlutine, setSenzaGlutine] = useState(false);
   const [note, setNote] = useState("");
 
@@ -240,7 +269,7 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
 
   function apriModifica() {
     const a = stato?.miaAdesione;
-    if (a) { setMenuScelta(a.menuId); setSenzaGlutine(a.senzaGlutine); setNote(a.note ?? ""); }
+    if (a) { setMenuScelta(a.menuId); setDieta(a.dieta); setSenzaGlutine(a.senzaGlutine); setNote(a.note ?? ""); }
     setModificaScelta(true);
   }
 
@@ -252,6 +281,7 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
     ? menuScelta
     : (menuDisponibili[0]?.id ?? null);
   const nomeMenu = (id: number) => menuDisponibili.find((m) => m.id === id)?.nome ?? "";
+  const nomeDieta = (d: api.GrigliataDieta) => (d === "vegano" ? t.dietaVegano : d === "vegetariano" ? t.dietaVegetariano : null);
 
   useEffect(() => { load(); }, [load]);
 
@@ -270,7 +300,7 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
     if (busy || menuEffettivo == null) return;
     setBusy(true); setMsg(null);
     try {
-      await api.grigliataIscriviti(menuEffettivo, senzaGlutine, note);
+      await api.grigliataIscriviti(menuEffettivo, dieta, senzaGlutine, note);
       setModificaScelta(false);
       await load();
     } catch {
@@ -393,6 +423,27 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
             </div>
           </div>
 
+          <div>
+            <p className="text-sm font-semibold mb-2" style={{ color: fg }}>{t.dietaLabel}</p>
+            {/* Tre pulsanti fissi, non legati ai menu del delegato: si può
+                scegliere QUALUNQUE menu e dichiararsi comunque vegani — è
+                un'informazione a parte, non una quarta scelta di menu. */}
+            <div className="grid grid-cols-3 gap-2">
+              {([["classico", t.dietaClassico], ["vegetariano", t.dietaVegetariano], ["vegano", t.dietaVegano]] as [api.GrigliataDieta, string][]).map(([val, label]) => {
+                const scelto = dieta === val;
+                return (
+                  <button key={val} onClick={() => setDieta(val)} aria-pressed={scelto}
+                    className="rounded-xl py-2.5 px-1 text-sm font-semibold leading-tight transition-all"
+                    style={scelto
+                      ? { background: RED, color: RED_FG }
+                      : { background: "var(--secondary)", color: fg }}>
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Un interruttore e non una quarta scelta di menu: si può essere
               vegani E senza glutine, sono due cose indipendenti. */}
           <button onClick={() => setSenzaGlutine((v) => !v)} role="switch" aria-checked={senzaGlutine}
@@ -434,6 +485,7 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
           </div>
           <p className="text-xs" style={{ color: sub }}>
             {t.menuScelto(nomeMenu(miaAdesione!.menuId))}
+            {nomeDieta(miaAdesione!.dieta) && ` · ${nomeDieta(miaAdesione!.dieta)}`}
             {miaAdesione!.senzaGlutine && ` · ${t.senzaGlutine}`}
           </p>
           {miaAdesione!.note && (

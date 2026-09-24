@@ -301,8 +301,13 @@ export interface GrigliataEvento {
   menu: GrigliataMenu[];
 }
 
+/** Indipendente dal menu scelto — si può scegliere "Carne" e dichiararsi
+ *  comunque vegani, il delegato prepara un piatto a parte. */
+export type GrigliataDieta = "classico" | "vegetariano" | "vegano";
+
 export interface GrigliataMiaAdesione {
   menuId: number;
+  dieta: GrigliataDieta;
   senzaGlutine: boolean;
   note: string | null;
   pagamentoDichiarato: boolean; pagamentoConfermato: boolean;
@@ -344,6 +349,8 @@ export async function getGrigliataStato(): Promise<GrigliataStato> {
     },
     miaAdesione: data.mia_adesione ? {
       menuId: Number(data.mia_adesione.menu_id),
+      dieta: (data.mia_adesione.dieta === "vegetariano" || data.mia_adesione.dieta === "vegano")
+        ? data.mia_adesione.dieta : "classico",
       senzaGlutine: Boolean(data.mia_adesione.senza_glutine),
       note: data.mia_adesione.note ?? null,
       pagamentoDichiarato: Boolean(data.mia_adesione.pagamento_dichiarato),
@@ -352,9 +359,9 @@ export async function getGrigliataStato(): Promise<GrigliataStato> {
   };
 }
 
-/** Aderisce (o cambia menu se aveva già aderito) — non c'è più un modo di declinare. */
-export async function grigliataIscriviti(menuId: number, senzaGlutine: boolean, note: string) {
-  return postGrigliataAction("iscrivi", { menu_id: menuId, senza_glutine: senzaGlutine, note });
+/** Aderisce (o cambia scelta se aveva già aderito) — non c'è più un modo di declinare. */
+export async function grigliataIscriviti(menuId: number, dieta: GrigliataDieta, senzaGlutine: boolean, note: string) {
+  return postGrigliataAction("iscrivi", { menu_id: menuId, dieta, senza_glutine: senzaGlutine, note });
 }
 
 export async function grigliataDichiaraPagamento() {

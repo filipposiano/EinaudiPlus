@@ -55,6 +55,20 @@ export function idValido(v) {
   return Number.isInteger(n) && n > 0 ? n : null;
 }
 
+// v1.3.1: "vegetariano"/"vegano" NON sono menu — sono un'informazione a sé
+// che il residente dichiara IN PIÙ, qualunque menu (fra quelli configurati
+// dal delegato, es. "Carne"/"Pesce") abbia scelto: si può benissimo
+// scegliere "Carne" e dichiararsi vegani (il delegato prepara qualcosa a
+// parte). Stessa idea di "senza glutine", solo con tre stati invece di due.
+export const DIETA_VALORI = ["classico", "vegetariano", "vegano"];
+
+/** Un valore mancante o non riconosciuto ricade su "classico" (mangia di
+ *  tutto): non è un errore bloccante, è l'informazione di default — stessa
+ *  scelta già fatta per "senza glutine" in iscriviti.js. */
+export function dietaValida(v) {
+  return DIETA_VALORI.includes(v) ? v : "classico";
+}
+
 /**
  * `v` è una data/ora nel futuro? Accetta qualunque stringa che `Date` sappia
  * interpretare (l'input del form è un `<input type="datetime-local">`, che

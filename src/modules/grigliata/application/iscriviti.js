@@ -4,12 +4,15 @@
 //
 // v1.3: il menu è uno di quelli che il delegato ha definito per QUESTA
 // grigliata (per id: che appartenga davvero all'evento attivo lo controlla
-// la SQL), più "senza glutine" e una nota libera per chi cucina.
+// la SQL). v1.3.1: "vegetariano"/"vegano" tornano un'informazione A SÉ,
+// dichiarata in più qualunque sia il menu scelto — vedi il commento esteso
+// su dietaValida() in domain/validazione.js — più "senza glutine" e una
+// nota libera per chi cucina.
 
 import { ValidationError } from "../../../shared/errors/AppError.js";
-import { idValido, NOTE_MAX } from "../domain/validazione.js";
+import { idValido, dietaValida, NOTE_MAX } from "../domain/validazione.js";
 
-export async function iscriviti({ room, menuId, senzaGlutine, note }, { grigliataRepository }) {
+export async function iscriviti({ room, menuId, dieta, senzaGlutine, note }, { grigliataRepository }) {
   const trimmedRoom = String(room || "").trim();
   if (!trimmedRoom) throw new ValidationError("camera mancante");
 
@@ -22,6 +25,7 @@ export async function iscriviti({ room, menuId, senzaGlutine, note }, { grigliat
   return grigliataRepository.iscrivi({
     room: trimmedRoom,
     menuId: menu,
+    dieta: dietaValida(dieta),
     senzaGlutine: senzaGlutine === true,
     note: noteValue || null,
   });

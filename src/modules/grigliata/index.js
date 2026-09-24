@@ -36,8 +36,8 @@ export async function getStatoPubblico(room) {
   return _getStatoPubblico({ room }, deps);
 }
 
-export async function iscriviti(room, menuId, senzaGlutine, note) {
-  return _iscriviti({ room, menuId, senzaGlutine, note }, deps);
+export async function iscriviti(room, menuId, dieta, senzaGlutine, note) {
+  return _iscriviti({ room, menuId, dieta, senzaGlutine, note }, deps);
 }
 
 export async function dichiaraPagamento(room) {
@@ -66,8 +66,8 @@ export async function adminModificaEvento(eventoId, titolo, scadenza, menu) {
   return _adminModificaEvento({ eventoId, titolo, scadenza, menu }, deps);
 }
 
-export async function adminAggiungiAdesione(eventoId, room, menuId) {
-  return _adminAggiungiAdesione({ eventoId, room, menuId }, deps);
+export async function adminAggiungiAdesione(eventoId, room, menuId, dieta) {
+  return _adminAggiungiAdesione({ eventoId, room, menuId, dieta }, deps);
 }
 
 export async function adminRimuoviAdesione(adesioneId) {

@@ -10,9 +10,9 @@ export const grigliataRepository = {
   },
 
   /** Percorso pubblico: aderisce, con un menu — vedi la nota in application/iscriviti.js. */
-  async iscrivi({ room, menuId, senzaGlutine, note }) {
+  async iscrivi({ room, menuId, dieta, senzaGlutine, note }) {
     return rpc("grigliata_iscrivi", {
-      p_room: room, p_menu_id: menuId, p_senza_glutine: senzaGlutine, p_note: note,
+      p_room: room, p_menu_id: menuId, p_dieta: dieta, p_senza_glutine: senzaGlutine, p_note: note,
     });
   },
 
@@ -52,8 +52,10 @@ export const grigliataRepository = {
   },
 
   /** Admin: aggiunge (o corregge) a mano l'adesione di una camera. */
-  async adminAggiungiAdesione({ eventoId, room, menuId }) {
-    return rpc("grigliata_admin_aggiungi_adesione", { p_evento_id: eventoId, p_room: room, p_menu_id: menuId });
+  async adminAggiungiAdesione({ eventoId, room, menuId, dieta }) {
+    return rpc("grigliata_admin_aggiungi_adesione", {
+      p_evento_id: eventoId, p_room: room, p_menu_id: menuId, p_dieta: dieta,
+    });
   },
 
   /** Admin: toglie un'adesione — la camera torna come se non avesse mai risposto. */

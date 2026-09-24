@@ -18,19 +18,23 @@ import { PIANI, pianoDi, nomePiano, colorePiano, type Piano } from "../../../pia
 // è quella con cui si apre la pagina ogni giorno.
 
 // v1.3: i menu non sono più un elenco fisso — li decide il delegato per
-// ogni grigliata (tabella grigliata_menu in SQL). Il PRIMO è quello "di
-// base" (di solito "Mangio tutto"): è la scelta della maggioranza, quindi
-// nel pannello non si segna — pastiglie e conteggi mostrano solo chi ha
-// scelto qualcos'altro, cioè quello di cui chi cucina deve tenere conto.
+// ogni grigliata (tabella grigliata_menu in SQL), es. "Carne"/"Pesce". v1.3.1:
+// "vegetariano"/"vegano" NON sono un menu — sono un'informazione a sé che il
+// residente dichiara IN PIÙ, qualunque menu abbia scelto (vedi `dieta` su
+// Adesione più sotto): si può scegliere "Carne" e dichiararsi vegani, il
+// delegato prepara un piatto a parte.
 type MenuVoce = { id: number; nome: string };
+type Dieta = "classico" | "vegetariano" | "vegano";
+const NOME_DIETA: Record<Dieta, string> = { classico: "Mangia di tutto", vegetariano: "Vegetariano", vegano: "Vegano" };
 
 // v1.1: un'adesione è, per definizione, una camera che partecipa — non
 // esiste più "partecipa=false" (vedi la nota gemella in
 // src/modules/grigliata/application/iscriviti.js). Il menu quindi non è
 // più opzionale. v1.3: "senza glutine" e una nota libera, scritti dal
-// residente — qui si leggono soltanto.
+// residente — qui si leggono soltanto. v1.3.1: "dieta" torna un campo a sé
+// (nel pannello non si segna 'classico', si segnano solo gli altri due).
 type Adesione = {
-  id: number; room: string; menu_id: number;
+  id: number; room: string; menu_id: number; dieta: Dieta;
   senza_glutine: boolean; note: string | null;
   pagamento_dichiarato: boolean; pagamento_confermato: boolean;
   confermato_da: string | null; confermato_at: string | null;
@@ -57,7 +61,7 @@ type Evento = {
 type VoceEditor = { chiave: number; id?: number; nome: string };
 
 const MENU_MAX = 10;
-const MENU_DI_DEFAULT = ["Mangio tutto", "Vegetariano", "Vegano"];
+const MENU_DI_DEFAULT = ["Carne", "Pesce"];
 let prossimaChiave = 1;
 
 const voceNuova = (nome: string, id?: number): VoceEditor => ({ chiave: prossimaChiave++, id, nome });
@@ -80,7 +84,7 @@ function EditorMenu({ voci, onChange, scelte }: {
     <div>
       <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Menu fra cui scegliere</label>
       <div style={{ display: "grid", gap: 6 }}>
-        {voci.map((v, i) => {
+        {voci.map((v) => {
           const usato = (v.id && scelte?.[v.id]) || 0;
           // Un menu già scelto da qualcuno non si toglie (lo rifiuterebbe
           // comunque la SQL): prima va spostata quella camera. L'ultimo
@@ -90,8 +94,7 @@ function EditorMenu({ voci, onChange, scelte }: {
             <div key={v.chiave} style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <input style={{ ...S.input, flex: 1, minWidth: 0 }} value={v.nome} maxLength={40}
                 onChange={(e) => rinomina(v.chiave, e.target.value)}
-                placeholder={i === 0 ? "Mangio tutto" : "Nome del menu"} />
-              {i === 0 && <span style={{ fontSize: 10, fontWeight: 700, ...S.sub, flexShrink: 0 }}>BASE</span>}
+                placeholder="Es. Carne" />
               <button onClick={() => togli(v.chiave)} disabled={bloccato}
                 title={usato > 0 ? `Scelto da ${usato} ${usato === 1 ? "camera" : "camere"}: non si può togliere` : "Togli questo menu"}
                 aria-label={`Togli ${v.nome || "menu"}`}
@@ -117,8 +120,9 @@ function EditorMenu({ voci, onChange, scelte }: {
         </button>
       )}
       <p style={{ fontSize: 11, ...S.sub, marginTop: 6 }}>
-        Il primo è quello di base, già selezionato per i residenti: nel riepilogo
-        si segnano solo le camere che ne scelgono un altro.
+        Cosa si mangia (es. "Carne"/"Pesce") — non è legato a vegetariano,
+        vegano o senza glutine: quello lo dichiara il residente a parte,
+        qualunque menu scelga. Il primo è preselezionato per i residenti.
       </p>
     </div>
   );
@@ -183,6 +187,7 @@ export function GrigliataAdmin() {
   const [nuovaCamera, setNuovaCamera] = useState("");
   // null = il menu di base (gli id si conoscono solo dopo il caricamento).
   const [nuovoMenuCamera, setNuovoMenuCamera] = useState<number | null>(null);
+  const [nuovaDietaCamera, setNuovaDietaCamera] = useState<Dieta>("classico");
 
   // "Elimina" chiede conferma DENTRO la pagina, non con window.confirm():
   // e' bloccato in diversi contesti (PWA installata, iframe senza
@@ -342,10 +347,11 @@ export function GrigliataAdmin() {
     setBusy(true); setMsg(null);
     try {
       await call("grigliataAggiungiAdesione", {
-        evento_id: overview.evento.id, room: nuovaCamera, menu_id: menuCameraEffettivo,
+        evento_id: overview.evento.id, room: nuovaCamera, menu_id: menuCameraEffettivo, dieta: nuovaDietaCamera,
       });
       setAggiungiCamera(false);
       setNuovaCamera("");
+      setNuovaDietaCamera("classico");
       await carica();
       setMsg("Camera aggiunta.");
     } catch (e: any) {
@@ -381,11 +387,17 @@ export function GrigliataAdmin() {
   const partecipanti = overview?.adesioni ?? [];
 
   const menuEvento = evento?.menu ?? [];
-  const idBase = menuEvento[0]?.id ?? null;
+  const idMenuDefault = menuEvento[0]?.id ?? null;
   const nomeMenu = (id: number) => menuEvento.find((m) => m.id === id)?.nome ?? "?";
-  /** Il nome del menu solo se NON è quello di base — altrimenti null. */
-  const menuDiverso = (a: Adesione) => (a.menu_id === idBase ? null : nomeMenu(a.menu_id));
-  const menuCameraEffettivo = menuEvento.some((m) => m.id === nuovoMenuCamera) ? nuovoMenuCamera : idBase;
+  /** Il nome della dieta solo se NON è "classico" (mangia di tutto) —
+   *  quello è la scelta della maggioranza, non si segna. */
+  const nomeDieta = (a: Adesione) => (a.dieta === "classico" ? null : NOME_DIETA[a.dieta]);
+  /** Menu (sempre) + dieta (solo se diversa da "classico"), per la pastiglia. */
+  const etichetta = (a: Adesione) => {
+    const d = nomeDieta(a);
+    return d ? `${nomeMenu(a.menu_id)} · ${d}` : nomeMenu(a.menu_id);
+  };
+  const menuCameraEffettivo = menuEvento.some((m) => m.id === nuovoMenuCamera) ? nuovoMenuCamera : idMenuDefault;
 
   const confermati = partecipanti.filter((a) => a.pagamento_confermato).length;
   const perMenu = (id: number) => {
@@ -395,11 +407,11 @@ export function GrigliataAdmin() {
   const scelteDi: Record<number, number> = {};
   for (const a of partecipanti) scelteDi[a.menu_id] = (scelteDi[a.menu_id] ?? 0) + 1;
   const senzaGlutine = partecipanti.filter((a) => a.senza_glutine).length;
-  // Chi ha qualcosa di cui chi cucina deve tenere conto: un menu diverso da
-  // quello di base, senza glutine, o una nota. È la lista da leggere prima
+  // Chi ha qualcosa di cui chi cucina deve tenere conto: una dieta diversa
+  // da "classico", senza glutine, o una nota. È la lista da leggere prima
   // di fare la spesa, quindi sta tutta insieme invece di dover aprire una
   // pastiglia alla volta.
-  const conEsigenze = partecipanti.filter((a) => menuDiverso(a) || a.senza_glutine || a.note);
+  const conEsigenze = partecipanti.filter((a) => a.dieta !== "classico" || a.senza_glutine || a.note);
 
   const Statistica = ({ valore, etichetta }: { valore: string | number; etichetta: string }) => (
     <div style={{ textAlign: "center" }}>
@@ -431,17 +443,17 @@ export function GrigliataAdmin() {
     return (
       <button onClick={() => setAdesioneSelezionata(a)} disabled={busy} style={stile}>
         <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "monospace" }}>{a.room}</span>
-        {/* Solo i casi diversi: chi ha il menu di base (la maggioranza) non
-            porta nessuna scritta, così quelle che restano saltano all'occhio. */}
-        {menuDiverso(a) && (
-          <span style={{
-            fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.02em",
-            color: confermato ? colore : "var(--muted-foreground)",
-            maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>
-            {menuDiverso(a)}
-          </span>
-        )}
+        {/* Il menu si vede sempre (è cosa si mangia, informazione utile a
+            prescindere); la dieta si aggiunge accanto SOLO se diversa da
+            "classico" — è la scelta della maggioranza, non si segna, così
+            i casi diversi saltano all'occhio. */}
+        <span style={{
+          fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.02em",
+          color: confermato ? colore : "var(--muted-foreground)",
+          maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+        }}>
+          {etichetta(a)}
+        </span>
         {/* Senza glutine e nota: due icone piccole, non altro testo — la
             pastiglia deve restare leggibile a colpo d'occhio; il dettaglio
             sta nel popup e nella lista "Esigenze alimentari" più sotto. */}
@@ -611,18 +623,19 @@ export function GrigliataAdmin() {
             </>
           )}
 
-          {/* Quanti numeri dipende da quanti menu ha deciso il delegato:
-              auto-fit invece di colonne fisse, così vanno a capo invece di
-              schiacciarsi. Il menu di base non ha un suo conteggio (è
-              "Partecipano" meno gli altri): si contano solo i casi diversi.
-              Senza glutine sta a lato, a parte: non è un menu ma si somma a
-              qualunque menu (si può essere vegani E celiaci), ed è il numero
-              che decide cosa comprare a parte. */}
+          {/* Quanti numeri dipende da quanti menu ha deciso il delegato: uno
+              per menu (pagati/tot.), auto-fit invece di colonne fisse così
+              vanno a capo invece di schiacciarsi. Senza glutine sta a lato,
+              a parte: non è un menu ma si somma a qualunque menu (si può
+              essere vegani E celiaci), ed è il numero che decide cosa
+              comprare a parte — vegetariani/vegani invece non hanno un loro
+              conteggio qui: si vedono sulla camera (pastiglie) e nella lista
+              "Esigenze alimentari" più sotto. */}
           <div style={{ display: "flex", gap: 10, alignItems: "stretch", paddingTop: 12, borderTop: "1px solid var(--border)" }}>
             <div style={{ flex: 1, minWidth: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))", gap: 8 }}>
               <Statistica valore={partecipanti.length} etichetta="Partecipano" />
               <Statistica valore={confermati} etichetta="Pagamenti confermati" />
-              {menuEvento.slice(1).map((m) => {
+              {menuEvento.map((m) => {
                 const n = perMenu(m.id);
                 return <Statistica key={m.id} valore={`${n.pagati}/${n.totale}`} etichetta={`${m.nome} (pagati/tot.)`} />;
               })}
@@ -682,6 +695,12 @@ export function GrigliataAdmin() {
                 onChange={(e) => setNuovoMenuCamera(Number(e.target.value))}>
                 {menuEvento.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
               </select>
+              <select style={{ ...S.input, width: "auto", maxWidth: "100%" }} value={nuovaDietaCamera}
+                onChange={(e) => setNuovaDietaCamera(e.target.value as Dieta)}>
+                <option value="classico">{NOME_DIETA.classico}</option>
+                <option value="vegetariano">{NOME_DIETA.vegetariano}</option>
+                <option value="vegano">{NOME_DIETA.vegano}</option>
+              </select>
               <button onClick={aggiungiAdesione} disabled={busy || !nuovaCamera.trim()} style={{ ...S.btn, opacity: busy || !nuovaCamera.trim() ? 0.5 : 1 }}>
                 {busy ? "In corso…" : "Aggiungi"}
               </button>
@@ -720,7 +739,7 @@ export function GrigliataAdmin() {
               <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13 }}>
                 <span style={{ fontFamily: "monospace", fontWeight: 700, minWidth: 44 }}>{a.room}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {menuDiverso(a) && <span style={{ fontWeight: 700, marginRight: 6 }}>{menuDiverso(a)}</span>}
+                  {nomeDieta(a) && <span style={{ fontWeight: 700, marginRight: 6 }}>{nomeDieta(a)}</span>}
                   {a.senza_glutine && (
                     <span style={{ fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 3 }}>
                       <WheatOff size={12} /> senza glutine
@@ -746,6 +765,7 @@ export function GrigliataAdmin() {
             <p style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Camera {adesioneSelezionata.room}</p>
             <p style={{ fontSize: 13, ...S.sub, marginBottom: 4 }}>
               Menu: {nomeMenu(adesioneSelezionata.menu_id)}
+              {nomeDieta(adesioneSelezionata) && ` · ${nomeDieta(adesioneSelezionata)}`}
               {adesioneSelezionata.senza_glutine && " · senza glutine"}
             </p>
             {adesioneSelezionata.note && (

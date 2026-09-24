@@ -6,13 +6,15 @@
 // pannello che accetta un numero di camera libero (vedi
 // bikes/application/adminAddBikeRoom.js).
 //
-// v1.3: il menu è un id fra quelli dell'evento (lo verifica la SQL).
+// v1.3: il menu è un id fra quelli dell'evento (lo verifica la SQL). v1.3.1:
+// "vegetariano"/"vegano" tornano un campo a sé, indipendente dal menu — un
+// valore mancante ricade su "classico" (vedi dietaValida in validazione.js).
 
 import { ValidationError, fromRpcError } from "../../../shared/errors/AppError.js";
 import { parseRoomNumber } from "../../../shared/validation/room.js";
-import { idValido } from "../domain/validazione.js";
+import { idValido, dietaValida } from "../domain/validazione.js";
 
-export async function adminAggiungiAdesione({ eventoId, room, menuId }, { grigliataRepository }) {
+export async function adminAggiungiAdesione({ eventoId, room, menuId, dieta }, { grigliataRepository }) {
   const id = idValido(eventoId);
   if (!id) throw new ValidationError("evento non valido");
 
@@ -23,7 +25,9 @@ export async function adminAggiungiAdesione({ eventoId, room, menuId }, { grigli
   if (!menu) throw new ValidationError("scegli un menu");
 
   try {
-    return await grigliataRepository.adminAggiungiAdesione({ eventoId: id, room: parsedRoom, menuId: menu });
+    return await grigliataRepository.adminAggiungiAdesione({
+      eventoId: id, room: parsedRoom, menuId: menu, dieta: dietaValida(dieta),
+    });
   } catch (err) {
     throw fromRpcError(err, { exposeToClient: true });
   }

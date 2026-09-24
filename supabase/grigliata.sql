@@ -34,11 +34,13 @@ create table if not exists grigliata_evento (
   created_at    timestamptz not null default now()
 );
 
--- I menu fra cui si sceglie: li decide il delegato per ogni grigliata (v1.3
--- — prima erano un elenco fisso). Il PRIMO (posizione 0) è quello "di
--- base": nel pannello non viene segnato sulle pastiglie, si segnano solo i
--- casi diversi. Un'adesione indica il suo menu per id, non per nome: così
--- rinominarlo non stacca chi l'aveva già scelto.
+-- I menu fra cui si sceglie (es. "Carne"/"Pesce"): li decide il delegato
+-- per ogni grigliata (v1.3 — prima erano un elenco fisso, e per un po', per
+-- errore, avevano coinciso con mangio-tutto/vegetariano/vegano; v1.3.1 li
+-- separa di nuovo, vedi la colonna `dieta` sulla tabella grigliata_adesione
+-- più sotto: il menu è COSA si mangia, la dieta è un vincolo dichiarato a
+-- parte, indipendente dal menu scelto). Un'adesione indica il suo menu per
+-- id, non per nome: così rinominarlo non stacca chi l'aveva già scelto.
 create table if not exists grigliata_menu (
   id         bigserial primary key,
   evento_id  bigint not null references grigliata_evento(id) on delete cascade,
@@ -65,9 +67,16 @@ create table if not exists grigliata_adesione (
   -- se ne va prima dell'adesione che lo indica. `no action` controlla alla
   -- fine dell'istruzione, quando entrambi sono già spariti.
   menu_id              bigint not null references grigliata_menu(id),
-  -- v1.3: indipendente dal menu (si può essere vegani E senza glutine), e
-  -- una nota libera per allergie/intolleranze — informazioni per chi
-  -- cucina, lette dal delegato nel pannello.
+  -- v1.3.1: informazione A SÉ, indipendente dal menu scelto — si può
+  -- scegliere il menu "Carne" e dichiararsi comunque vegani (il delegato
+  -- prepara un piatto a parte). 'classico' = mangia di tutto, il valore di
+  -- default: nel pannello non si segna, si segnano solo gli altri due (vedi
+  -- GrigliataAdmin.tsx).
+  dieta                text not null default 'classico'
+                         check (dieta in ('classico', 'vegetariano', 'vegano')),
+  -- v1.3: indipendente da menu E dieta (si può essere vegani E senza
+  -- glutine), e una nota libera per allergie/intolleranze — informazioni
+  -- per chi cucina, lette dal delegato nel pannello.
   senza_glutine        boolean not null default false,
   note                 text check (note is null or char_length(note) <= 300),
   pagamento_dichiarato boolean not null default false,
@@ -135,6 +144,7 @@ begin
     ),
     'mia_adesione', case when v_adesione.id is null then null else jsonb_build_object(
       'menu_id', v_adesione.menu_id,
+      'dieta', v_adesione.dieta,
       'senza_glutine', v_adesione.senza_glutine,
       'note', v_adesione.note,
       'pagamento_dichiarato', v_adesione.pagamento_dichiarato,
@@ -154,11 +164,16 @@ $$;
 --
 -- v1.3: anche "senza glutine" e una nota libera — riscritti entrambi a ogni
 -- adesione (il form li rimanda sempre, già precompilati), una nota vuota
--- torna null invece di restare una stringa vuota.
-create or replace function grigliata_iscrivi(p_room text, p_menu_id bigint, p_senza_glutine boolean, p_note text)
-returns jsonb language plpgsql as $$
+-- torna null invece di restare una stringa vuota. v1.3.1: anche "dieta"
+-- (mangio tutto/vegetariano/vegano) torna un campo a sé, indipendente dal
+-- menu scelto — un valore mancante o non riconosciuto ricade su 'classico',
+-- non è un errore bloccante (stessa scelta di "senza glutine").
+create or replace function grigliata_iscrivi(
+  p_room text, p_menu_id bigint, p_dieta text, p_senza_glutine boolean, p_note text
+) returns jsonb language plpgsql as $$
 declare
   v_evento_id bigint;
+  v_dieta text;
   v_note text;
 begin
   select id into v_evento_id from grigliata_evento
@@ -176,15 +191,18 @@ begin
     return jsonb_build_object('ok', false, 'error', 'scegli un menu');
   end if;
 
+  v_dieta := case when p_dieta in ('vegetariano', 'vegano') then p_dieta else 'classico' end;
+
   v_note := nullif(btrim(coalesce(p_note, '')), '');
   if v_note is not null and char_length(v_note) > 300 then
     return jsonb_build_object('ok', false, 'error', 'nota troppo lunga (massimo 300 caratteri)');
   end if;
 
-  insert into grigliata_adesione (evento_id, room, menu_id, senza_glutine, note, updated_at)
-  values (v_evento_id, p_room, p_menu_id, coalesce(p_senza_glutine, false), v_note, now())
+  insert into grigliata_adesione (evento_id, room, menu_id, dieta, senza_glutine, note, updated_at)
+  values (v_evento_id, p_room, p_menu_id, v_dieta, coalesce(p_senza_glutine, false), v_note, now())
   on conflict (evento_id, room) do update
     set menu_id = excluded.menu_id,
+        dieta = excluded.dieta,
         senza_glutine = excluded.senza_glutine,
         note = excluded.note,
         updated_at = now();
@@ -459,7 +477,7 @@ begin
     ),
     'adesioni', coalesce((
       select jsonb_agg(jsonb_build_object(
-        'id', a.id, 'room', a.room, 'menu_id', a.menu_id,
+        'id', a.id, 'room', a.room, 'menu_id', a.menu_id, 'dieta', a.dieta,
         'senza_glutine', a.senza_glutine, 'note', a.note,
         'pagamento_dichiarato', a.pagamento_dichiarato, 'pagamento_confermato', a.pagamento_confermato,
         'confermato_da', a.confermato_da, 'confermato_at', a.confermato_at
@@ -499,11 +517,16 @@ $$;
 -- l'app, o per registrare chi ha dato la sua parola di persona. Upsert come
 -- grigliata_iscrivi: se la camera aveva già risposto, la sua riga si
 -- aggiorna invece di duplicarsi (stesso vincolo unique(evento_id, room)).
--- Tocca solo il menu (uno di quelli di QUESTO evento): "senza glutine" e la
--- nota di una camera che aveva già risposto da sé restano quelli che ha
--- scritto lei (una riga nuova parte dai default: glutine sì, nessuna nota).
-create or replace function grigliata_admin_aggiungi_adesione(p_evento_id bigint, p_room text, p_menu_id bigint)
-returns jsonb language plpgsql as $$
+-- Tocca menu e dieta (uno di quelli di QUESTO evento, la dieta con lo
+-- stesso default 'classico' di grigliata_iscrivi se non riconosciuta):
+-- "senza glutine" e la nota di una camera che aveva già risposto da sé
+-- restano quelli che ha scritto lei (una riga nuova parte dai default:
+-- glutine sì, nessuna nota).
+create or replace function grigliata_admin_aggiungi_adesione(
+  p_evento_id bigint, p_room text, p_menu_id bigint, p_dieta text
+) returns jsonb language plpgsql as $$
+declare
+  v_dieta text;
 begin
   if not exists (select 1 from grigliata_evento where id = p_evento_id) then
     return jsonb_build_object('ok', false, 'error', 'evento non trovato');
@@ -517,10 +540,12 @@ begin
     return jsonb_build_object('ok', false, 'error', 'scegli un menu');
   end if;
 
-  insert into grigliata_adesione (evento_id, room, menu_id, updated_at)
-  values (p_evento_id, btrim(p_room), p_menu_id, now())
+  v_dieta := case when p_dieta in ('vegetariano', 'vegano') then p_dieta else 'classico' end;
+
+  insert into grigliata_adesione (evento_id, room, menu_id, dieta, updated_at)
+  values (p_evento_id, btrim(p_room), p_menu_id, v_dieta, now())
   on conflict (evento_id, room) do update
-    set menu_id = excluded.menu_id, updated_at = now();
+    set menu_id = excluded.menu_id, dieta = excluded.dieta, updated_at = now();
 
   return jsonb_build_object('ok', true);
 end;
@@ -604,7 +629,7 @@ $$;
 
 revoke all on function grigliata_attiva_bool() from public, anon, authenticated;
 revoke all on function grigliata_stato_pubblico(text) from public, anon, authenticated;
-revoke all on function grigliata_iscrivi(text, bigint, boolean, text) from public, anon, authenticated;
+revoke all on function grigliata_iscrivi(text, bigint, text, boolean, text) from public, anon, authenticated;
 revoke all on function grigliata_dichiara_pagamento(text) from public, anon, authenticated;
 revoke all on function grigliata_normalizza_link(text) from public, anon, authenticated;
 revoke all on function grigliata_menu_errore(jsonb) from public, anon, authenticated;
@@ -613,7 +638,7 @@ revoke all on function grigliata_admin_crea(text, timestamptz, text, text, jsonb
 revoke all on function grigliata_admin_modifica(bigint, text, timestamptz, jsonb) from public, anon, authenticated;
 revoke all on function grigliata_admin_overview() from public, anon, authenticated;
 revoke all on function grigliata_admin_conferma_pagamento(bigint, text) from public, anon, authenticated;
-revoke all on function grigliata_admin_aggiungi_adesione(bigint, text, bigint) from public, anon, authenticated;
+revoke all on function grigliata_admin_aggiungi_adesione(bigint, text, bigint, text) from public, anon, authenticated;
 revoke all on function grigliata_admin_rimuovi_adesione(bigint) from public, anon, authenticated;
 revoke all on function grigliata_admin_chiudi(bigint) from public, anon, authenticated;
 revoke all on function grigliata_admin_riapri(bigint) from public, anon, authenticated;
@@ -621,7 +646,7 @@ revoke all on function grigliata_admin_elimina(bigint) from public, anon, authen
 
 grant execute on function grigliata_attiva_bool() to service_role;
 grant execute on function grigliata_stato_pubblico(text) to service_role;
-grant execute on function grigliata_iscrivi(text, bigint, boolean, text) to service_role;
+grant execute on function grigliata_iscrivi(text, bigint, text, boolean, text) to service_role;
 grant execute on function grigliata_dichiara_pagamento(text) to service_role;
 grant execute on function grigliata_normalizza_link(text) to service_role;
 grant execute on function grigliata_menu_errore(jsonb) to service_role;
@@ -630,7 +655,7 @@ grant execute on function grigliata_admin_crea(text, timestamptz, text, text, js
 grant execute on function grigliata_admin_modifica(bigint, text, timestamptz, jsonb) to service_role;
 grant execute on function grigliata_admin_overview() to service_role;
 grant execute on function grigliata_admin_conferma_pagamento(bigint, text) to service_role;
-grant execute on function grigliata_admin_aggiungi_adesione(bigint, text, bigint) to service_role;
+grant execute on function grigliata_admin_aggiungi_adesione(bigint, text, bigint, text) to service_role;
 grant execute on function grigliata_admin_rimuovi_adesione(bigint) to service_role;
 grant execute on function grigliata_admin_chiudi(bigint) to service_role;
 grant execute on function grigliata_admin_riapri(bigint) to service_role;
