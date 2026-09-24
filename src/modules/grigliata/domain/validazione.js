@@ -4,11 +4,16 @@
 // grigliata_admin_crea), che rifiutano da sole se questo controllo venisse
 // aggirato chiamando l'RPC direttamente.
 
-export const MENU = new Set(["classico", "vegano"]);
+// "classico" è "mangio tutto": il valore resta quello di prima perché è già
+// salvato nelle adesioni esistenti, cambia solo come lo chiama l'interfaccia.
+export const MENU = new Set(["classico", "vegetariano", "vegano"]);
 
 export function isValidMenu(v) {
   return MENU.has(v);
 }
+
+/** Stesso tetto del vincolo `check` sulla colonna `note` in SQL. */
+export const NOTE_MAX = 300;
 
 /**
  * `v` è una data/ora nel futuro? Accetta qualunque stringa che `Date` sappia

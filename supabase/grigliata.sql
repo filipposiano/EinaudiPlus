@@ -43,8 +43,14 @@ create table if not exists grigliata_adesione (
   -- Una riga qui = una camera che partecipa: non esiste "adesione con
   -- partecipa=false" (v1.1 ha tolto la possibilità di rispondere "non
   -- parteciperò" — vedi la nota in grigliata_iscrivi più sotto). Un menu è
-  -- quindi sempre presente, non opzionale come prima.
-  menu                 text not null check (menu in ('classico', 'vegano')),
+  -- quindi sempre presente, non opzionale come prima. 'classico' è "mangio
+  -- tutto" (il valore resta quello storico, cambia solo l'etichetta).
+  menu                 text not null check (menu in ('classico', 'vegetariano', 'vegano')),
+  -- v1.3: indipendente dal menu (si può essere vegani E senza glutine), e
+  -- una nota libera per allergie/intolleranze — informazioni per chi
+  -- cucina, lette dal delegato nel pannello.
+  senza_glutine        boolean not null default false,
+  note                 text check (note is null or char_length(note) <= 300),
   pagamento_dichiarato boolean not null default false,
   pagamento_confermato boolean not null default false,
   confermato_da        text,
@@ -108,6 +114,8 @@ begin
     ),
     'mia_adesione', case when v_adesione.id is null then null else jsonb_build_object(
       'menu', v_adesione.menu,
+      'senza_glutine', v_adesione.senza_glutine,
+      'note', v_adesione.note,
       'pagamento_dichiarato', v_adesione.pagamento_dichiarato,
       'pagamento_confermato', v_adesione.pagamento_confermato
     ) end
@@ -122,11 +130,16 @@ $$;
 -- seconda (vedi il vincolo unique sulla tabella). I flag di pagamento NON
 -- si toccano qui apposta: cambiare menu non deve far sparire in silenzio
 -- una conferma di pagamento già data dal delegato.
-create or replace function grigliata_iscrivi(p_room text, p_menu text)
+--
+-- v1.3: anche "senza glutine" e una nota libera — riscritti entrambi a ogni
+-- adesione (il form li rimanda sempre, già precompilati), una nota vuota
+-- torna null invece di restare una stringa vuota.
+create or replace function grigliata_iscrivi(p_room text, p_menu text, p_senza_glutine boolean, p_note text)
 returns jsonb language plpgsql as $$
 declare
   v_evento_id bigint;
   v_menu text;
+  v_note text;
 begin
   select id into v_evento_id from grigliata_evento
     where not chiuso and now() < scadenza
@@ -137,14 +150,21 @@ begin
   end if;
 
   v_menu := nullif(btrim(coalesce(p_menu, '')), '');
-  if v_menu is null or v_menu not in ('classico', 'vegano') then
+  if v_menu is null or v_menu not in ('classico', 'vegetariano', 'vegano') then
     return jsonb_build_object('ok', false, 'error', 'scegli un menu');
   end if;
 
-  insert into grigliata_adesione (evento_id, room, menu, updated_at)
-  values (v_evento_id, p_room, v_menu, now())
+  v_note := nullif(btrim(coalesce(p_note, '')), '');
+  if v_note is not null and char_length(v_note) > 300 then
+    return jsonb_build_object('ok', false, 'error', 'nota troppo lunga (massimo 300 caratteri)');
+  end if;
+
+  insert into grigliata_adesione (evento_id, room, menu, senza_glutine, note, updated_at)
+  values (v_evento_id, p_room, v_menu, coalesce(p_senza_glutine, false), v_note, now())
   on conflict (evento_id, room) do update
     set menu = excluded.menu,
+        senza_glutine = excluded.senza_glutine,
+        note = excluded.note,
         updated_at = now();
 
   return jsonb_build_object('ok', true);
@@ -284,6 +304,7 @@ begin
     'adesioni', coalesce((
       select jsonb_agg(jsonb_build_object(
         'id', a.id, 'room', a.room, 'menu', a.menu,
+        'senza_glutine', a.senza_glutine, 'note', a.note,
         'pagamento_dichiarato', a.pagamento_dichiarato, 'pagamento_confermato', a.pagamento_confermato,
         'confermato_da', a.confermato_da, 'confermato_at', a.confermato_at
       ) order by a.room)
@@ -322,6 +343,9 @@ $$;
 -- l'app, o per registrare chi ha dato la sua parola di persona. Upsert come
 -- grigliata_iscrivi: se la camera aveva già risposto, la sua riga si
 -- aggiorna invece di duplicarsi (stesso vincolo unique(evento_id, room)).
+-- Tocca solo il menu: "senza glutine" e la nota di una camera che aveva già
+-- risposto da sé restano quelli che ha scritto lei (una riga nuova parte
+-- dai default: glutine sì, nessuna nota).
 create or replace function grigliata_admin_aggiungi_adesione(p_evento_id bigint, p_room text, p_menu text)
 returns jsonb language plpgsql as $$
 begin
@@ -331,7 +355,7 @@ begin
   if p_room is null or btrim(p_room) = '' then
     return jsonb_build_object('ok', false, 'error', 'camera mancante');
   end if;
-  if p_menu is null or p_menu not in ('classico', 'vegano') then
+  if p_menu is null or p_menu not in ('classico', 'vegetariano', 'vegano') then
     return jsonb_build_object('ok', false, 'error', 'scegli un menu');
   end if;
 
@@ -422,7 +446,7 @@ $$;
 
 revoke all on function grigliata_attiva_bool() from public, anon, authenticated;
 revoke all on function grigliata_stato_pubblico(text) from public, anon, authenticated;
-revoke all on function grigliata_iscrivi(text, text) from public, anon, authenticated;
+revoke all on function grigliata_iscrivi(text, text, boolean, text) from public, anon, authenticated;
 revoke all on function grigliata_dichiara_pagamento(text) from public, anon, authenticated;
 revoke all on function grigliata_normalizza_link(text) from public, anon, authenticated;
 revoke all on function grigliata_admin_crea(text, timestamptz, text, text, text) from public, anon, authenticated;
@@ -437,7 +461,7 @@ revoke all on function grigliata_admin_elimina(bigint) from public, anon, authen
 
 grant execute on function grigliata_attiva_bool() to service_role;
 grant execute on function grigliata_stato_pubblico(text) to service_role;
-grant execute on function grigliata_iscrivi(text, text) to service_role;
+grant execute on function grigliata_iscrivi(text, text, boolean, text) to service_role;
 grant execute on function grigliata_dichiara_pagamento(text) to service_role;
 grant execute on function grigliata_normalizza_link(text) to service_role;
 grant execute on function grigliata_admin_crea(text, timestamptz, text, text, text) to service_role;

@@ -291,7 +291,8 @@ export async function clearAsDirezione(day: number, slot: number, machine: strin
 // quindi qui il corpo viaggia come JSON vero, non il text/plain storico di
 // postAction() sopra.
 
-export type GrigliataMenu = "classico" | "vegano";
+/** "classico" = mangio tutto (il valore storico, già salvato nelle adesioni). */
+export type GrigliataMenu = "classico" | "vegetariano" | "vegano";
 
 export interface GrigliataEvento {
   id: number; titolo: string; scadenza: string;
@@ -300,6 +301,8 @@ export interface GrigliataEvento {
 
 export interface GrigliataMiaAdesione {
   menu: GrigliataMenu;
+  senzaGlutine: boolean;
+  note: string | null;
   pagamentoDichiarato: boolean; pagamentoConfermato: boolean;
 }
 
@@ -338,6 +341,8 @@ export async function getGrigliataStato(): Promise<GrigliataStato> {
     },
     miaAdesione: data.mia_adesione ? {
       menu: data.mia_adesione.menu as GrigliataMenu,
+      senzaGlutine: Boolean(data.mia_adesione.senza_glutine),
+      note: data.mia_adesione.note ?? null,
       pagamentoDichiarato: Boolean(data.mia_adesione.pagamento_dichiarato),
       pagamentoConfermato: Boolean(data.mia_adesione.pagamento_confermato),
     } : null,
@@ -345,8 +350,8 @@ export async function getGrigliataStato(): Promise<GrigliataStato> {
 }
 
 /** Aderisce (o cambia menu se aveva già aderito) — non c'è più un modo di declinare. */
-export async function grigliataIscriviti(menu: GrigliataMenu) {
-  return postGrigliataAction("iscrivi", { menu });
+export async function grigliataIscriviti(menu: GrigliataMenu, senzaGlutine: boolean, note: string) {
+  return postGrigliataAction("iscrivi", { menu, senza_glutine: senzaGlutine, note });
 }
 
 export async function grigliataDichiaraPagamento() {

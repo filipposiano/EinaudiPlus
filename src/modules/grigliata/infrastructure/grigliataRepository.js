@@ -10,8 +10,10 @@ export const grigliataRepository = {
   },
 
   /** Percorso pubblico: aderisce, con un menu — vedi la nota in application/iscriviti.js. */
-  async iscrivi({ room, menu }) {
-    return rpc("grigliata_iscrivi", { p_room: room, p_menu: menu });
+  async iscrivi({ room, menu, senzaGlutine, note }) {
+    return rpc("grigliata_iscrivi", {
+      p_room: room, p_menu: menu, p_senza_glutine: senzaGlutine, p_note: note,
+    });
   },
 
   /** Percorso pubblico: "ho pagato". */

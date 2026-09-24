@@ -29,11 +29,17 @@ const T = {
     soloCamere: "Questa sezione è per le camere: la Direzione non partecipa.",
     nessunaAttiva: "Non c'è nessuna grigliata attiva al momento.",
     scadeIl: (d: string) => `Le adesioni chiudono il ${d}`,
-    menuLabel: "Che menu preferisci?",
-    menuClassico: "Classico",
+    menuLabel: "Cosa mangi?",
+    menuClassico: "Mangio tutto",
+    menuVegetariano: "Vegetariano",
     menuVegano: "Vegano",
+    senzaGlutine: "Senza glutine",
+    senzaGlutineHint: "Celiachia o intolleranza al glutine",
+    noteLabel: "Note (facoltative)",
+    notePlaceholder: "Allergie, intolleranze o altro che chi cucina deve sapere",
+    note: "Note",
     partecipaBtn: "Partecipo",
-    cambiaScelta: "Cambia menu",
+    cambiaScelta: "Modifica",
     partecipi: "Partecipi!",
     menuScelto: (m: string) => `Menu: ${m}`,
     pagamentoTitolo: "Invia la tua quota",
@@ -54,11 +60,17 @@ const T = {
     soloCamere: "This section is for rooms: the front desk doesn't take part.",
     nessunaAttiva: "There's no barbecue running right now.",
     scadeIl: (d: string) => `Sign-ups close on ${d}`,
-    menuLabel: "Which menu?",
-    menuClassico: "Classic",
+    menuLabel: "What do you eat?",
+    menuClassico: "Everything",
+    menuVegetariano: "Vegetarian",
     menuVegano: "Vegan",
+    senzaGlutine: "Gluten-free",
+    senzaGlutineHint: "Coeliac disease or gluten intolerance",
+    noteLabel: "Notes (optional)",
+    notePlaceholder: "Allergies, intolerances or anything the cooks should know",
+    note: "Notes",
     partecipaBtn: "I'm in",
-    cambiaScelta: "Change menu",
+    cambiaScelta: "Edit",
     partecipi: "You're in!",
     menuScelto: (m: string) => `Menu: ${m}`,
     pagamentoTitolo: "Send your share",
@@ -79,11 +91,17 @@ const T = {
     soloCamere: "Cette section est pour les chambres : la Direction n'y participe pas.",
     nessunaAttiva: "Il n'y a aucun barbecue en cours.",
     scadeIl: (d: string) => `Les inscriptions ferment le ${d}`,
-    menuLabel: "Quel menu ?",
-    menuClassico: "Classique",
+    menuLabel: "Tu manges quoi ?",
+    menuClassico: "Je mange de tout",
+    menuVegetariano: "Végétarien",
     menuVegano: "Végétalien",
+    senzaGlutine: "Sans gluten",
+    senzaGlutineHint: "Maladie cœliaque ou intolérance au gluten",
+    noteLabel: "Remarques (facultatif)",
+    notePlaceholder: "Allergies, intolérances ou autre chose que les cuisiniers doivent savoir",
+    note: "Remarques",
     partecipaBtn: "Je participe",
-    cambiaScelta: "Changer de menu",
+    cambiaScelta: "Modifier",
     partecipi: "Tu es inscrit·e !",
     menuScelto: (m: string) => `Menu : ${m}`,
     pagamentoTitolo: "Envoie ta part",
@@ -104,11 +122,17 @@ const T = {
     soloCamere: "Dieser Bereich ist für Zimmer: die Verwaltung nimmt nicht teil.",
     nessunaAttiva: "Gerade läuft kein Grillfest.",
     scadeIl: (d: string) => `Anmeldeschluss ist der ${d}`,
-    menuLabel: "Welches Menü?",
-    menuClassico: "Klassisch",
+    menuLabel: "Was isst du?",
+    menuClassico: "Ich esse alles",
+    menuVegetariano: "Vegetarisch",
     menuVegano: "Vegan",
+    senzaGlutine: "Glutenfrei",
+    senzaGlutineHint: "Zöliakie oder Glutenunverträglichkeit",
+    noteLabel: "Hinweise (optional)",
+    notePlaceholder: "Allergien, Unverträglichkeiten oder was die Köche sonst wissen sollten",
+    note: "Hinweise",
     partecipaBtn: "Ich mache mit",
-    cambiaScelta: "Menü ändern",
+    cambiaScelta: "Ändern",
     partecipi: "Du bist dabei!",
     menuScelto: (m: string) => `Menü: ${m}`,
     pagamentoTitolo: "Sende deinen Anteil",
@@ -129,11 +153,17 @@ const T = {
     soloCamere: "Esta sección es para las habitaciones: la Dirección no participa.",
     nessunaAttiva: "No hay ninguna barbacoa activa ahora mismo.",
     scadeIl: (d: string) => `Las inscripciones cierran el ${d}`,
-    menuLabel: "¿Qué menú prefieres?",
-    menuClassico: "Clásico",
+    menuLabel: "¿Qué comes?",
+    menuClassico: "Como de todo",
+    menuVegetariano: "Vegetariano",
     menuVegano: "Vegano",
+    senzaGlutine: "Sin gluten",
+    senzaGlutineHint: "Celiaquía o intolerancia al gluten",
+    noteLabel: "Notas (opcionales)",
+    notePlaceholder: "Alergias, intolerancias u otra cosa que deban saber quienes cocinan",
+    note: "Notas",
     partecipaBtn: "Participo",
-    cambiaScelta: "Cambiar menú",
+    cambiaScelta: "Modificar",
     partecipi: "¡Estás dentro!",
     menuScelto: (m: string) => `Menú: ${m}`,
     pagamentoTitolo: "Envía tu parte",
@@ -154,11 +184,17 @@ const T = {
     soloCamere: "Chesta sezione è pe' 'e cammere: 'a Direzione nun ce sta.",
     nessunaAttiva: "Mo nun ce sta nisciuna grigliata.",
     scadeIl: (d: string) => `'E adesioni chiudono ô ${d}`,
-    menuLabel: "Che menu vuò?",
-    menuClassico: "Classico",
+    menuLabel: "Che magne?",
+    menuClassico: "Magno 'e tutto",
+    menuVegetariano: "Vegetariano",
     menuVegano: "Vegano",
+    senzaGlutine: "Senza glutine",
+    senzaGlutineHint: "Celiachia o intolleranza ô glutine",
+    noteLabel: "Note (si vuò)",
+    notePlaceholder: "Allergie, intolleranze o chello ca chi cucina adda sapé",
+    note: "Note",
     partecipaBtn: "Ce sto",
-    cambiaScelta: "Cagna menu",
+    cambiaScelta: "Cagna",
     partecipi: "Staje dinto!",
     menuScelto: (m: string) => `Menu: ${m}`,
     pagamentoTitolo: "Manna 'a quota toja",
@@ -199,24 +235,35 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // Form di adesione, precompilato da mia_adesione una volta caricata — ma
-  // resta modificabile: "cambia menu" lo riapre senza dover ricaricare. Non
-  // c'è più una scelta sì/no da ricordare: aderire è l'unica azione,
-  // dichiarare un interesse attivo — vedi la nota gemella in
-  // src/modules/grigliata/application/iscriviti.js.
+  // Form di adesione: menu, senza glutine, note. Non c'è più una scelta sì/no
+  // da ricordare: aderire è l'unica azione, dichiarare un interesse attivo —
+  // vedi la nota gemella in src/modules/grigliata/application/iscriviti.js.
+  //
+  // Si precompila da mia_adesione quando lo si APRE ("Modifica"), non a ogni
+  // load(): load() gira ogni 10 secondi, e riscrivere i campi lì cancellava
+  // una nota mentre la si stava ancora scrivendo.
   const [modificaScelta, setModificaScelta] = useState(false);
   const [menuScelta, setMenuScelta] = useState<Menu>("classico");
+  const [senzaGlutine, setSenzaGlutine] = useState(false);
+  const [note, setNote] = useState("");
 
   const load = useCallback(async () => {
     if (!camera) { setLoading(false); return; }
     setError(false);
     try {
-      const s = await api.getGrigliataStato();
-      setStato(s);
-      if (s.miaAdesione) setMenuScelta(s.miaAdesione.menu);
+      setStato(await api.getGrigliataStato());
     } catch { setError(true); }
     finally { setLoading(false); }
   }, [camera]);
+
+  function apriModifica() {
+    const a = stato?.miaAdesione;
+    if (a) { setMenuScelta(a.menu); setSenzaGlutine(a.senzaGlutine); setNote(a.note ?? ""); }
+    setModificaScelta(true);
+  }
+
+  const nomeMenu = (m: Menu) =>
+    m === "vegano" ? t.menuVegano : m === "vegetariano" ? t.menuVegetariano : t.menuClassico;
 
   useEffect(() => { load(); }, [load]);
 
@@ -235,7 +282,7 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
     if (busy) return;
     setBusy(true); setMsg(null);
     try {
-      await api.grigliataIscriviti(menuScelta);
+      await api.grigliataIscriviti(menuScelta, senzaGlutine, note);
       setModificaScelta(false);
       await load();
     } catch {
@@ -336,12 +383,12 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
         <div className="rounded-2xl border p-4 flex flex-col gap-4" style={{ background: surf, borderColor: div }}>
           <div>
             <p className="text-sm font-semibold mb-2" style={{ color: fg }}>{t.menuLabel}</p>
-            <div className="grid grid-cols-2 gap-2">
-              {([["classico", t.menuClassico], ["vegano", t.menuVegano]] as [Menu, string][]).map(([val, label]) => {
+            <div className="grid grid-cols-3 gap-2">
+              {([["classico", t.menuClassico], ["vegetariano", t.menuVegetariano], ["vegano", t.menuVegano]] as [Menu, string][]).map(([val, label]) => {
                 const scelto = menuScelta === val;
                 return (
                   <button key={val} onClick={() => setMenuScelta(val)}
-                    className="rounded-xl py-2.5 text-sm font-semibold transition-all"
+                    className="rounded-xl py-2.5 px-1 text-sm font-semibold leading-tight transition-all"
                     style={scelto
                       ? { background: RED, color: RED_FG }
                       : { background: "var(--secondary)", color: fg }}>
@@ -351,6 +398,28 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
               })}
             </div>
           </div>
+
+          {/* Un interruttore e non una quarta scelta di menu: si può essere
+              vegani E senza glutine, sono due cose indipendenti. */}
+          <button onClick={() => setSenzaGlutine((v) => !v)} role="switch" aria-checked={senzaGlutine}
+            className="flex items-center justify-between gap-3 text-left">
+            <span>
+              <span className="block text-sm font-semibold" style={{ color: fg }}>{t.senzaGlutine}</span>
+              <span className="block text-xs" style={{ color: sub }}>{t.senzaGlutineHint}</span>
+            </span>
+            <span className="shrink-0 flex items-center rounded-full p-[3px] transition-colors"
+              style={{ width: 44, height: 26, background: senzaGlutine ? RED : "var(--secondary)", justifyContent: senzaGlutine ? "flex-end" : "flex-start" }}>
+              <span className="rounded-full" style={{ width: 20, height: 20, background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.3)" }} />
+            </span>
+          </button>
+
+          <label className="block">
+            <span className="block text-sm font-semibold mb-2" style={{ color: fg }}>{t.noteLabel}</span>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} rows={2}
+              placeholder={t.notePlaceholder}
+              className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none"
+              style={{ background: "var(--secondary)", color: fg, border: `1px solid ${div}` }} />
+          </label>
 
           <button onClick={salvaAdesione} disabled={busy}
             className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
@@ -365,11 +434,19 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
               <Check size={16} style={{ color: RED }} />
               <p className="text-sm font-semibold" style={{ color: RED }}>{t.partecipi}</p>
             </div>
-            <button onClick={() => setModificaScelta(true)} className="text-xs font-semibold underline" style={{ color: sub }}>
+            <button onClick={apriModifica} className="text-xs font-semibold underline" style={{ color: sub }}>
               {t.cambiaScelta}
             </button>
           </div>
-          <p className="text-xs" style={{ color: sub }}>{t.menuScelto(miaAdesione!.menu === "vegano" ? t.menuVegano : t.menuClassico)}</p>
+          <p className="text-xs" style={{ color: sub }}>
+            {t.menuScelto(nomeMenu(miaAdesione!.menu))}
+            {miaAdesione!.senzaGlutine && ` · ${t.senzaGlutine}`}
+          </p>
+          {miaAdesione!.note && (
+            <p className="text-xs whitespace-pre-wrap" style={{ color: sub, overflowWrap: "anywhere" }}>
+              {t.note}: {miaAdesione!.note}
+            </p>
+          )}
         </div>
       )}
 

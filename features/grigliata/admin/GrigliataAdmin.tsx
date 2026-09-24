@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pencil, Plus, Check, UserPlus } from "lucide-react";
+import { Pencil, Plus, Check, UserPlus, WheatOff, StickyNote } from "lucide-react";
 import { call } from "../../admin-shared/adminApi";
 import { S } from "../../admin-shared/adminStyles";
 import { PIANI, pianoDi, nomePiano, colorePiano, type Piano } from "../../../piani";
@@ -17,14 +17,20 @@ import { PIANI, pianoDi, nomePiano, colorePiano, type Piano } from "../../../pia
 // eccezionale non deve competere visivamente con "conferma pagamento", che
 // è quella con cui si apre la pagina ogni giorno.
 
-type Menu = "classico" | "vegano";
+// "classico" = mangia tutto: il valore storico, già salvato nelle adesioni.
+type Menu = "classico" | "vegetariano" | "vegano";
+
+const NOME_MENU: Record<Menu, string> = { classico: "Mangia tutto", vegetariano: "Vegetariano", vegano: "Vegano" };
+const MENU_ORDINE: Menu[] = ["classico", "vegetariano", "vegano"];
 
 // v1.1: un'adesione è, per definizione, una camera che partecipa — non
 // esiste più "partecipa=false" (vedi la nota gemella in
 // src/modules/grigliata/application/iscriviti.js). Il menu quindi non è
-// più opzionale.
+// più opzionale. v1.3: "senza glutine" e una nota libera, scritti dal
+// residente — qui si leggono soltanto.
 type Adesione = {
   id: number; room: string; menu: Menu;
+  senza_glutine: boolean; note: string | null;
   pagamento_dichiarato: boolean; pagamento_confermato: boolean;
   confermato_da: string | null; confermato_at: string | null;
 };
@@ -289,8 +295,11 @@ export function GrigliataAdmin() {
     const del = partecipanti.filter((a) => a.menu === m);
     return { totale: del.length, pagati: del.filter((a) => a.pagamento_confermato).length };
   };
-  const classico = perMenu("classico");
-  const vegano = perMenu("vegano");
+  const senzaGlutine = partecipanti.filter((a) => a.senza_glutine).length;
+  // Chi ha scritto qualcosa per chi cucina: senza glutine o una nota. È la
+  // lista da leggere prima di fare la spesa, quindi sta tutta insieme invece
+  // di dover aprire una pastiglia alla volta.
+  const conEsigenze = partecipanti.filter((a) => a.senza_glutine || a.note);
 
   const Statistica = ({ valore, etichetta }: { valore: string | number; etichetta: string }) => (
     <div style={{ textAlign: "center" }}>
@@ -326,8 +335,17 @@ export function GrigliataAdmin() {
           fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.02em",
           color: confermato ? colore : "var(--muted-foreground)",
         }}>
-          {a.menu === "vegano" ? "Vegano" : "Classico"}
+          {NOME_MENU[a.menu]}
         </span>
+        {/* Senza glutine e nota: due icone piccole, non altro testo — la
+            pastiglia deve restare leggibile a colpo d'occhio; il dettaglio
+            sta nel popup e nella lista "Esigenze alimentari" più sotto. */}
+        {(a.senza_glutine || a.note) && (
+          <span style={{ display: "flex", gap: 4, color: "var(--muted-foreground)" }}>
+            {a.senza_glutine && <WheatOff size={11} aria-label="Senza glutine" />}
+            {a.note && <StickyNote size={11} aria-label="Ha scritto una nota" />}
+          </span>
+        )}
         {/* Non confermato ma già dichiarato: un'informazione in più, non un
             terzo colore — resta grigia, dice solo "questa ha priorità". */}
         {!confermato && a.pagamento_dichiarato && (
@@ -483,11 +501,16 @@ export function GrigliataAdmin() {
             </>
           )}
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+          {/* Sei numeri invece di quattro: auto-fit invece di 4 colonne
+              fisse, così su telefono vanno a capo invece di schiacciarsi. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))", gap: 8, paddingTop: 12, borderTop: "1px solid var(--border)" }}>
             <Statistica valore={partecipanti.length} etichetta="Partecipano" />
             <Statistica valore={confermati} etichetta="Pagamenti confermati" />
-            <Statistica valore={`${classico.pagati}/${classico.totale}`} etichetta="Menu classico (pagati/tot.)" />
-            <Statistica valore={`${vegano.pagati}/${vegano.totale}`} etichetta="Menu vegano (pagati/tot.)" />
+            {MENU_ORDINE.map((m) => {
+              const n = perMenu(m);
+              return <Statistica key={m} valore={`${n.pagati}/${n.totale}`} etichetta={`${NOME_MENU[m]} (pagati/tot.)`} />;
+            })}
+            <Statistica valore={senzaGlutine} etichetta="Senza glutine" />
           </div>
 
           {evento.chiuso && (
@@ -530,8 +553,7 @@ export function GrigliataAdmin() {
                 value={nuovaCamera} onChange={(e) => setNuovaCamera(e.target.value)} />
               <select style={{ ...S.input, width: "auto" }} value={nuovoMenuCamera}
                 onChange={(e) => setNuovoMenuCamera(e.target.value as Menu)}>
-                <option value="classico">Classico</option>
-                <option value="vegano">Vegano</option>
+                {MENU_ORDINE.map((m) => <option key={m} value={m}>{NOME_MENU[m]}</option>)}
               </select>
               <button onClick={aggiungiAdesione} disabled={busy || !nuovaCamera.trim()} style={{ ...S.btn, opacity: busy || !nuovaCamera.trim() ? 0.5 : 1 }}>
                 {busy ? "In corso…" : "Aggiungi"}
@@ -560,6 +582,33 @@ export function GrigliataAdmin() {
         </div>
       )}
 
+      {/* ── Esigenze alimentari: tutto quello che serve a chi cucina ────── */}
+      {evento && conEsigenze.length > 0 && (
+        <div style={{ ...S.card, padding: 14, marginTop: 16 }}>
+          <p style={{ fontSize: 12, ...S.sub, marginBottom: 10 }}>
+            Esigenze alimentari · {conEsigenze.length}
+          </p>
+          <div style={{ display: "grid", gap: 8 }}>
+            {conEsigenze.map((a) => (
+              <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13 }}>
+                <span style={{ fontFamily: "monospace", fontWeight: 700, minWidth: 44 }}>{a.room}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={S.sub}>{NOME_MENU[a.menu]}</span>
+                  {a.senza_glutine && (
+                    <span style={{ marginLeft: 6, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                      <WheatOff size={12} /> senza glutine
+                    </span>
+                  )}
+                  {a.note && (
+                    <p style={{ marginTop: 2, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{a.note}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Conferma un pagamento — overlay in pagina, dalla pastiglia ──── */}
       {adesioneSelezionata && (
         <div style={{
@@ -569,8 +618,14 @@ export function GrigliataAdmin() {
           <div style={{ ...S.card, padding: 20, maxWidth: 320, width: "100%" }} onClick={(e) => e.stopPropagation()}>
             <p style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>Camera {adesioneSelezionata.room}</p>
             <p style={{ fontSize: 13, ...S.sub, marginBottom: 4 }}>
-              Menu: {adesioneSelezionata.menu === "vegano" ? "Vegano" : "Classico"}
+              Menu: {NOME_MENU[adesioneSelezionata.menu]}
+              {adesioneSelezionata.senza_glutine && " · senza glutine"}
             </p>
+            {adesioneSelezionata.note && (
+              <p style={{ fontSize: 13, marginBottom: 4, whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>
+                Note: {adesioneSelezionata.note}
+              </p>
+            )}
             <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
               {adesioneSelezionata.pagamento_confermato
                 ? "Pagamento confermato."

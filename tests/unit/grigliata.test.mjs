@@ -81,6 +81,7 @@ function repositoryCheRompe(messaggio = "Could not find the function") {
 section("isValidMenu() / isFutureDateTime()");
 {
   check("'classico' valido", isValidMenu("classico") === true);
+  check("'vegetariano' valido", isValidMenu("vegetariano") === true);
   check("'vegano' valido", isValidMenu("vegano") === true);
   check("altro non valido", isValidMenu("piccante") === false);
   check("vuoto non valido", isValidMenu("") === false);
@@ -111,6 +112,32 @@ section("iscriviti()");
   await iscriviti({ room: "214", menu: "vegano" }, { grigliataRepository: repo });
   check("camera e menu passano al repository",
     repo.calls[0].name === "iscrivi" && repo.calls[0].args.room === "214" && repo.calls[0].args.menu === "vegano");
+  check("senza glutine assente -> false, nota assente -> null",
+    repo.calls[0].args.senzaGlutine === false && repo.calls[0].args.note === null, JSON.stringify(repo.calls[0].args));
+
+  const repoV13 = fakeRepository();
+  await iscriviti({ room: "214", menu: "vegetariano", senzaGlutine: true, note: "  allergia alle noci  " }, { grigliataRepository: repoV13 });
+  check("vegetariano, senza glutine e nota (ripulita) passano al repository",
+    repoV13.calls[0].args.menu === "vegetariano" && repoV13.calls[0].args.senzaGlutine === true
+    && repoV13.calls[0].args.note === "allergia alle noci", JSON.stringify(repoV13.calls[0].args));
+
+  const repoNotaVuota = fakeRepository();
+  await iscriviti({ room: "214", menu: "classico", note: "   " }, { grigliataRepository: repoNotaVuota });
+  check("una nota fatta di soli spazi diventa null", repoNotaVuota.calls[0].args.note === null);
+
+  // Solo `true` vale true: una stringa "false" arrivata da un client
+  // sbagliato non deve diventare senza glutine per sbaglio.
+  const repoStringa = fakeRepository();
+  await iscriviti({ room: "214", menu: "classico", senzaGlutine: "false" }, { grigliataRepository: repoStringa });
+  check("senzaGlutine non booleano -> false", repoStringa.calls[0].args.senzaGlutine === false);
+
+  const errNota = await throws(() =>
+    iscriviti({ room: "214", menu: "classico", note: "x".repeat(301) }, { grigliataRepository: fakeRepository() }));
+  check("una nota oltre 300 caratteri viene respinta", /nota troppo lunga/.test(errNota?.message || ""));
+
+  const repoNota300 = fakeRepository();
+  await iscriviti({ room: "214", menu: "classico", note: "x".repeat(300) }, { grigliataRepository: repoNota300 });
+  check("una nota di esattamente 300 caratteri passa", repoNota300.calls[0].args.note.length === 300);
 
   const errMenu = await throws(() =>
     iscriviti({ room: "214", menu: "" }, { grigliataRepository: fakeRepository() }));
