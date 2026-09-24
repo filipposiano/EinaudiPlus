@@ -164,6 +164,7 @@ const T = {
     loading: "Carico…", retry: "Riprova", netError: "Impossibile contattare il server.",
     closedNotice: "La sala è chiusa per via del deposito dei pacchi.",
     closeRoomBtn: "Chiudi per il deposito dei pacchi", reopenRoomBtn: "Riapri la sala",
+    closeShort: "Chiudi", reopenShort: "Riapri",
     rulesTitle: "Regolamento", tipsTitle: "Problemi di connessione",
     musicNote: "Strumenti non in cuffia: consentiti solo 16:00–20:00.",
     overnightPart: "serata a cavallo della mezzanotte",
@@ -192,6 +193,7 @@ const T = {
     loading: "Loading…", retry: "Retry", netError: "Couldn't reach the server.",
     closedNotice: "The room is closed because it's being used to store packages.",
     closeRoomBtn: "Close for package storage", reopenRoomBtn: "Reopen the room",
+    closeShort: "Close", reopenShort: "Reopen",
     rulesTitle: "Rules", tipsTitle: "Connection tips",
     musicNote: "Instruments without headphones: allowed only 16:00–20:00.",
     overnightPart: "overnight booking",
@@ -220,6 +222,7 @@ const T = {
     loading: "Chargement…", retry: "Réessayer", netError: "Impossible de joindre le serveur.",
     closedNotice: "La salle est fermée : elle sert à stocker des colis.",
     closeRoomBtn: "Fermer pour stocker des colis", reopenRoomBtn: "Rouvrir la salle",
+    closeShort: "Fermer", reopenShort: "Rouvrir",
     rulesTitle: "Règlement", tipsTitle: "Problèmes de connexion",
     musicNote: "Instruments sans casque : autorisés seulement de 16h00 à 20h00.",
     overnightPart: "soirée à cheval sur minuit",
@@ -248,6 +251,7 @@ const T = {
     loading: "Wird geladen…", retry: "Nochmal versuchen", netError: "Server nicht erreichbar.",
     closedNotice: "Der Raum ist geschlossen: er wird gerade als Paketlager genutzt.",
     closeRoomBtn: "Für Paketlagerung schließen", reopenRoomBtn: "Raum wieder öffnen",
+    closeShort: "Schließen", reopenShort: "Öffnen",
     rulesTitle: "Hausordnung", tipsTitle: "Verbindungsprobleme",
     musicNote: "Instrumente ohne Kopfhörer: nur von 16:00 bis 20:00 erlaubt.",
     overnightPart: "Abend über Mitternacht",
@@ -276,6 +280,7 @@ const T = {
     loading: "Cargando…", retry: "Reintentar", netError: "No se puede contactar con el servidor.",
     closedNotice: "La sala está cerrada: se está usando para guardar paquetes.",
     closeRoomBtn: "Cerrar para guardar paquetes", reopenRoomBtn: "Reabrir la sala",
+    closeShort: "Cerrar", reopenShort: "Reabrir",
     rulesTitle: "Reglamento", tipsTitle: "Problemas de conexión",
     musicNote: "Instrumentos sin auriculares: permitidos solo de 16:00 a 20:00.",
     overnightPart: "velada que pasa la medianoche",
@@ -304,6 +309,7 @@ const T = {
     loading: "Sto' carrecanno…", retry: "Prova n'ata vota", netError: "Nun riesco a parla' cu 'o server.",
     closedNotice: "'A sala è chiusa pecché ce stanno tenenno 'e pacche 'a dinto.",
     closeRoomBtn: "Chiure pe' tené 'e pacche", reopenRoomBtn: "Arape n'ata vota 'a sala",
+    closeShort: "Chiure", reopenShort: "Arape",
     rulesTitle: "Regulamento", tipsTitle: "Guaje 'e connessione",
     musicNote: "Strumenti senza cuffie: se ponno sunà sulo 'a 16:00 ê 20:00.",
     overnightPart: "serata ca passa 'a mezanotte",
@@ -852,9 +858,9 @@ export default function RoomView({ room, lang, roomNumber, adminRole }: {
             <p className="text-sm leading-relaxed flex-1" style={{ color: fg }}>{t.closedNotice}</p>
             {canLockSpace && (
               <button onClick={toggleChiuso} disabled={lockBusy} aria-label={t.reopenRoomBtn} title={t.reopenRoomBtn}
-                className="rounded-xl px-3 py-2 text-xs font-semibold shrink-0 transition-all active:scale-95"
+                className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold shrink-0 transition-all active:scale-95"
                 style={{ background: RED, color: RED_FG, opacity: lockBusy ? 0.6 : 1 }}>
-                {t.reopenRoomBtn}
+                <Package size={14} />{t.reopenShort}
               </button>
             )}
           </div>
@@ -864,13 +870,14 @@ export default function RoomView({ room, lang, roomNumber, adminRole }: {
             <p className="text-[11px] font-mono tracking-widest uppercase" style={{ color: sub }}>{t.newBooking}</p>
             <div className="flex items-center gap-1.5">
               {/* Solo FDO/sistemista: stessa policy di setMachineStatus.
-                  Un'icona sola (a pacco), non un'etichetta — sta accanto a
-                  "Regole" senza allargare la riga su schermi stretti. */}
+                  Stesso stile di "Regole" qui accanto (icona + parola) —
+                  un'icona sola bastava a capirla solo a chi già sapeva cosa
+                  significa. */}
               {canLockSpace && (
                 <button onClick={toggleChiuso} disabled={lockBusy} aria-label={t.closeRoomBtn} title={t.closeRoomBtn}
-                  className="flex items-center justify-center rounded-xl p-2 border transition-all active:scale-95"
+                  className="flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold border transition-all active:scale-95"
                   style={{ background: chip, borderColor: div, color: fg, opacity: lockBusy ? 0.6 : 1 }}>
-                  <Package size={14} />
+                  <Package size={14} />{t.closeShort}
                 </button>
               )}
               <button onClick={() => setRulesOpen(true)}
