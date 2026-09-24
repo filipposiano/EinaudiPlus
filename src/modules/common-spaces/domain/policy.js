@@ -4,11 +4,11 @@
 // isSysadmin() è un concetto di Identity, consumato qui tramite la sua
 // superficie pubblica (index.js), non un file interno.
 
-import { isSysadmin, isDelegato } from "../../identity/index.js";
+import { isSysadmin, isStaff, isDelegato } from "../../identity/index.js";
 
 /** Azioni amministrative di dominio Common Spaces, riconosciute da authorize(). */
 const AZIONI_COMMON_SPACES = new Set([
-  "spaces", "deleteSpaceBooking", "bookSpaceDirezione", "recurringAddSpace",
+  "spaces", "deleteSpaceBooking", "bookSpaceDirezione", "recurringAddSpace", "spaceSetChiuso",
 ]);
 
 /**
@@ -18,6 +18,14 @@ const AZIONI_COMMON_SPACES = new Set([
  * vedi index.js).
  */
 const SOLO_SISTEMISTA = new Set(["recurringAddSpace"]);
+
+/**
+ * Chiudere/riaprire una sala (es. per il deposito dei pacchi) resta allo
+ * stesso livello dello stato guasto/funzionante delle macchine: decisione
+ * operativa di FDO e sistemista, non dello staff — stessa riga di
+ * VIETATE_A_STAFF in laundry/domain/policy.js, per lo stesso motivo.
+ */
+const VIETATE_A_STAFF = new Set(["spaceSetChiuso"]);
 
 /**
  * Decide se `claims` può eseguire `action`.
@@ -31,5 +39,6 @@ export function authorize(claims, action) {
   // I permessi del delegato stanno per intero nel modulo Grigliata — vedi
   // la stessa riga in laundry/domain/policy.js.
   if (isDelegato(claims)) return false;
+  if (VIETATE_A_STAFF.has(action) && isStaff(claims)) return false;
   return true;
 }

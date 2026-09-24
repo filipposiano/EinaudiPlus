@@ -37,6 +37,7 @@ import {
   adminGetSpacesOverview, adminDeleteSpaceBooking,
   adminBookAsDirezione as adminBookSpaceAsDirezione,
   adminAddRecurringRule as adminAddSpaceRecurringRule,
+  adminSetSpaceChiuso,
 } from "../../src/modules/common-spaces/index.js";
 import { authorize as themeAuthorize, getTheme, setTheme } from "../../src/modules/theme/index.js";
 import {
@@ -77,7 +78,7 @@ import {
 // sarebbero solo rumore.
 const MUTATIONS = new Set([
   "setMachineStatus", "deleteBooking", "forceBook",
-  "markFeedback", "deleteSpaceBooking",
+  "markFeedback", "deleteSpaceBooking", "spaceSetChiuso",
   "recurringAddLaundry", "recurringAddSpace", "recurringSetActive",
   "recurringDelete", "applyRecurring", "purge",
   "deletePushSub", "deleteTelegramSub", "broadcastPush",
@@ -207,6 +208,10 @@ export default wrapHandler("admin/data", async (req, res) => {
 
     case "spaces":
       result = await adminGetSpacesOverview();
+      break;
+
+    case "spaceSetChiuso":
+      result = await adminSetSpaceChiuso({ space: body.space, chiuso: body.chiuso });
       break;
 
     // ── Scritture ────────────────────────────────────────────────────────

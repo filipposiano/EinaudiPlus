@@ -181,6 +181,7 @@ const fr: Testi = {
   autoReservedLabel: "incluse",
   giornoDopo: "(le lendemain)",
   navBici: "Vélos",
+  navSale: "Salles",
   bici: "Vélo",
   biciSi: "Oui, j'en ai un",
   biciNo: "Non",

@@ -4,7 +4,7 @@ import {
   Delete, X, Wrench, Loader2,
   Film, Music, Menu,
   MessageSquare, LogOut,
-  Settings, Repeat, Eraser, Presentation, UserCog, Bike, Sparkles, Bell, Bed, Flame,
+  Settings, Repeat, Eraser, Presentation, UserCog, Bike, Sparkles, Bell, Bed, Flame, Package,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -55,7 +55,7 @@ const CambiaPasswordObbligata = lazy(() => import("./AdminPanel").then((m) => ({
 // delegato vede chi ha aderito).
 type Facility = "laundry" | "cinema" | "music" | "conferenze" | "bike" | "grigliata" | "guasto" | "impostazioni" | "feedback" | AdminTab;
 
-const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "bici", "account", "ricorrenti", "notifiche", "manutenzione", "tema", "cambiobiancheria", "grigliataAdmin"];
+const ADMIN_TABS: AdminTab[] = ["macchine", "segnalazioni", "bici", "account", "ricorrenti", "notifiche", "manutenzione", "tema", "cambiobiancheria", "grigliataAdmin", "sale"];
 const isAdminFacility = (f: Facility): f is AdminTab => (ADMIN_TABS as string[]).includes(f);
 
 /** Etichetta della camera nell'intestazione. Chi amministra è la Direzione. */
@@ -340,7 +340,7 @@ const facilitiesFor = (roomNumber: string | null, grigliataAttiva: boolean) =>
 // chi PUO' vedere una voce, invece di chi non puo', non lascia questo buco.
 const ADMIN_SECTIONS: {
   id: AdminTab; icon: any;
-  chiave: "navMacchine" | "navSegnalazioni" | "navBici" | "navAccount" | "navRicorrenti" | "navNotifiche" | "navManutenzione" | "navTema" | "navCambioBiancheria" | "navGrigliataAdmin";
+  chiave: "navMacchine" | "navSegnalazioni" | "navBici" | "navAccount" | "navRicorrenti" | "navNotifiche" | "navManutenzione" | "navTema" | "navCambioBiancheria" | "navGrigliataAdmin" | "navSale";
   ruoli: AdminRole[];
 }[] = [
   // Macchine e segnalazioni restano affari di FDO e sistemista: lo staff
@@ -356,6 +356,9 @@ const ADMIN_SECTIONS: {
   // macchine e le segnalazioni. Cancellarle tutte (reset annuale) resta al
   // sistemista — il pulsante compare solo a lui dentro la sezione stessa.
   { id: "bici",           icon: Bike,          chiave: "navBici",         ruoli: ["fdo", "sistemista"] },
+  // Chiudere una sala per il deposito dei pacchi: stesso livello di Macchine
+  // e Cambio biancheria, non del sistemista soltanto.
+  { id: "sale",           icon: Package,       chiave: "navSale",         ruoli: ["fdo", "sistemista"] },
   // Il delegato vede SOLO questa, oltre al sistemista che vede tutto.
   { id: "grigliataAdmin", icon: Flame,         chiave: "navGrigliataAdmin", ruoli: ["delegato", "sistemista"] },
   // La programmazione della sala polivalente non e' piu' una scheda a se':

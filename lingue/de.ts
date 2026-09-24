@@ -181,6 +181,7 @@ const de: Testi = {
   autoReservedLabel: "inbegriffen",
   giornoDopo: "(am Folgetag)",
   navBici: "Fahrräder",
+  navSale: "Räume",
   bici: "Fahrrad",
   biciSi: "Ja, ich habe eins",
   biciNo: "Nein",

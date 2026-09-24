@@ -372,15 +372,16 @@ $$;
 create or replace function space_bookings(p_slug text)
 returns jsonb language plpgsql stable as $$
 declare
-  v_sid smallint;
-  v_ws  date;
+  v_sid    smallint;
+  v_chiuso boolean;
+  v_ws     date;
 begin
-  select id into v_sid from room_space where slug = p_slug;
+  select id, chiuso into v_sid, v_chiuso from room_space where slug = p_slug;
   if not found then return jsonb_build_object('ok', false, 'error', 'sala non valida'); end if;
 
   v_ws := current_week_start('Europe/Rome');
 
-  return jsonb_build_object('ok', true, 'bookings', coalesce((
+  return jsonb_build_object('ok', true, 'chiuso', v_chiuso, 'bookings', coalesce((
     select jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
       'id',    b.id::text,
       'day',   b.day,
@@ -420,6 +421,14 @@ declare
 begin
   select * into v_s from room_space where slug = p_slug;
   if not found then return jsonb_build_object('ok', false, 'error', 'sala non valida'); end if;
+
+  -- Chiusa per il deposito dei pacchi (o un altro motivo operativo, vedi
+  -- schema.sql): rifiuta QUALUNQUE prenotazione nuova, residente o
+  -- Direzione — book_space_as_direzione() delega qui, quindi è lo stesso
+  -- controllo per entrambe le vie, non due copie da tenere allineate.
+  if v_s.chiuso then
+    return jsonb_build_object('ok', false, 'error', 'chiusa');
+  end if;
 
   if p_name is null or btrim(p_name) = '' then
     return jsonb_build_object('ok', false, 'error', 'nome mancante');

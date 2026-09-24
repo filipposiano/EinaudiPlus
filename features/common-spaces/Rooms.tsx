@@ -10,7 +10,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import {
-  Film, Music, X, Plus, Trash2, Info, Loader2, AlertTriangle,
+  Film, Music, X, Plus, Trash2, Info, Loader2, AlertTriangle, Package,
 } from "lucide-react";
 import * as roomsApi from "../../roomsApi";
 import type { RoomKind, RoomBooking, CinemaType } from "../../roomsApi";
@@ -160,6 +160,7 @@ const T = {
     full: "Giorno pieno: massimo 6 prenotazioni.",
     errorGeneric: "Errore, riprova.",
     loading: "Carico…", retry: "Riprova", netError: "Impossibile contattare il server.",
+    closedNotice: "La sala è chiusa per via del deposito dei pacchi.",
     rulesTitle: "Regolamento", tipsTitle: "Problemi di connessione",
     musicNote: "Strumenti non in cuffia: consentiti solo 16:00–20:00.",
     overnightPart: "serata a cavallo della mezzanotte",
@@ -186,6 +187,7 @@ const T = {
     full: "Day is full: max 6 bookings.",
     errorGeneric: "Error, try again.",
     loading: "Loading…", retry: "Retry", netError: "Couldn't reach the server.",
+    closedNotice: "The room is closed because it's being used to store packages.",
     rulesTitle: "Rules", tipsTitle: "Connection tips",
     musicNote: "Instruments without headphones: allowed only 16:00–20:00.",
     overnightPart: "overnight booking",
@@ -212,6 +214,7 @@ const T = {
     full: "Journée complète : 6 réservations maximum.",
     errorGeneric: "Erreur, réessaie.",
     loading: "Chargement…", retry: "Réessayer", netError: "Impossible de joindre le serveur.",
+    closedNotice: "La salle est fermée : elle sert à stocker des colis.",
     rulesTitle: "Règlement", tipsTitle: "Problèmes de connexion",
     musicNote: "Instruments sans casque : autorisés seulement de 16h00 à 20h00.",
     overnightPart: "soirée à cheval sur minuit",
@@ -238,6 +241,7 @@ const T = {
     full: "Tag ausgebucht: maximal 6 Buchungen.",
     errorGeneric: "Fehler, versuch es nochmal.",
     loading: "Wird geladen…", retry: "Nochmal versuchen", netError: "Server nicht erreichbar.",
+    closedNotice: "Der Raum ist geschlossen: er wird gerade als Paketlager genutzt.",
     rulesTitle: "Hausordnung", tipsTitle: "Verbindungsprobleme",
     musicNote: "Instrumente ohne Kopfhörer: nur von 16:00 bis 20:00 erlaubt.",
     overnightPart: "Abend über Mitternacht",
@@ -264,6 +268,7 @@ const T = {
     full: "Día completo: máximo 6 reservas.",
     errorGeneric: "Error, inténtalo otra vez.",
     loading: "Cargando…", retry: "Reintentar", netError: "No se puede contactar con el servidor.",
+    closedNotice: "La sala está cerrada: se está usando para guardar paquetes.",
     rulesTitle: "Reglamento", tipsTitle: "Problemas de conexión",
     musicNote: "Instrumentos sin auriculares: permitidos solo de 16:00 a 20:00.",
     overnightPart: "velada que pasa la medianoche",
@@ -290,6 +295,7 @@ const T = {
     full: "Juorno chino: massimo 6 prenotazioni.",
     errorGeneric: "Errore, prova n'ata vota.",
     loading: "Sto' carrecanno…", retry: "Prova n'ata vota", netError: "Nun riesco a parla' cu 'o server.",
+    closedNotice: "'A sala è chiusa pecché ce stanno tenenno 'e pacche 'a dinto.",
     rulesTitle: "Regulamento", tipsTitle: "Guaje 'e connessione",
     musicNote: "Strumenti senza cuffie: se ponno sunà sulo 'a 16:00 ê 20:00.",
     overnightPart: "serata ca passa 'a mezanotte",
@@ -587,6 +593,11 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   const direzione = myRoom === "DIREZIONE";
 
   const [bookings, setBookings] = useState<RoomBooking[]>([]);
+  // FDO/sistemista può chiudere la sala (es. per il deposito dei pacchi):
+  // mentre lo è, niente forma di prenotazione — solo l'avviso. Il blocco
+  // vero resta lato server (book_space() rifiuta comunque), questo è solo
+  // per non mostrare un form che finirebbe respinto.
+  const [chiuso, setChiuso]     = useState(false);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(false);
   const [selDay, setSelDay]     = useState(TODAY);
@@ -619,7 +630,10 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
   }, [start, cfg.step, cfg.winEnd, cfg.overnight]);
 
   const refresh = useCallback(async () => {
-    try { setBookings(await roomsApi.getRoomBookings(room)); setError(false); }
+    try {
+      const s = await roomsApi.getRoomState(room);
+      setBookings(s.bookings); setChiuso(s.chiuso); setError(false);
+    }
     catch { setError(true); }
     finally { setLoading(false); }
   }, [room]);
@@ -711,8 +725,13 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
       setToastUndo(newId ? () => () => remove(newId) : null);
     } catch (e: any) {
       const msg = String(e?.message);
-      setToast(msg === "overlap" ? t.overlap : msg === "full" ? t.full : t.errorGeneric);
+      // "chiusa": qui non dovrebbe arrivarci mai (il form sparisce quando
+      // chiuso e' vero), ma una scheda rimasta aperta in un'altra tab può
+      // ancora provarci — il server la rifiuta comunque, questo è solo il
+      // messaggio giusto invece del generico.
+      setToast(msg === "overlap" ? t.overlap : msg === "full" ? t.full : msg === "chiusa" ? t.closedNotice : t.errorGeneric);
       setToastUndo(null);
+      if (msg === "chiusa") setChiuso(true);
     } finally { setBusy(false); }
   }
 
@@ -786,7 +805,17 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
         {/* Timeline occupazione */}
         <Timeline room={room} bookings={dayBookings} myRoom={myRoom} />
 
-        {/* Form nuova prenotazione */}
+        {/* Form nuova prenotazione — sparisce del tutto quando la sala è
+            chiusa (es. deposito pacchi): il blocco vero è lato server
+            (book_space rifiuta comunque), qui si evita solo di mostrare un
+            form che finirebbe respinto ad ogni tocco. */}
+        {chiuso ? (
+          <div className="rounded-2xl border p-4 mb-4 flex items-start gap-3"
+            style={{ background: "color-mix(in srgb, var(--destructive) 8%, transparent)", borderColor: div }}>
+            <Package size={18} style={{ color: OOS, flexShrink: 0, marginTop: 1 }} />
+            <p className="text-sm leading-relaxed" style={{ color: fg }}>{t.closedNotice}</p>
+          </div>
+        ) : (
         <div className="rounded-2xl border p-4 mb-4" style={{ background: surf, borderColor: div }}>
           <div className="flex items-center justify-between mb-3">
             <p className="text-[11px] font-mono tracking-widest uppercase" style={{ color: sub }}>{t.newBooking}</p>
@@ -916,6 +945,7 @@ export default function RoomView({ room, lang, roomNumber }: { room: RoomKind; l
             <Plus size={15} />{t.book} · {fmtMin(start)}–{fmtEnd(end, lang)}
           </button>
         </div>
+        )}
 
         {/* Prenotazioni del giorno */}
         <p className="text-[11px] font-mono tracking-widest uppercase mb-2" style={{ color: sub }}>

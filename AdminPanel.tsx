@@ -22,6 +22,7 @@ import type { Laundry } from "./features/laundry/admin/types";
 import { Login } from "./features/identity/admin/Login";
 import { Macchine } from "./features/laundry/admin/MacchineTab";
 import { CambioBiancheria } from "./features/laundry/admin/CambioBiancheriaTab";
+import { Sale } from "./features/common-spaces/admin/SaleTab";
 import { Segnalazioni } from "./features/feedback/admin/Segnalazioni";
 import { Bici } from "./features/bikes/admin/BiciTab";
 import { Accounts } from "./features/identity/admin/Accounts";
@@ -144,6 +145,9 @@ export function AdminScreens({ tab, onSession }: {
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata a FDO e sistemista.</p>)}
       {tab === "cambiobiancheria" && (!staff && !delegato
         ? <CambioBiancheria />
+        : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata a FDO e sistemista.</p>)}
+      {tab === "sale" && (!staff && !delegato
+        ? <Sale />
         : <p style={{ fontSize: 13, ...S.sub }}>Sezione riservata a FDO e sistemista.</p>)}
       {tab === "segnalazioni" && (!staff && !delegato
         ? <Segnalazioni laundries={laundries} reload={loadOverview} />

@@ -201,6 +201,7 @@ const it = {
   autoReservedLabel: "inclusa",
   giornoDopo: "(del giorno successivo)",
   navBici: "Bici",
+  navSale: "Sale",
   bici: "Bici",
   biciSi: "Sì, ce l'ho",
   biciNo: "No",

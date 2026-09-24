@@ -126,7 +126,15 @@ create table room_space (
   -- cambiare se un giorno una sala apre prima. Restano qui perche' dicono a
   -- chi legge lo schema come sono pensate le due sale.
   open_min    smallint not null default 0,
-  close_min   smallint not null default 1440
+  close_min   smallint not null default 1440,
+  -- v1.2: FDO/sistemista possono chiudere una sala per il deposito dei
+  -- pacchi (o un altro motivo operativo) senza toccare le prenotazioni già
+  -- fatte — book_space() rifiuta soltanto quelle NUOVE mentre è vera (vedi
+  -- functions.sql). Non c'è una colonna "motivo": il messaggio che il
+  -- residente vede è fisso ("la sala è chiusa per via del deposito dei
+  -- pacchi"), tradotto lato client come ogni altro testo dell'app, non
+  -- scritto qui in una sola lingua.
+  chiuso      boolean not null default false
 );
 
 insert into room_space (slug, name, has_type, open_min, close_min) values

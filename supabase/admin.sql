@@ -183,20 +183,46 @@ begin
 end;
 $$;
 
--- Tutte le prenotazioni sale della settimana, entrambe le sale insieme.
+-- Tutte le prenotazioni sale della settimana, entrambe le sale insieme —
+-- più 'sale', lo stato (chiusa o no) di ciascuna sala: aggiunto per il
+-- pannello "Sale" (v1.2), non tocca la forma di 'items' che il chiamante
+-- esistente già legge.
 create or replace function admin_spaces()
 returns jsonb language sql stable as $$
-  select jsonb_build_object('ok', true, 'items', coalesce(jsonb_agg(x order by x->>'space', x->>'day'), '[]'::jsonb))
-  from (
-    select jsonb_build_object(
-      'id', b.id, 'space', s.slug, 'day', b.day,
-      'start', b.start_min, 'end', b.end_min,
-      'name', b.name, 'type', b.btype
-    ) as x
-    from space_booking b
-    join room_space s on s.id = b.space_id
-    where b.week_start = current_week_start('Europe/Rome')
-  ) t;
+  select jsonb_build_object(
+    'ok', true,
+    'items', coalesce((
+      select jsonb_agg(x order by x->>'space', x->>'day')
+      from (
+        select jsonb_build_object(
+          'id', b.id, 'space', s.slug, 'day', b.day,
+          'start', b.start_min, 'end', b.end_min,
+          'name', b.name, 'type', b.btype
+        ) as x
+        from space_booking b
+        join room_space s on s.id = b.space_id
+        where b.week_start = current_week_start('Europe/Rome')
+      ) t
+    ), '[]'::jsonb),
+    'sale', coalesce((
+      select jsonb_agg(jsonb_build_object('slug', s.slug, 'name', s.name, 'chiuso', s.chiuso) order by s.slug)
+      from room_space s
+    ), '[]'::jsonb)
+  );
+$$;
+
+-- Chiude o riapre una sala (es. per il deposito dei pacchi): mentre è
+-- chiusa, book_space() rifiuta qualunque prenotazione nuova — vedi il
+-- commento gemello lì. Non tocca le prenotazioni già esistenti.
+create or replace function space_admin_set_chiuso(p_slug text, p_chiuso boolean)
+returns jsonb language plpgsql as $$
+begin
+  update room_space set chiuso = coalesce(p_chiuso, false) where slug = p_slug;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'sala non valida');
+  end if;
+  return jsonb_build_object('ok', true, 'slug', p_slug, 'chiuso', coalesce(p_chiuso, false));
+end;
 $$;
 
 create or replace function admin_log(p_actor text, p_action text, p_detail jsonb default null)

@@ -15,6 +15,7 @@ import { adminGetSpacesOverview as _adminGetSpacesOverview } from "./application
 import { adminDeleteSpaceBooking as _adminDeleteSpaceBooking } from "./application/adminDeleteSpaceBooking.js";
 import { adminBookAsDirezione as _adminBookAsDirezione } from "./application/adminBookAsDirezione.js";
 import { adminAddRecurringRule as _adminAddRecurringRule } from "./application/adminAddRecurringRule.js";
+import { adminSetSpaceChiuso as _adminSetSpaceChiuso } from "./application/adminSetSpaceChiuso.js";
 
 export { authorize } from "./domain/policy.js";
 export { SPACES, isValidSpace } from "./domain/spaces.js";
@@ -47,4 +48,8 @@ export async function adminBookAsDirezione(input) {
 
 export async function adminAddRecurringRule(input) {
   return _adminAddRecurringRule(input, deps);
+}
+
+export async function adminSetSpaceChiuso(input) {
+  return _adminSetSpaceChiuso(input, deps);
 }

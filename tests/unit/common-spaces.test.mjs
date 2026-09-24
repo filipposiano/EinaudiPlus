@@ -10,6 +10,7 @@ import { adminGetSpacesOverview } from "../../src/modules/common-spaces/applicat
 import { adminDeleteSpaceBooking } from "../../src/modules/common-spaces/application/adminDeleteSpaceBooking.js";
 import { adminBookAsDirezione } from "../../src/modules/common-spaces/application/adminBookAsDirezione.js";
 import { adminAddRecurringRule } from "../../src/modules/common-spaces/application/adminAddRecurringRule.js";
+import { adminSetSpaceChiuso } from "../../src/modules/common-spaces/application/adminSetSpaceChiuso.js";
 import { authorize } from "../../src/modules/common-spaces/domain/policy.js";
 
 let pass = 0, fail = 0;
@@ -32,6 +33,7 @@ function fakeRepository() {
     adminDelete: record("adminDelete"),
     bookAsDirezione: record("bookAsDirezione"),
     addRecurringRule: record("addRecurringRule"),
+    setChiuso: record("setChiuso"),
   };
 }
 
@@ -139,6 +141,23 @@ section("adminAddRecurringRule()");
   check("space_id fuori range respinto", /space_id/.test(err?.message || ""));
 }
 
+// ─── adminSetSpaceChiuso() ─────────────────────────────────────────────────────
+
+section("adminSetSpaceChiuso()");
+{
+  const repo = fakeRepository();
+  await adminSetSpaceChiuso({ space: "music", chiuso: true }, { commonSpacesRepository: repo });
+  check("sala valida passa slug e booleano al repository",
+    repo.calls[0].args.space === "music" && repo.calls[0].args.chiuso === true, JSON.stringify(repo.calls[0]));
+
+  const repo2 = fakeRepository();
+  await adminSetSpaceChiuso({ space: "music", chiuso: undefined }, { commonSpacesRepository: repo2 });
+  check("chiuso assente diventa false, non undefined", repo2.calls[0].args.chiuso === false);
+
+  const err = await throws(() => adminSetSpaceChiuso({ space: "piscina", chiuso: true }, { commonSpacesRepository: fakeRepository() }));
+  check("sala inesistente respinta", err?.message === "sala non valida");
+}
+
 // ─── Policy di autorizzazione ──────────────────────────────────────────────────
 
 section("authorize() — policy del modulo Common Spaces");
@@ -159,6 +178,13 @@ section("authorize() — policy del modulo Common Spaces");
   check("staff non può creare una regola ricorrente", authorize(staff, "recurringAddSpace") === false);
   check("FDO non può creare una regola ricorrente", authorize(fdo, "recurringAddSpace") === false);
   check("sistemista può creare una regola ricorrente", authorize(sistemista, "recurringAddSpace") === true);
+
+  // Chiudere/riaprire una sala: stesso livello di setMachineStatus in
+  // laundry — FDO e sistemista sì, staff e delegato no.
+  check("FDO può chiudere/riaprire una sala", authorize(fdo, "spaceSetChiuso") === true);
+  check("sistemista può chiudere/riaprire una sala", authorize(sistemista, "spaceSetChiuso") === true);
+  check("staff NON può chiudere/riaprire una sala", authorize(staff, "spaceSetChiuso") === false);
+  check("il delegato NON può chiudere/riaprire una sala", authorize(delegato, "spaceSetChiuso") === false);
 
   check("nessuno non autenticato può agire", authorize(null, "spaces") === false);
   check("azione di un altro modulo -> null", authorize(sistemista, "setMachineStatus") === null);

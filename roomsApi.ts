@@ -52,12 +52,20 @@ const overlaps = (list: RoomBooking[], b: { day: number; start: number; end: num
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 
-export async function getRoomBookings(room: RoomKind): Promise<RoomBooking[]> {
+export interface RoomState {
+  bookings: RoomBooking[];
+  /** Chiusa dall'FDO/sistemista (es. per il deposito dei pacchi): mentre è
+   *  vera, bookRoom() la rifiuta comunque — questo campo è solo per
+   *  mostrarlo subito, non è lui a far rispettare il blocco. */
+  chiuso: boolean;
+}
+
+export async function getRoomState(room: RoomKind): Promise<RoomState> {
   const res = await fetch(url(room));
   if (!res.ok) throw new Error("network");
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || "error");
-  return (data.bookings || []) as RoomBooking[];
+  return { bookings: (data.bookings || []) as RoomBooking[], chiuso: Boolean(data.chiuso) };
 }
 
 export async function bookRoom(room: RoomKind, b: Omit<RoomBooking, "id">): Promise<RoomBooking[]> {

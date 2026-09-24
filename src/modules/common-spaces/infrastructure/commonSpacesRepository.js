@@ -40,4 +40,9 @@ export const commonSpacesRepository = {
       p_name: name, p_type: type, p_note: note,
     });
   },
+
+  /** Chiude o riapre una sala (es. per il deposito dei pacchi). */
+  async setChiuso({ space, chiuso }) {
+    return rpc("space_admin_set_chiuso", { p_slug: space, p_chiuso: chiuso });
+  },
 };
