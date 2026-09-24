@@ -26,7 +26,7 @@ import { adminRiapriEvento as _adminRiapriEvento } from "./application/adminRiap
 import { adminEliminaEvento as _adminEliminaEvento } from "./application/adminEliminaEvento.js";
 
 export { authorize } from "./domain/policy.js";
-export { MENU, isValidMenu } from "./domain/validazione.js";
+export { controllaMenu, MENU_MAX, MENU_NOME_MAX } from "./domain/validazione.js";
 
 const deps = { grigliataRepository, notifyRoom: notifyRoomChannel };
 
@@ -36,8 +36,8 @@ export async function getStatoPubblico(room) {
   return _getStatoPubblico({ room }, deps);
 }
 
-export async function iscriviti(room, menu, senzaGlutine, note) {
-  return _iscriviti({ room, menu, senzaGlutine, note }, deps);
+export async function iscriviti(room, menuId, senzaGlutine, note) {
+  return _iscriviti({ room, menuId, senzaGlutine, note }, deps);
 }
 
 export async function dichiaraPagamento(room) {
@@ -62,12 +62,12 @@ export async function adminChiudiEvento(eventoId) {
   return _adminChiudiEvento({ eventoId }, deps);
 }
 
-export async function adminModificaEvento(eventoId, titolo, scadenza) {
-  return _adminModificaEvento({ eventoId, titolo, scadenza }, deps);
+export async function adminModificaEvento(eventoId, titolo, scadenza, menu) {
+  return _adminModificaEvento({ eventoId, titolo, scadenza, menu }, deps);
 }
 
-export async function adminAggiungiAdesione(eventoId, room, menu) {
-  return _adminAggiungiAdesione({ eventoId, room, menu }, deps);
+export async function adminAggiungiAdesione(eventoId, room, menuId) {
+  return _adminAggiungiAdesione({ eventoId, room, menuId }, deps);
 }
 
 export async function adminRimuoviAdesione(adesioneId) {

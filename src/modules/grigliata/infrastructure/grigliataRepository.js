@@ -10,9 +10,9 @@ export const grigliataRepository = {
   },
 
   /** Percorso pubblico: aderisce, con un menu — vedi la nota in application/iscriviti.js. */
-  async iscrivi({ room, menu, senzaGlutine, note }) {
+  async iscrivi({ room, menuId, senzaGlutine, note }) {
     return rpc("grigliata_iscrivi", {
-      p_room: room, p_menu: menu, p_senza_glutine: senzaGlutine, p_note: note,
+      p_room: room, p_menu_id: menuId, p_senza_glutine: senzaGlutine, p_note: note,
     });
   },
 
@@ -21,10 +21,11 @@ export const grigliataRepository = {
     return rpc("grigliata_dichiara_pagamento", { p_room: room });
   },
 
-  /** Admin (delegato/sistemista): fa partire una nuova grigliata. */
-  async adminCrea({ titolo, scadenza, paypal, satispay, attore }) {
+  /** Admin (delegato/sistemista): fa partire una nuova grigliata, coi suoi menu. */
+  async adminCrea({ titolo, scadenza, paypal, satispay, menu, attore }) {
     return rpc("grigliata_admin_crea", {
-      p_titolo: titolo, p_scadenza: scadenza, p_paypal: paypal, p_satispay: satispay, p_attore: attore,
+      p_titolo: titolo, p_scadenza: scadenza, p_paypal: paypal, p_satispay: satispay,
+      p_menu: menu, p_attore: attore,
     });
   },
 
@@ -43,14 +44,16 @@ export const grigliataRepository = {
     return rpc("grigliata_admin_chiudi", { p_evento_id: id });
   },
 
-  /** Admin: cambia titolo e scadenza di un evento esistente, senza toccare altro. */
-  async adminModifica({ id, titolo, scadenza }) {
-    return rpc("grigliata_admin_modifica", { p_evento_id: id, p_titolo: titolo, p_scadenza: scadenza });
+  /** Admin: cambia titolo, scadenza e menu di un evento esistente. */
+  async adminModifica({ id, titolo, scadenza, menu }) {
+    return rpc("grigliata_admin_modifica", {
+      p_evento_id: id, p_titolo: titolo, p_scadenza: scadenza, p_menu: menu,
+    });
   },
 
   /** Admin: aggiunge (o corregge) a mano l'adesione di una camera. */
-  async adminAggiungiAdesione({ eventoId, room, menu }) {
-    return rpc("grigliata_admin_aggiungi_adesione", { p_evento_id: eventoId, p_room: room, p_menu: menu });
+  async adminAggiungiAdesione({ eventoId, room, menuId }) {
+    return rpc("grigliata_admin_aggiungi_adesione", { p_evento_id: eventoId, p_room: room, p_menu_id: menuId });
   },
 
   /** Admin: toglie un'adesione — la camera torna come se non avesse mai risposto. */

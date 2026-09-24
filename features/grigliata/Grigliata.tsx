@@ -30,9 +30,6 @@ const T = {
     nessunaAttiva: "Non c'è nessuna grigliata attiva al momento.",
     scadeIl: (d: string) => `Le adesioni chiudono il ${d}`,
     menuLabel: "Cosa mangi?",
-    menuClassico: "Mangio tutto",
-    menuVegetariano: "Vegetariano",
-    menuVegano: "Vegano",
     senzaGlutine: "Senza glutine",
     senzaGlutineHint: "Celiachia o intolleranza al glutine",
     noteLabel: "Note (facoltative)",
@@ -61,9 +58,6 @@ const T = {
     nessunaAttiva: "There's no barbecue running right now.",
     scadeIl: (d: string) => `Sign-ups close on ${d}`,
     menuLabel: "What do you eat?",
-    menuClassico: "Everything",
-    menuVegetariano: "Vegetarian",
-    menuVegano: "Vegan",
     senzaGlutine: "Gluten-free",
     senzaGlutineHint: "Coeliac disease or gluten intolerance",
     noteLabel: "Notes (optional)",
@@ -92,9 +86,6 @@ const T = {
     nessunaAttiva: "Il n'y a aucun barbecue en cours.",
     scadeIl: (d: string) => `Les inscriptions ferment le ${d}`,
     menuLabel: "Tu manges quoi ?",
-    menuClassico: "Je mange de tout",
-    menuVegetariano: "Végétarien",
-    menuVegano: "Végétalien",
     senzaGlutine: "Sans gluten",
     senzaGlutineHint: "Maladie cœliaque ou intolérance au gluten",
     noteLabel: "Remarques (facultatif)",
@@ -123,9 +114,6 @@ const T = {
     nessunaAttiva: "Gerade läuft kein Grillfest.",
     scadeIl: (d: string) => `Anmeldeschluss ist der ${d}`,
     menuLabel: "Was isst du?",
-    menuClassico: "Ich esse alles",
-    menuVegetariano: "Vegetarisch",
-    menuVegano: "Vegan",
     senzaGlutine: "Glutenfrei",
     senzaGlutineHint: "Zöliakie oder Glutenunverträglichkeit",
     noteLabel: "Hinweise (optional)",
@@ -154,9 +142,6 @@ const T = {
     nessunaAttiva: "No hay ninguna barbacoa activa ahora mismo.",
     scadeIl: (d: string) => `Las inscripciones cierran el ${d}`,
     menuLabel: "¿Qué comes?",
-    menuClassico: "Como de todo",
-    menuVegetariano: "Vegetariano",
-    menuVegano: "Vegano",
     senzaGlutine: "Sin gluten",
     senzaGlutineHint: "Celiaquía o intolerancia al gluten",
     noteLabel: "Notas (opcionales)",
@@ -185,9 +170,6 @@ const T = {
     nessunaAttiva: "Mo nun ce sta nisciuna grigliata.",
     scadeIl: (d: string) => `'E adesioni chiudono ô ${d}`,
     menuLabel: "Che magne?",
-    menuClassico: "Magno 'e tutto",
-    menuVegetariano: "Vegetariano",
-    menuVegano: "Vegano",
     senzaGlutine: "Senza glutine",
     senzaGlutineHint: "Celiachia o intolleranza ô glutine",
     noteLabel: "Note (si vuò)",
@@ -208,8 +190,6 @@ const T = {
     erroreAzione: "Nun ha' fatto, prova n'ata vota.",
   },
 } as const;
-
-type Menu = api.GrigliataMenu;
 
 /**
  * Un link "paypal.me/mario", senza schema, è un URL RELATIVO per un
@@ -243,7 +223,9 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   // load(): load() gira ogni 10 secondi, e riscrivere i campi lì cancellava
   // una nota mentre la si stava ancora scrivendo.
   const [modificaScelta, setModificaScelta] = useState(false);
-  const [menuScelta, setMenuScelta] = useState<Menu>("classico");
+  // null = nessuna scelta ancora: vale il primo menu dell'evento (vedi
+  // menuEffettivo più sotto) — gli id li conosciamo solo dopo il load().
+  const [menuScelta, setMenuScelta] = useState<number | null>(null);
   const [senzaGlutine, setSenzaGlutine] = useState(false);
   const [note, setNote] = useState("");
 
@@ -258,12 +240,18 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
 
   function apriModifica() {
     const a = stato?.miaAdesione;
-    if (a) { setMenuScelta(a.menu); setSenzaGlutine(a.senzaGlutine); setNote(a.note ?? ""); }
+    if (a) { setMenuScelta(a.menuId); setSenzaGlutine(a.senzaGlutine); setNote(a.note ?? ""); }
     setModificaScelta(true);
   }
 
-  const nomeMenu = (m: Menu) =>
-    m === "vegano" ? t.menuVegano : m === "vegetariano" ? t.menuVegetariano : t.menuClassico;
+  // v1.3: i menu li decide il delegato per ogni grigliata, nell'ordine in
+  // cui compaiono qui — il primo è quello "di base", preselezionato. I nomi
+  // si mostrano come li ha scritti lui: non c'è una traduzione da fare.
+  const menuDisponibili = stato?.evento?.menu ?? [];
+  const menuEffettivo = menuDisponibili.some((m) => m.id === menuScelta)
+    ? menuScelta
+    : (menuDisponibili[0]?.id ?? null);
+  const nomeMenu = (id: number) => menuDisponibili.find((m) => m.id === id)?.nome ?? "";
 
   useEffect(() => { load(); }, [load]);
 
@@ -279,10 +267,10 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   }, [camera, load]);
 
   async function salvaAdesione() {
-    if (busy) return;
+    if (busy || menuEffettivo == null) return;
     setBusy(true); setMsg(null);
     try {
-      await api.grigliataIscriviti(menuScelta, senzaGlutine, note);
+      await api.grigliataIscriviti(menuEffettivo, senzaGlutine, note);
       setModificaScelta(false);
       await load();
     } catch {
@@ -383,16 +371,22 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
         <div className="rounded-2xl border p-4 flex flex-col gap-4" style={{ background: surf, borderColor: div }}>
           <div>
             <p className="text-sm font-semibold mb-2" style={{ color: fg }}>{t.menuLabel}</p>
-            <div className="grid grid-cols-3 gap-2">
-              {([["classico", t.menuClassico], ["vegetariano", t.menuVegetariano], ["vegano", t.menuVegano]] as [Menu, string][]).map(([val, label]) => {
-                const scelto = menuScelta === val;
+            {/* Da uno a dieci menu, con nomi lunghi fino a 40 caratteri: una
+                griglia che va a capo da sola, non tre colonne fisse. */}
+            <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))" }}>
+              {evento.menu.map((m) => {
+                const scelto = menuEffettivo === m.id;
                 return (
-                  <button key={val} onClick={() => setMenuScelta(val)}
+                  <button key={m.id} onClick={() => setMenuScelta(m.id)} aria-pressed={scelto}
                     className="rounded-xl py-2.5 px-1 text-sm font-semibold leading-tight transition-all"
-                    style={scelto
-                      ? { background: RED, color: RED_FG }
-                      : { background: "var(--secondary)", color: fg }}>
-                    {label}
+                    lang="it"
+                    style={{
+                      // Un nome lungo va a capo fra le parole, o sillabato —
+                      // non spezzato a caso ("Vegetarian|o").
+                      hyphens: "auto", overflowWrap: "break-word",
+                      ...(scelto ? { background: RED, color: RED_FG } : { background: "var(--secondary)", color: fg }),
+                    }}>
+                    {m.nome}
                   </button>
                 );
               })}
@@ -421,9 +415,9 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
               style={{ background: "var(--secondary)", color: fg, border: `1px solid ${div}` }} />
           </label>
 
-          <button onClick={salvaAdesione} disabled={busy}
+          <button onClick={salvaAdesione} disabled={busy || menuEffettivo == null}
             className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
-            style={{ background: RED, color: RED_FG, opacity: busy ? 0.6 : 1 }}>
+            style={{ background: RED, color: RED_FG, opacity: busy || menuEffettivo == null ? 0.6 : 1 }}>
             {t.partecipaBtn}
           </button>
         </div>
@@ -439,7 +433,7 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
             </button>
           </div>
           <p className="text-xs" style={{ color: sub }}>
-            {t.menuScelto(nomeMenu(miaAdesione!.menu))}
+            {t.menuScelto(nomeMenu(miaAdesione!.menuId))}
             {miaAdesione!.senzaGlutine && ` · ${t.senzaGlutine}`}
           </p>
           {miaAdesione!.note && (

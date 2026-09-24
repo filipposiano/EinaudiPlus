@@ -291,16 +291,18 @@ export async function clearAsDirezione(day: number, slot: number, machine: strin
 // quindi qui il corpo viaggia come JSON vero, non il text/plain storico di
 // postAction() sopra.
 
-/** "classico" = mangio tutto (il valore storico, già salvato nelle adesioni). */
-export type GrigliataMenu = "classico" | "vegetariano" | "vegano";
+/** Un menu fra cui scegliere — li decide il delegato per ogni grigliata. */
+export interface GrigliataMenu { id: number; nome: string }
 
 export interface GrigliataEvento {
   id: number; titolo: string; scadenza: string;
   paypalLink: string | null; satispayLink: string | null;
+  /** Nell'ordine deciso dal delegato: il primo è quello "di base". */
+  menu: GrigliataMenu[];
 }
 
 export interface GrigliataMiaAdesione {
-  menu: GrigliataMenu;
+  menuId: number;
   senzaGlutine: boolean;
   note: string | null;
   pagamentoDichiarato: boolean; pagamentoConfermato: boolean;
@@ -338,9 +340,10 @@ export async function getGrigliataStato(): Promise<GrigliataStato> {
     evento: {
       id: data.evento.id, titolo: data.evento.titolo, scadenza: data.evento.scadenza,
       paypalLink: data.evento.paypal_link ?? null, satispayLink: data.evento.satispay_link ?? null,
+      menu: Array.isArray(data.evento.menu) ? data.evento.menu : [],
     },
     miaAdesione: data.mia_adesione ? {
-      menu: data.mia_adesione.menu as GrigliataMenu,
+      menuId: Number(data.mia_adesione.menu_id),
       senzaGlutine: Boolean(data.mia_adesione.senza_glutine),
       note: data.mia_adesione.note ?? null,
       pagamentoDichiarato: Boolean(data.mia_adesione.pagamento_dichiarato),
@@ -350,8 +353,8 @@ export async function getGrigliataStato(): Promise<GrigliataStato> {
 }
 
 /** Aderisce (o cambia menu se aveva già aderito) — non c'è più un modo di declinare. */
-export async function grigliataIscriviti(menu: GrigliataMenu, senzaGlutine: boolean, note: string) {
-  return postGrigliataAction("iscrivi", { menu, senza_glutine: senzaGlutine, note });
+export async function grigliataIscriviti(menuId: number, senzaGlutine: boolean, note: string) {
+  return postGrigliataAction("iscrivi", { menu_id: menuId, senza_glutine: senzaGlutine, note });
 }
 
 export async function grigliataDichiaraPagamento() {

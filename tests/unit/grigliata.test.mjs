@@ -16,7 +16,7 @@ import { adminRimuoviAdesione } from "../../src/modules/grigliata/application/ad
 import { adminRiapriEvento } from "../../src/modules/grigliata/application/adminRiapriEvento.js";
 import { adminEliminaEvento } from "../../src/modules/grigliata/application/adminEliminaEvento.js";
 import { authorize } from "../../src/modules/grigliata/domain/policy.js";
-import { isValidMenu, isFutureDateTime } from "../../src/modules/grigliata/domain/validazione.js";
+import { controllaMenu, idValido, isFutureDateTime } from "../../src/modules/grigliata/domain/validazione.js";
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -78,13 +78,32 @@ function repositoryCheRompe(messaggio = "Could not find the function") {
 
 // ─── Validazioni di forma ──────────────────────────────────────────────────────
 
-section("isValidMenu() / isFutureDateTime()");
+// Un elenco di menu valido, riusato dove il menu non è il punto del test.
+const MENU = [{ nome: "Mangio tutto" }, { nome: "Vegetariano" }];
+
+section("controllaMenu() / idValido() / isFutureDateTime()");
 {
-  check("'classico' valido", isValidMenu("classico") === true);
-  check("'vegetariano' valido", isValidMenu("vegetariano") === true);
-  check("'vegano' valido", isValidMenu("vegano") === true);
-  check("altro non valido", isValidMenu("piccante") === false);
-  check("vuoto non valido", isValidMenu("") === false);
+  const ok = controllaMenu([{ nome: "  Mangio tutto " }, { id: "5", nome: "Vegano" }]);
+  check("i nomi vengono ripuliti, l'id di un menu esistente convertito in numero",
+    JSON.stringify(ok.menu) === JSON.stringify([{ nome: "Mangio tutto" }, { id: 5, nome: "Vegano" }]), JSON.stringify(ok));
+  check("un id non valido viene ignorato (menu nuovo)",
+    JSON.stringify(controllaMenu([{ id: "x", nome: "A" }]).menu) === JSON.stringify([{ nome: "A" }]));
+
+  check("non un array -> errore", controllaMenu(undefined).errore === "menu non valido");
+  check("elenco vuoto -> errore", controllaMenu([]).errore === "serve almeno un menu");
+  check("più di 10 menu -> errore",
+    controllaMenu(Array.from({ length: 11 }, (_, i) => ({ nome: "m" + i }))).errore === "al massimo 10 menu");
+  check("10 menu passano", !controllaMenu(Array.from({ length: 10 }, (_, i) => ({ nome: "m" + i }))).errore);
+  check("un nome vuoto -> errore", controllaMenu([{ nome: "   " }]).errore === "ogni menu deve avere un nome");
+  check("un nome oltre 40 caratteri -> errore", /troppo lungo/.test(controllaMenu([{ nome: "x".repeat(41) }]).errore || ""));
+  check("due nomi uguali (maiuscole a parte) -> errore",
+    /stesso nome/.test(controllaMenu([{ nome: "Vegano" }, { nome: " vegano" }]).errore || ""));
+  check("lo stesso id elencato due volte -> errore",
+    controllaMenu([{ id: 3, nome: "A" }, { id: 3, nome: "B" }]).errore === "menu non valido");
+
+  check("idValido: intero positivo", idValido("12") === 12 && idValido(3) === 3);
+  check("idValido: zero, negativi, decimali, testo -> null",
+    idValido(0) === null && idValido(-1) === null && idValido(1.5) === null && idValido("x") === null && idValido(undefined) === null);
 
   const futuro = new Date(Date.now() + 3600_000).toISOString();
   const passato = new Date(Date.now() - 3600_000).toISOString();
@@ -108,51 +127,55 @@ section("getStatoPubblico()");
 section("iscriviti()");
 {
   // v1.1: non esiste più "declinare" — aderire con un menu è l'unica azione.
+  // v1.3: il menu è un id fra quelli dell'evento — che appartenga davvero
+  // all'evento attivo lo controlla la SQL, qui solo la forma.
   const repo = fakeRepository();
-  await iscriviti({ room: "214", menu: "vegano" }, { grigliataRepository: repo });
-  check("camera e menu passano al repository",
-    repo.calls[0].name === "iscrivi" && repo.calls[0].args.room === "214" && repo.calls[0].args.menu === "vegano");
+  await iscriviti({ room: "214", menuId: "3" }, { grigliataRepository: repo });
+  check("camera e id del menu (in numero) passano al repository",
+    repo.calls[0].name === "iscrivi" && repo.calls[0].args.room === "214" && repo.calls[0].args.menuId === 3);
   check("senza glutine assente -> false, nota assente -> null",
     repo.calls[0].args.senzaGlutine === false && repo.calls[0].args.note === null, JSON.stringify(repo.calls[0].args));
 
   const repoV13 = fakeRepository();
-  await iscriviti({ room: "214", menu: "vegetariano", senzaGlutine: true, note: "  allergia alle noci  " }, { grigliataRepository: repoV13 });
-  check("vegetariano, senza glutine e nota (ripulita) passano al repository",
-    repoV13.calls[0].args.menu === "vegetariano" && repoV13.calls[0].args.senzaGlutine === true
+  await iscriviti({ room: "214", menuId: 2, senzaGlutine: true, note: "  allergia alle noci  " }, { grigliataRepository: repoV13 });
+  check("menu, senza glutine e nota (ripulita) passano al repository",
+    repoV13.calls[0].args.menuId === 2 && repoV13.calls[0].args.senzaGlutine === true
     && repoV13.calls[0].args.note === "allergia alle noci", JSON.stringify(repoV13.calls[0].args));
 
   const repoNotaVuota = fakeRepository();
-  await iscriviti({ room: "214", menu: "classico", note: "   " }, { grigliataRepository: repoNotaVuota });
+  await iscriviti({ room: "214", menuId: 1, note: "   " }, { grigliataRepository: repoNotaVuota });
   check("una nota fatta di soli spazi diventa null", repoNotaVuota.calls[0].args.note === null);
 
   // Solo `true` vale true: una stringa "false" arrivata da un client
   // sbagliato non deve diventare senza glutine per sbaglio.
   const repoStringa = fakeRepository();
-  await iscriviti({ room: "214", menu: "classico", senzaGlutine: "false" }, { grigliataRepository: repoStringa });
+  await iscriviti({ room: "214", menuId: 1, senzaGlutine: "false" }, { grigliataRepository: repoStringa });
   check("senzaGlutine non booleano -> false", repoStringa.calls[0].args.senzaGlutine === false);
 
   const errNota = await throws(() =>
-    iscriviti({ room: "214", menu: "classico", note: "x".repeat(301) }, { grigliataRepository: fakeRepository() }));
+    iscriviti({ room: "214", menuId: 1, note: "x".repeat(301) }, { grigliataRepository: fakeRepository() }));
   check("una nota oltre 300 caratteri viene respinta", /nota troppo lunga/.test(errNota?.message || ""));
 
   const repoNota300 = fakeRepository();
-  await iscriviti({ room: "214", menu: "classico", note: "x".repeat(300) }, { grigliataRepository: repoNota300 });
+  await iscriviti({ room: "214", menuId: 1, note: "x".repeat(300) }, { grigliataRepository: repoNota300 });
   check("una nota di esattamente 300 caratteri passa", repoNota300.calls[0].args.note.length === 300);
 
   const errMenu = await throws(() =>
-    iscriviti({ room: "214", menu: "" }, { grigliataRepository: fakeRepository() }));
+    iscriviti({ room: "214", menuId: "" }, { grigliataRepository: fakeRepository() }));
   check("senza menu viene respinto", errMenu?.message === "scegli un menu");
 
-  const errMenuInvalido = await throws(() =>
-    iscriviti({ room: "214", menu: "piccante" }, { grigliataRepository: fakeRepository() }));
-  check("un menu non riconosciuto viene respinto", errMenuInvalido?.message === "scegli un menu");
+  // Un client v1.2 (ancora in cache) manda il vecchio nome testuale: va
+  // respinto con un messaggio chiaro, non passato alla SQL.
+  const errMenuVecchio = await throws(() =>
+    iscriviti({ room: "214", menuId: "vegano" }, { grigliataRepository: fakeRepository() }));
+  check("un menu non numerico (client vecchio) viene respinto", errMenuVecchio?.message === "scegli un menu");
 
   const errCamera = await throws(() =>
-    iscriviti({ room: "", menu: "classico" }, { grigliataRepository: fakeRepository() }));
+    iscriviti({ room: "", menuId: 1 }, { grigliataRepository: fakeRepository() }));
   check("camera mancante viene respinta", errCamera?.message === "camera mancante");
 
   const repoNonToccato = fakeRepository();
-  await throws(() => iscriviti({ room: "214", menu: "" }, { grigliataRepository: repoNonToccato }));
+  await throws(() => iscriviti({ room: "214", menuId: "" }, { grigliataRepository: repoNonToccato }));
   check("e il repository non viene chiamato", repoNonToccato.calls.length === 0);
 }
 
@@ -175,34 +198,47 @@ section("adminCreaEvento()");
   const futuro = new Date(Date.now() + 3600_000).toISOString();
   const repo = fakeRepository();
   await adminCreaEvento(
-    { titolo: "  Grigliata di primavera  ", scadenza: futuro, paypalLink: " https://paypal.me/x ", satispayLink: "", attore: "peach" },
+    { titolo: "  Grigliata di primavera  ", scadenza: futuro, paypalLink: " https://paypal.me/x ", satispayLink: "",
+      menu: [{ nome: " Mangio tutto " }, { id: 99, nome: "Vegano" }], attore: "peach" },
     { grigliataRepository: repo },
   );
   check("titolo e link vengono ripuliti prima del repository",
     repo.calls[0].args.titolo === "Grigliata di primavera"
     && repo.calls[0].args.paypal === "https://paypal.me/x"
     && repo.calls[0].args.satispay === null);
+  // Un evento nuovo non ha menu esistenti: un id arrivato dal client non
+  // significa niente e non deve raggiungere la SQL.
+  check("i menu passano ripuliti, nell'ordine, senza id",
+    JSON.stringify(repo.calls[0].args.menu) === JSON.stringify([{ nome: "Mangio tutto" }, { nome: "Vegano" }]),
+    JSON.stringify(repo.calls[0].args.menu));
 
   const errScadenza = await throws(() =>
-    adminCreaEvento({ titolo: "x", scadenza: "2020-01-01T00:00:00Z", paypalLink: "x", satispayLink: "", attore: "peach" },
+    adminCreaEvento({ titolo: "x", scadenza: "2020-01-01T00:00:00Z", paypalLink: "x", satispayLink: "", menu: MENU, attore: "peach" },
       { grigliataRepository: fakeRepository() }));
   check("una scadenza nel passato viene respinta", errScadenza?.message === "la scadenza deve essere una data futura");
 
   const errLink = await throws(() =>
-    adminCreaEvento({ titolo: "x", scadenza: futuro, paypalLink: "", satispayLink: "  ", attore: "peach" },
+    adminCreaEvento({ titolo: "x", scadenza: futuro, paypalLink: "", satispayLink: "  ", menu: MENU, attore: "peach" },
       { grigliataRepository: fakeRepository() }));
   check("senza nessun link di pagamento viene respinto",
     errLink?.message === "inserisci almeno un link per il pagamento (PayPal o Satispay)");
 
+  const errMenu = await throws(() =>
+    adminCreaEvento({ titolo: "x", scadenza: futuro, paypalLink: "x", satispayLink: "", menu: [], attore: "peach" },
+      { grigliataRepository: fakeRepository() }));
+  check("senza nessun menu viene respinto", errMenu?.message === "serve almeno un menu");
+
   const repoNonToccato = fakeRepository();
-  await throws(() => adminCreaEvento({ titolo: "x", scadenza: "2020-01-01", paypalLink: "", satispayLink: "", attore: "peach" },
+  await throws(() => adminCreaEvento({ titolo: "x", scadenza: "2020-01-01", paypalLink: "", satispayLink: "", menu: MENU, attore: "peach" },
+    { grigliataRepository: repoNonToccato }));
+  await throws(() => adminCreaEvento({ titolo: "x", scadenza: futuro, paypalLink: "x", satispayLink: "", menu: [{ nome: "" }], attore: "peach" },
     { grigliataRepository: repoNonToccato }));
   check("e il repository non viene chiamato", repoNonToccato.calls.length === 0);
 
   // Titolo assente: ricade su 'Grigliata' — coerente col default di
   // grigliata_admin_crea() in SQL, non solo un dettaglio del client.
   const repoSenzaTitolo = fakeRepository();
-  await adminCreaEvento({ titolo: "", scadenza: futuro, paypalLink: "x", satispayLink: "", attore: "peach" },
+  await adminCreaEvento({ titolo: "", scadenza: futuro, paypalLink: "x", satispayLink: "", menu: MENU, attore: "peach" },
     { grigliataRepository: repoSenzaTitolo });
   check("titolo assente ricade su 'Grigliata'", repoSenzaTitolo.calls[0].args.titolo === "Grigliata");
 }
@@ -250,51 +286,65 @@ section("adminModificaEvento()");
 {
   const futuro = new Date(Date.now() + 3600_000).toISOString();
   const repo = fakeRepository();
-  await adminModificaEvento({ eventoId: "7", titolo: "  Grigliata corretta  ", scadenza: futuro }, { grigliataRepository: repo });
+  await adminModificaEvento(
+    { eventoId: "7", titolo: "  Grigliata corretta  ", scadenza: futuro, menu: [{ id: "4", nome: "Carne " }, { nome: "Pesce" }] },
+    { grigliataRepository: repo });
   check("l'id arriva convertito in numero, il titolo ripulito, la data come ISO",
     repo.calls[0].args.id === 7 && repo.calls[0].args.titolo === "Grigliata corretta"
     && repo.calls[0].args.scadenza === new Date(futuro).toISOString());
+  // Qui invece l'id resta: è quello che dice alla SQL "rinominato", non
+  // "tolto e aggiunto" (e le scelte già fatte su quel menu restano).
+  check("i menu esistenti tengono il loro id, i nuovi arrivano senza",
+    JSON.stringify(repo.calls[0].args.menu) === JSON.stringify([{ id: 4, nome: "Carne" }, { nome: "Pesce" }]),
+    JSON.stringify(repo.calls[0].args.menu));
 
   const errId = await throws(() =>
-    adminModificaEvento({ eventoId: "x", titolo: "x", scadenza: futuro }, { grigliataRepository: fakeRepository() }));
+    adminModificaEvento({ eventoId: "x", titolo: "x", scadenza: futuro, menu: MENU }, { grigliataRepository: fakeRepository() }));
   check("un id non numerico viene respinto", errId?.message === "evento non valido");
 
   const errData = await throws(() =>
-    adminModificaEvento({ eventoId: "7", titolo: "x", scadenza: "2020-01-01T00:00:00Z" }, { grigliataRepository: fakeRepository() }));
+    adminModificaEvento({ eventoId: "7", titolo: "x", scadenza: "2020-01-01T00:00:00Z", menu: MENU }, { grigliataRepository: fakeRepository() }));
   check("una scadenza nel passato viene respinta", errData?.message === "la scadenza deve essere una data futura");
 
+  const errMenuDoppio = await throws(() =>
+    adminModificaEvento({ eventoId: "7", titolo: "x", scadenza: futuro, menu: [{ nome: "Vegano" }, { nome: "VEGANO" }] },
+      { grigliataRepository: fakeRepository() }));
+  check("due menu con lo stesso nome vengono respinti", /stesso nome/.test(errMenuDoppio?.message || ""));
+
   const repoNonToccato = fakeRepository();
-  await throws(() => adminModificaEvento({ eventoId: "7", titolo: "x", scadenza: "2020-01-01" }, { grigliataRepository: repoNonToccato }));
+  await throws(() => adminModificaEvento({ eventoId: "7", titolo: "x", scadenza: "2020-01-01", menu: MENU }, { grigliataRepository: repoNonToccato }));
+  await throws(() => adminModificaEvento({ eventoId: "7", titolo: "x", scadenza: futuro }, { grigliataRepository: repoNonToccato }));
   check("e il repository non viene chiamato", repoNonToccato.calls.length === 0);
 
   // Titolo assente: passa vuoto al repository, che ricade su 'Grigliata'
   // lato SQL (stessa regola di adminCreaEvento) — qui non si respinge.
   const repoSenzaTitolo = fakeRepository();
-  await adminModificaEvento({ eventoId: "7", titolo: "", scadenza: futuro }, { grigliataRepository: repoSenzaTitolo });
+  await adminModificaEvento({ eventoId: "7", titolo: "", scadenza: futuro, menu: MENU }, { grigliataRepository: repoSenzaTitolo });
   check("titolo assente passa vuoto, non respinto", repoSenzaTitolo.calls[0].args.titolo === "");
 }
 
 section("adminAggiungiAdesione()");
 {
   const repo = fakeRepository();
-  await adminAggiungiAdesione({ eventoId: "7", room: " 214 ", menu: "vegano" }, { grigliataRepository: repo });
-  check("l'id arriva convertito in numero, la camera ripulita, il menu passato",
-    repo.calls[0].args.eventoId === 7 && repo.calls[0].args.room === "214" && repo.calls[0].args.menu === "vegano");
+  await adminAggiungiAdesione({ eventoId: "7", room: " 214 ", menuId: "12" }, { grigliataRepository: repo });
+  check("l'id arriva convertito in numero, la camera ripulita, l'id del menu passato",
+    repo.calls[0].args.eventoId === 7 && repo.calls[0].args.room === "214" && repo.calls[0].args.menuId === 12,
+    JSON.stringify(repo.calls[0].args));
 
   const errId = await throws(() =>
-    adminAggiungiAdesione({ eventoId: "x", room: "214", menu: "classico" }, { grigliataRepository: fakeRepository() }));
+    adminAggiungiAdesione({ eventoId: "x", room: "214", menuId: 1 }, { grigliataRepository: fakeRepository() }));
   check("un id di evento non numerico viene respinto", errId?.message === "evento non valido");
 
   const errRoom = await throws(() =>
-    adminAggiungiAdesione({ eventoId: "7", room: "non una camera", menu: "classico" }, { grigliataRepository: fakeRepository() }));
+    adminAggiungiAdesione({ eventoId: "7", room: "non una camera", menuId: 1 }, { grigliataRepository: fakeRepository() }));
   check("una camera nel formato sbagliato viene respinta", errRoom?.message === "numero di camera non valido");
 
   const errMenu = await throws(() =>
-    adminAggiungiAdesione({ eventoId: "7", room: "214", menu: "piccante" }, { grigliataRepository: fakeRepository() }));
-  check("un menu non riconosciuto viene respinto", errMenu?.message === "scegli un menu");
+    adminAggiungiAdesione({ eventoId: "7", room: "214", menuId: "vegano" }, { grigliataRepository: fakeRepository() }));
+  check("un menu non numerico viene respinto", errMenu?.message === "scegli un menu");
 
   const repoNonToccato = fakeRepository();
-  await throws(() => adminAggiungiAdesione({ eventoId: "7", room: "x", menu: "classico" }, { grigliataRepository: repoNonToccato }));
+  await throws(() => adminAggiungiAdesione({ eventoId: "7", room: "x", menuId: 1 }, { grigliataRepository: repoNonToccato }));
   check("e il repository non viene chiamato", repoNonToccato.calls.length === 0);
 }
 
@@ -350,7 +400,7 @@ section("un errore della RPC è esponibile all'admin, non generico");
   check("ed è marcato esponibile", errOverview?.expose === true);
 
   const errCrea = await throws(() =>
-    adminCreaEvento({ titolo: "x", scadenza: futuro, paypalLink: "x", satispayLink: "", attore: "peach" },
+    adminCreaEvento({ titolo: "x", scadenza: futuro, paypalLink: "x", satispayLink: "", menu: MENU, attore: "peach" },
       { grigliataRepository: repoRotto }));
   check("adminCreaEvento: stesso comportamento dopo la validazione", errCrea?.expose === true);
 
@@ -362,11 +412,11 @@ section("un errore della RPC è esponibile all'admin, non generico");
   check("adminChiudiEvento: stesso comportamento dopo la validazione", errChiudi?.expose === true);
 
   const errModifica = await throws(() =>
-    adminModificaEvento({ eventoId: "1", titolo: "x", scadenza: futuro }, { grigliataRepository: repoRotto }));
+    adminModificaEvento({ eventoId: "1", titolo: "x", scadenza: futuro, menu: MENU }, { grigliataRepository: repoRotto }));
   check("adminModificaEvento: stesso comportamento dopo la validazione", errModifica?.expose === true);
 
   const errAggiungi = await throws(() =>
-    adminAggiungiAdesione({ eventoId: "1", room: "214", menu: "classico" }, { grigliataRepository: repoRotto }));
+    adminAggiungiAdesione({ eventoId: "1", room: "214", menuId: 1 }, { grigliataRepository: repoRotto }));
   check("adminAggiungiAdesione: stesso comportamento dopo la validazione", errAggiungi?.expose === true);
 
   const errRimuovi = await throws(() =>
