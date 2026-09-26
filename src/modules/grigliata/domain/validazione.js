@@ -78,3 +78,21 @@ export function isFutureDateTime(v) {
   const t = Date.parse(String(v || ""));
   return Number.isFinite(t) && t > Date.now();
 }
+
+// v1.4.1: la quota a persona. Stesso tetto del vincolo `check` in SQL.
+export const QUOTA_MAX = 1000;
+
+/**
+ * Interpreta la quota scritta dal delegato: numero o stringa, con la
+ * virgola italiana ("12,50") o il punto. Vuota/assente = nessuna quota
+ * (`{ quota: null }`). Torna `{ quota }` arrotondata ai centesimi, o
+ * `{ errore }`.
+ */
+export function controllaQuota(v) {
+  if (v === null || v === undefined || String(v).trim() === "") return { quota: null };
+  const testo = String(v).trim().replace(/\s*€\s*/g, "").replace(",", ".");
+  if (!/^\d+(\.\d{1,2})?$/.test(testo)) return { errore: "quota non valida" };
+  const n = Number(testo);
+  if (n > QUOTA_MAX) return { errore: `quota non valida (massimo ${QUOTA_MAX} €)` };
+  return { quota: Math.round(n * 100) / 100 };
+}

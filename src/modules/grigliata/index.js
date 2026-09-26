@@ -25,6 +25,7 @@ import { adminRimuoviAdesione as _adminRimuoviAdesione } from "./application/adm
 import { adminRiapriEvento as _adminRiapriEvento } from "./application/adminRiapriEvento.js";
 import { adminEliminaEvento as _adminEliminaEvento } from "./application/adminEliminaEvento.js";
 import { adminImpostaPagamenti as _adminImpostaPagamenti } from "./application/adminImpostaPagamenti.js";
+import { adminImpostaQuota as _adminImpostaQuota } from "./application/adminImpostaQuota.js";
 
 export { authorize } from "./domain/policy.js";
 export { controllaMenu, MENU_MAX, MENU_NOME_MAX } from "./domain/validazione.js";
@@ -85,4 +86,8 @@ export async function adminEliminaEvento(eventoId) {
 
 export async function adminImpostaPagamenti(eventoId, attivi, paypalLink, satispayLink) {
   return _adminImpostaPagamenti({ eventoId, attivi, paypalLink, satispayLink }, deps);
+}
+
+export async function adminImpostaQuota(eventoId, quota) {
+  return _adminImpostaQuota({ eventoId, quota }, deps);
 }

@@ -71,7 +71,7 @@ import {
   adminCreaEvento, adminOverview as grigliataAdminOverview,
   adminConfermaPagamento, adminChiudiEvento, adminModificaEvento,
   adminAggiungiAdesione, adminRimuoviAdesione,
-  adminRiapriEvento, adminEliminaEvento, adminImpostaPagamenti,
+  adminRiapriEvento, adminEliminaEvento, adminImpostaPagamenti, adminImpostaQuota,
 } from "../../src/modules/grigliata/index.js";
 
 // Le azioni che modificano qualcosa finiscono nell'audit log. Le letture no,
@@ -90,7 +90,7 @@ const MUTATIONS = new Set([
   "cambioBiancheriaSet", "cambioBiancheriaSkip",
   "grigliataCrea", "grigliataConfermaPagamento", "grigliataChiudi", "grigliataModifica",
   "grigliataAggiungiAdesione", "grigliataRimuoviAdesione", "grigliataRiapri", "grigliataElimina",
-  "grigliataPagamenti",
+  "grigliataPagamenti", "grigliataQuota",
 ]);
 
 /**
@@ -455,7 +455,7 @@ export default wrapHandler("admin/data", async (req, res) => {
       result = await adminCreaEvento({
         titolo: body.titolo, scadenza: body.scadenza,
         paypalLink: body.paypal_link, satispayLink: body.satispay_link,
-        menu: body.menu, pagamentiAttivi: body.pagamenti_attivi, attore: me.u,
+        menu: body.menu, pagamentiAttivi: body.pagamenti_attivi, quota: body.quota, attore: me.u,
       });
       break;
 
@@ -493,6 +493,10 @@ export default wrapHandler("admin/data", async (req, res) => {
 
     case "grigliataPagamenti":
       result = await adminImpostaPagamenti(body.evento_id, body.attivi, body.paypal_link, body.satispay_link);
+      break;
+
+    case "grigliataQuota":
+      result = await adminImpostaQuota(body.evento_id, body.quota);
       break;
 
     // ── Bici ──────────────────────────────────────────────────────────────

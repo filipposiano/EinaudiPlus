@@ -32,6 +32,9 @@ create table if not exists grigliata_evento (
   -- scheda residenti non mostra la sezione di pagamento; i flag di
   -- pagamento delle adesioni restano salvati, solo nascosti.
   pagamenti_attivi boolean not null default true,
+  -- v1.4.1: quota a persona, facoltativa (null = non indicata). Il residente
+  -- la vede sia con i pagamenti attivi sia spenti.
+  quota         numeric(7, 2) check (quota is null or (quota >= 0 and quota <= 1000)),
   -- Disattivata invece di cancellata, come le regole ricorrenti e gli
   -- account: un evento passato resta nella dashboard del delegato (l'ultimo,
   -- se non ce n'è uno attivo) invece di sparire senza lasciare traccia.
@@ -144,6 +147,7 @@ begin
       'titolo', v_evento.titolo,
       'scadenza', v_evento.scadenza,
       'pagamenti_attivi', v_evento.pagamenti_attivi,
+      'quota', v_evento.quota,
       'paypal_link', v_evento.paypal_link,
       'satispay_link', v_evento.satispay_link,
       'menu', grigliata_menu_di(v_evento.id)
@@ -332,7 +336,8 @@ create or replace function grigliata_admin_crea(
   p_titolo text, p_scadenza timestamptz, p_paypal text, p_satispay text, p_menu jsonb, p_attore text,
   -- default: il codice già in produzione (che non manda questo parametro)
   -- continua a funzionare fra l'applicazione di questa migrazione e il deploy.
-  p_pagamenti_attivi boolean default true
+  p_pagamenti_attivi boolean default true,
+  p_quota numeric default null
 ) returns jsonb language plpgsql as $$
 declare
   v_id bigint;
@@ -352,6 +357,10 @@ begin
     return jsonb_build_object('ok', false, 'error', 'inserisci almeno un link per il pagamento (PayPal o Satispay)');
   end if;
 
+  if p_quota is not null and (p_quota < 0 or p_quota > 1000) then
+    return jsonb_build_object('ok', false, 'error', 'quota non valida (fra 0 e 1000 €)');
+  end if;
+
   v_errore := grigliata_menu_errore(p_menu);
   if v_errore is not null then
     return jsonb_build_object('ok', false, 'error', v_errore);
@@ -359,10 +368,10 @@ begin
 
   update grigliata_evento set chiuso = true where not chiuso;
 
-  insert into grigliata_evento (titolo, creato_da, scadenza, paypal_link, satispay_link, pagamenti_attivi)
+  insert into grigliata_evento (titolo, creato_da, scadenza, paypal_link, satispay_link, pagamenti_attivi, quota)
   values (
     coalesce(nullif(btrim(coalesce(p_titolo, '')), ''), 'Grigliata'),
-    p_attore, p_scadenza, v_paypal, v_satispay, v_pagamenti
+    p_attore, p_scadenza, v_paypal, v_satispay, v_pagamenti, round(p_quota, 2)
   )
   returning id into v_id;
 
@@ -371,6 +380,25 @@ begin
   from jsonb_array_elements(p_menu) with ordinality as e(value, ordinality);
 
   return jsonb_build_object('ok', true, 'id', v_id);
+end;
+$$;
+
+-- Imposta (o toglie, con null) la quota a persona di un evento esistente.
+-- Indipendente dai pagamenti attivi: anche con i pagamenti spenti la quota
+-- dice al residente quanto portare (es. contanti sul posto).
+create or replace function grigliata_admin_imposta_quota(p_evento_id bigint, p_quota numeric)
+returns jsonb language plpgsql as $$
+begin
+  if p_quota is not null and (p_quota < 0 or p_quota > 1000) then
+    return jsonb_build_object('ok', false, 'error', 'quota non valida (fra 0 e 1000 €)');
+  end if;
+
+  update grigliata_evento set quota = round(p_quota, 2) where id = p_evento_id;
+  if not found then
+    return jsonb_build_object('ok', false, 'error', 'evento non trovato');
+  end if;
+
+  return jsonb_build_object('ok', true);
 end;
 $$;
 
@@ -517,7 +545,7 @@ begin
     'ok', true,
     'evento', jsonb_build_object(
       'id', v_evento.id, 'titolo', v_evento.titolo, 'scadenza', v_evento.scadenza,
-      'pagamenti_attivi', v_evento.pagamenti_attivi,
+      'pagamenti_attivi', v_evento.pagamenti_attivi, 'quota', v_evento.quota,
       'paypal_link', v_evento.paypal_link, 'satispay_link', v_evento.satispay_link,
       'chiuso', v_evento.chiuso, 'attiva', (not v_evento.chiuso and now() < v_evento.scadenza),
       'menu', grigliata_menu_di(v_evento.id)
@@ -681,7 +709,8 @@ revoke all on function grigliata_dichiara_pagamento(text) from public, anon, aut
 revoke all on function grigliata_normalizza_link(text) from public, anon, authenticated;
 revoke all on function grigliata_menu_errore(jsonb) from public, anon, authenticated;
 revoke all on function grigliata_menu_di(bigint) from public, anon, authenticated;
-revoke all on function grigliata_admin_crea(text, timestamptz, text, text, jsonb, text, boolean) from public, anon, authenticated;
+revoke all on function grigliata_admin_crea(text, timestamptz, text, text, jsonb, text, boolean, numeric) from public, anon, authenticated;
+revoke all on function grigliata_admin_imposta_quota(bigint, numeric) from public, anon, authenticated;
 revoke all on function grigliata_admin_imposta_pagamenti(bigint, boolean, text, text) from public, anon, authenticated;
 revoke all on function grigliata_admin_modifica(bigint, text, timestamptz, jsonb) from public, anon, authenticated;
 revoke all on function grigliata_admin_overview() from public, anon, authenticated;
@@ -699,7 +728,8 @@ grant execute on function grigliata_dichiara_pagamento(text) to service_role;
 grant execute on function grigliata_normalizza_link(text) to service_role;
 grant execute on function grigliata_menu_errore(jsonb) to service_role;
 grant execute on function grigliata_menu_di(bigint) to service_role;
-grant execute on function grigliata_admin_crea(text, timestamptz, text, text, jsonb, text, boolean) to service_role;
+grant execute on function grigliata_admin_crea(text, timestamptz, text, text, jsonb, text, boolean, numeric) to service_role;
+grant execute on function grigliata_admin_imposta_quota(bigint, numeric) to service_role;
 grant execute on function grigliata_admin_imposta_pagamenti(bigint, boolean, text, text) to service_role;
 grant execute on function grigliata_admin_modifica(bigint, text, timestamptz, jsonb) to service_role;
 grant execute on function grigliata_admin_overview() to service_role;

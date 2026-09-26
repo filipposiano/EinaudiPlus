@@ -46,6 +46,8 @@ const T = {
     partecipi: "Partecipi!",
     menuScelto: (m: string) => `Menu: ${m}`,
     pagamentoTitolo: "Invia la tua quota",
+    quota: (q: string) => `Quota a persona: ${q}`,
+    pagamentiDisattivati: "Per ora i pagamenti sono disattivati: non devi inviare niente dall'app. Il delegato ti farà sapere se e come pagare.",
     pagamentoDesc: "Usa uno dei link qui sotto per inviare la quota al delegato, poi tocca \"Ho pagato\".",
     causalePagamento: "Importante: scrivi il numero della tua camera nella causale (nota) del pagamento, così il delegato può abbinarlo a te.",
     paypalBtn: "Paga con PayPal",
@@ -80,6 +82,8 @@ const T = {
     partecipi: "You're in!",
     menuScelto: (m: string) => `Menu: ${m}`,
     pagamentoTitolo: "Send your share",
+    quota: (q: string) => `Share per person: ${q}`,
+    pagamentiDisattivati: "Payments are turned off for now: you don't need to send anything through the app. The organizer will let you know if and how to pay.",
     pagamentoDesc: "Use one of the links below to send your share to the organizer, then tap \"I've paid\".",
     causalePagamento: "Important: put your room number in the payment note, so the organizer can match it to you.",
     paypalBtn: "Pay with PayPal",
@@ -114,6 +118,8 @@ const T = {
     partecipi: "Tu es inscrit·e !",
     menuScelto: (m: string) => `Menu : ${m}`,
     pagamentoTitolo: "Envoie ta part",
+    quota: (q: string) => `Part par personne : ${q}`,
+    pagamentiDisattivati: "Les paiements sont désactivés pour le moment : tu n'as rien à envoyer depuis l'app. L'organisateur te dira si et comment payer.",
     pagamentoDesc: "Utilise un des liens ci-dessous pour envoyer ta part à l'organisateur, puis touche \"J'ai payé\".",
     causalePagamento: "Important : indique le numéro de ta chambre dans la note du paiement, pour que l'organisateur puisse te retrouver.",
     paypalBtn: "Payer avec PayPal",
@@ -148,6 +154,8 @@ const T = {
     partecipi: "Du bist dabei!",
     menuScelto: (m: string) => `Menü: ${m}`,
     pagamentoTitolo: "Sende deinen Anteil",
+    quota: (q: string) => `Anteil pro Person: ${q}`,
+    pagamentiDisattivati: "Zahlungen sind vorerst deaktiviert: du musst über die App nichts senden. Der Organisator sagt dir, ob und wie du zahlst.",
     pagamentoDesc: "Nutze einen der Links unten, um deinen Anteil an den Organisator zu senden, und tippe dann auf \"Bezahlt\".",
     causalePagamento: "Wichtig: Gib deine Zimmernummer in der Zahlungsnotiz an, damit der Organisator sie dir zuordnen kann.",
     paypalBtn: "Mit PayPal bezahlen",
@@ -182,6 +190,8 @@ const T = {
     partecipi: "¡Estás dentro!",
     menuScelto: (m: string) => `Menú: ${m}`,
     pagamentoTitolo: "Envía tu parte",
+    quota: (q: string) => `Cuota por persona: ${q}`,
+    pagamentiDisattivati: "Por ahora los pagos están desactivados: no tienes que enviar nada desde la app. El organizador te dirá si hay que pagar y cómo.",
     pagamentoDesc: "Usa uno de los enlaces de abajo para enviar tu parte al organizador, luego toca \"Ya he pagado\".",
     causalePagamento: "Importante: escribe el número de tu habitación en la nota del pago, para que el organizador pueda identificarte.",
     paypalBtn: "Pagar con PayPal",
@@ -216,6 +226,8 @@ const T = {
     partecipi: "Staje dinto!",
     menuScelto: (m: string) => `Menu: ${m}`,
     pagamentoTitolo: "Manna 'a quota toja",
+    quota: (q: string) => `Quota a cristiano: ${q}`,
+    pagamentiDisattivati: "P' mo' 'e pagamente so' stutate: nun hê 'a mannà niente dall'app. 'O delegato te fa sapé si e comme pagà.",
     pagamentoDesc: "Adopera uno d''e link ccà sotto pe' mannà 'a quota, po' tocca \"Aggio pagato\".",
     causalePagamento: "Importante: scrive 'o nummero d''a cammera toja dint''a nota d''o pagamento, accussì 'o delegato te ricanosce.",
     paypalBtn: "Paga cu PayPal",
@@ -378,6 +390,10 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   }
 
   const { evento, miaAdesione } = stato;
+  // v1.4.1: la quota a persona, se il delegato l'ha indicata — vale anche
+  // con i pagamenti spenti (quanto portare sul posto).
+  const quota = evento.quota == null ? null
+    : evento.quota.toLocaleString("it-IT", { style: "currency", currency: "EUR" });
   const scadenza = new Date(evento.scadenza).toLocaleString("it-IT", {
     day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
   });
@@ -401,6 +417,7 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
       <div className="rounded-2xl border p-4 mb-4" style={{ background: surf, borderColor: div }}>
         <p className="text-sm font-bold mb-1" style={{ color: fg }}>{evento.titolo}</p>
         <p className="text-xs" style={{ color: sub }}>{t.scadeIl(scadenza)}</p>
+        {quota && <p className="text-xs font-semibold mt-1" style={{ color: fg }}>{t.quota(quota)}</p>}
       </div>
 
       {msg && (
@@ -523,13 +540,22 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
       )}
 
       {/* Il pagamento compare solo per chi ha già aderito (non mentre si sta
-          ancora scegliendo il menu), e solo se il delegato ha i pagamenti
-          attivi (v1.4). */}
-      {miaAdesione && !modificaScelta && evento.pagamentiAttivi && (
+          ancora scegliendo il menu). Con i pagamenti spenti dal delegato
+          (v1.4) la card resta, ma dice solo che per ora non si paga — niente
+          link né "Ho pagato". */}
+      {miaAdesione && !modificaScelta && (
         <div className="rounded-2xl border p-4 mt-4 flex flex-col gap-3" style={{ background: surf, borderColor: div }}>
-          <p className="text-sm font-bold" style={{ color: fg }}>{t.pagamentoTitolo}</p>
+          <div>
+            <p className="text-sm font-bold" style={{ color: fg }}>{t.pagamentoTitolo}</p>
+            {quota && <p className="text-xs mt-0.5" style={{ color: sub }}>{t.quota(quota)}</p>}
+          </div>
 
-          {miaAdesione.pagamentoConfermato ? (
+          {!evento.pagamentiAttivi ? (
+            <p className="text-xs leading-relaxed rounded-xl px-3 py-2 font-medium"
+              style={{ background: "var(--secondary)", color: fg }}>
+              {t.pagamentiDisattivati}
+            </p>
+          ) : miaAdesione.pagamentoConfermato ? (
             <div className="flex items-center gap-2 rounded-xl px-4 py-3" style={{ background: `color-mix(in srgb, ${GREEN} 15%, transparent)`, color: GREEN }}>
               <Check size={16} />
               <p className="text-sm font-semibold">{t.pagamentoConfermato}</p>

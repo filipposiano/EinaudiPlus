@@ -44,6 +44,8 @@ type Evento = {
   id: number; titolo: string; scadenza: string;
   /** v1.4 — assente se il server non ha ancora la migrazione 048: vale attivi. */
   pagamenti_attivi?: boolean;
+  /** v1.4.1 — quota a persona in euro; null/assente = non indicata. */
+  quota?: number | string | null;
   paypal_link: string | null; satispay_link: string | null;
   chiuso: boolean; attiva: boolean;
   menu: MenuVoce[];
@@ -214,6 +216,19 @@ function isoInDatetimeLocal(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** "12,50 €" — o null se la quota non è indicata. PostgREST restituisce un
+ *  `numeric` come numero, ma non lo si dà per scontato. */
+function fmtQuota(q: number | string | null | undefined): string | null {
+  if (q == null || q === "") return null;
+  const n = Number(q);
+  return Number.isFinite(n) ? n.toLocaleString("it-IT", { style: "currency", currency: "EUR" }) : null;
+}
+
+/** Per precompilare il campo: "12,5" invece di "12.5". */
+function quotaInCampo(q: number | string | null | undefined): string {
+  return q == null || q === "" ? "" : String(Number(q)).replace(".", ",");
+}
+
 function fmtData(iso: string): string {
   return new Date(iso).toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
@@ -230,6 +245,7 @@ export function GrigliataAdmin() {
   const [nuovoTitolo, setNuovoTitolo] = useState("");
   const [nuovaScadenza, setNuovaScadenza] = useState("");
   const [menuModifica, setMenuModifica] = useState<VoceEditor[]>([]);
+  const [nuovaQuota, setNuovaQuota] = useState("");
 
   // Aggiunta a mano di una camera — per chi non usa l'app, o per registrare
   // chi ha dato la sua parola di persona. Sempre "partecipa", con un menu:
@@ -268,6 +284,7 @@ export function GrigliataAdmin() {
   const [menuNuovi, setMenuNuovi] = useState<VoceEditor[]>(vociDiDefault);
   // v1.4: raccogliere le quote dall'app è una scelta, non un obbligo.
   const [pagamentiNuovi, setPagamentiNuovi] = useState(true);
+  const [quotaNuova, setQuotaNuova] = useState("");
 
   // Riattivare i pagamenti su un evento che non ha nessun link (creato con
   // i pagamenti spenti) chiede prima i link: si apre questo mini-form.
@@ -302,11 +319,11 @@ export function GrigliataAdmin() {
       await call("grigliataCrea", {
         titolo, scadenza: new Date(scadenza).toISOString(),
         paypal_link: pagamentiNuovi ? paypal : "", satispay_link: pagamentiNuovi ? satispay : "",
-        menu: vociDaInviare(menuNuovi), pagamenti_attivi: pagamentiNuovi,
+        menu: vociDaInviare(menuNuovi), pagamenti_attivi: pagamentiNuovi, quota: quotaNuova,
       });
       setMostraForm(false);
       setPaypal(""); setSatispay(""); setTitoloModificato(false);
-      setMenuNuovi(vociDiDefault()); setPagamentiNuovi(true);
+      setMenuNuovi(vociDiDefault()); setPagamentiNuovi(true); setQuotaNuova("");
       setFiltroMenu(null); setFiltroEsigenza("tutte"); setCerca("");
       await carica();
       setMsg("Grigliata avviata.");
@@ -392,6 +409,7 @@ export function GrigliataAdmin() {
     setNuovoTitolo(overview.evento.titolo);
     setNuovaScadenza(isoInDatetimeLocal(overview.evento.scadenza));
     setMenuModifica(overview.evento.menu.map((m) => voceNuova(m.nome, m.id)));
+    setNuovaQuota(quotaInCampo(overview.evento.quota));
     setModificaEvento(true);
   }
 
@@ -403,6 +421,11 @@ export function GrigliataAdmin() {
         evento_id: overview.evento.id, titolo: nuovoTitolo, scadenza: new Date(nuovaScadenza).toISOString(),
         menu: vociDaInviare(menuModifica),
       });
+      // La quota ha una sua azione (vale anche su un evento chiuso, e non
+      // passa dai controlli di titolo/scadenza): si manda solo se è cambiata.
+      if (nuovaQuota.trim() !== quotaInCampo(overview.evento.quota)) {
+        await call("grigliataQuota", { evento_id: overview.evento.id, quota: nuovaQuota });
+      }
       setModificaEvento(false);
       await carica();
       setMsg("Grigliata aggiornata.");
@@ -696,6 +719,15 @@ export function GrigliataAdmin() {
 
           <EditorMenu voci={menuNuovi} onChange={setMenuNuovi} />
 
+          <div>
+            <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Quota a persona (€, facoltativa)</label>
+            <input style={S.input} value={quotaNuova} onChange={(e) => setQuotaNuova(e.target.value)}
+              inputMode="decimal" placeholder="Es. 10 oppure 12,50" />
+            <p style={{ fontSize: 11, ...S.sub, marginTop: 4 }}>
+              I residenti la vedono nella scheda, anche con i pagamenti disattivati.
+            </p>
+          </div>
+
           <Interruttore acceso={pagamentiNuovi} onClick={() => setPagamentiNuovi((v) => !v)}
             titolo="Raccogli le quote dall'app"
             sottotitolo={pagamentiNuovi
@@ -736,6 +768,11 @@ export function GrigliataAdmin() {
               <input style={S.input} value={nuovoTitolo} onChange={(e) => setNuovoTitolo(e.target.value)} placeholder="Grigliata" />
               <input style={S.input} type="datetime-local"
                 value={nuovaScadenza} onChange={(e) => setNuovaScadenza(e.target.value)} />
+              <div>
+                <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Quota a persona (€, vuota = nessuna)</label>
+                <input style={S.input} value={nuovaQuota} onChange={(e) => setNuovaQuota(e.target.value)}
+                  inputMode="decimal" placeholder="Es. 10 oppure 12,50" />
+              </div>
               <div style={{ marginTop: 4 }}>
                 <EditorMenu voci={menuModifica} onChange={setMenuModifica} scelte={scelteDi} />
               </div>
@@ -765,7 +802,11 @@ export function GrigliataAdmin() {
                   {evento.attiva ? "ATTIVA" : "CHIUSA"}
                 </button>
               </div>
-              <p style={{ fontSize: 12, ...S.sub, marginBottom: 14 }}>Scade {fmtData(evento.scadenza)}</p>
+              <p style={{ fontSize: 12, ...S.sub, marginBottom: 14 }}>
+                Scade {fmtData(evento.scadenza)}
+                {" · "}
+                {fmtQuota(evento.quota) ? `Quota ${fmtQuota(evento.quota)} a persona` : "Nessuna quota indicata"}
+              </p>
             </>
           )}
 
@@ -807,6 +848,12 @@ export function GrigliataAdmin() {
             <div style={{ flex: 1, minWidth: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))", gap: 8 }}>
               <Statistica valore={partecipanti.length} etichetta="Partecipano" />
               {pagamentiAttivi && <Statistica valore={confermati} etichetta="Pagamenti confermati" />}
+              {/* Con una quota indicata: quanto è già entrato su quanto
+                  dovrebbe entrare, il numero che serve per la spesa. */}
+              {pagamentiAttivi && fmtQuota(evento.quota) && (
+                <Statistica valore={fmtQuota(confermati * Number(evento.quota))!}
+                  etichetta={`Incassati su ${fmtQuota(partecipanti.length * Number(evento.quota))}`} />
+              )}
               {menuEvento.map((m) => {
                 const n = perMenu(m.id);
                 return pagamentiAttivi

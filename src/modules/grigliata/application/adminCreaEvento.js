@@ -12,9 +12,9 @@
 // link non sono obbligatori. Assente = attivi, il comportamento di sempre.
 
 import { ValidationError, fromRpcError } from "../../../shared/errors/AppError.js";
-import { isFutureDateTime, controllaMenu } from "../domain/validazione.js";
+import { isFutureDateTime, controllaMenu, controllaQuota } from "../domain/validazione.js";
 
-export async function adminCreaEvento({ titolo, scadenza, paypalLink, satispayLink, menu, pagamentiAttivi, attore }, { grigliataRepository }) {
+export async function adminCreaEvento({ titolo, scadenza, paypalLink, satispayLink, menu, pagamentiAttivi, quota, attore }, { grigliataRepository }) {
   if (!isFutureDateTime(scadenza)) {
     throw new ValidationError("la scadenza deve essere una data futura");
   }
@@ -29,6 +29,10 @@ export async function adminCreaEvento({ titolo, scadenza, paypalLink, satispayLi
   const esito = controllaMenu(menu);
   if (esito.errore) throw new ValidationError(esito.errore);
 
+  // v1.4.1: facoltativa — vuota = nessuna quota indicata.
+  const esitoQuota = controllaQuota(quota);
+  if (esitoQuota.errore) throw new ValidationError(esitoQuota.errore);
+
   try {
     return await grigliataRepository.adminCrea({
       titolo: String(titolo || "").trim() || "Grigliata",
@@ -39,6 +43,7 @@ export async function adminCreaEvento({ titolo, scadenza, paypalLink, satispayLi
       // significano niente — si tengono solo i nomi.
       menu: esito.menu.map(({ nome }) => ({ nome })),
       pagamentiAttivi: pagamenti,
+      quota: esitoQuota.quota,
       attore,
     });
   } catch (err) {
