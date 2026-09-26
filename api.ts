@@ -296,6 +296,9 @@ export interface GrigliataMenu { id: number; nome: string }
 
 export interface GrigliataEvento {
   id: number; titolo: string; scadenza: string;
+  /** v1.4: il delegato può spegnere i pagamenti — niente sezione "Invia la
+   *  tua quota" per il residente. */
+  pagamentiAttivi: boolean;
   paypalLink: string | null; satispayLink: string | null;
   /** Nell'ordine deciso dal delegato: il primo è quello "di base". */
   menu: GrigliataMenu[];
@@ -344,6 +347,8 @@ export async function getGrigliataStato(): Promise<GrigliataStato> {
     attiva: true,
     evento: {
       id: data.evento.id, titolo: data.evento.titolo, scadenza: data.evento.scadenza,
+      // Assente (server non ancora migrato alla 048) = attivi, come prima.
+      pagamentiAttivi: data.evento.pagamenti_attivi !== false,
       paypalLink: data.evento.paypal_link ?? null, satispayLink: data.evento.satispay_link ?? null,
       menu: Array.isArray(data.evento.menu) ? data.evento.menu : [],
     },

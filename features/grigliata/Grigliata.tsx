@@ -29,7 +29,9 @@ const T = {
     soloCamere: "Questa sezione è per le camere: la Direzione non partecipa.",
     nessunaAttiva: "Non c'è nessuna grigliata attiva al momento.",
     scadeIl: (d: string) => `Le adesioni chiudono il ${d}`,
-    menuLabel: "Cosa mangi?",
+    menuLabel: "Quale menu desideri?",
+    infoTitolo: "Informazioni su di te",
+    infoDesc: "Così chi cucina può preparare qualcosa anche per te.",
     dietaLabel: "Segui una dieta particolare?",
     dietaClassico: "Mangio di tutto",
     dietaVegetariano: "Vegetariano",
@@ -61,7 +63,9 @@ const T = {
     soloCamere: "This section is for rooms: the front desk doesn't take part.",
     nessunaAttiva: "There's no barbecue running right now.",
     scadeIl: (d: string) => `Sign-ups close on ${d}`,
-    menuLabel: "What do you eat?",
+    menuLabel: "Which menu would you like?",
+    infoTitolo: "About you",
+    infoDesc: "So the cooks can prepare something for you too.",
     dietaLabel: "Any dietary preference?",
     dietaClassico: "I eat everything",
     dietaVegetariano: "Vegetarian",
@@ -93,7 +97,9 @@ const T = {
     soloCamere: "Cette section est pour les chambres : la Direction n'y participe pas.",
     nessunaAttiva: "Il n'y a aucun barbecue en cours.",
     scadeIl: (d: string) => `Les inscriptions ferment le ${d}`,
-    menuLabel: "Tu manges quoi ?",
+    menuLabel: "Quel menu souhaites-tu ?",
+    infoTitolo: "À propos de toi",
+    infoDesc: "Pour que les cuisiniers puissent prévoir quelque chose pour toi aussi.",
     dietaLabel: "Un régime particulier ?",
     dietaClassico: "Je mange de tout",
     dietaVegetariano: "Végétarien",
@@ -125,7 +131,9 @@ const T = {
     soloCamere: "Dieser Bereich ist für Zimmer: die Verwaltung nimmt nicht teil.",
     nessunaAttiva: "Gerade läuft kein Grillfest.",
     scadeIl: (d: string) => `Anmeldeschluss ist der ${d}`,
-    menuLabel: "Was isst du?",
+    menuLabel: "Welches Menü möchtest du?",
+    infoTitolo: "Über dich",
+    infoDesc: "Damit die Köche auch für dich etwas vorbereiten können.",
     dietaLabel: "Ernährst du dich besonders?",
     dietaClassico: "Ich esse alles",
     dietaVegetariano: "Vegetarisch",
@@ -157,7 +165,9 @@ const T = {
     soloCamere: "Esta sección es para las habitaciones: la Dirección no participa.",
     nessunaAttiva: "No hay ninguna barbacoa activa ahora mismo.",
     scadeIl: (d: string) => `Las inscripciones cierran el ${d}`,
-    menuLabel: "¿Qué comes?",
+    menuLabel: "¿Qué menú quieres?",
+    infoTitolo: "Sobre ti",
+    infoDesc: "Así quienes cocinan pueden preparar algo también para ti.",
     dietaLabel: "¿Sigues alguna dieta?",
     dietaClassico: "Como de todo",
     dietaVegetariano: "Vegetariano",
@@ -189,7 +199,9 @@ const T = {
     soloCamere: "Chesta sezione è pe' 'e cammere: 'a Direzione nun ce sta.",
     nessunaAttiva: "Mo nun ce sta nisciuna grigliata.",
     scadeIl: (d: string) => `'E adesioni chiudono ô ${d}`,
-    menuLabel: "Che magne?",
+    menuLabel: "Qua menu vuò?",
+    infoTitolo: "Dimme 'e te",
+    infoDesc: "Accussì chi cucina te prepara pure a te quaccosa.",
     dietaLabel: "Tiene 'na dieta particolare?",
     dietaClassico: "Magno 'e tutto",
     dietaVegetariano: "Vegetariano",
@@ -397,74 +409,88 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
         </div>
       )}
 
+      {/* v1.4: il form è diviso in due blocchi — COSA si mangia (il menu del
+          delegato) e CHI sei (dieta, glutine, note) — invece di un'unica
+          card: sono due domande diverse, e la seconda vale qualunque menu
+          si scelga. Il pulsante sta sotto entrambi: salva tutto insieme,
+          i dati viaggiano come prima (stessa grigliata_iscrivi). */}
       {mostraForm ? (
-        <div className="rounded-2xl border p-4 flex flex-col gap-4" style={{ background: surf, borderColor: div }}>
-          <div>
-            <p className="text-sm font-semibold mb-2" style={{ color: fg }}>{t.menuLabel}</p>
-            {/* Da uno a dieci menu, con nomi lunghi fino a 40 caratteri: una
-                griglia che va a capo da sola, non tre colonne fisse. */}
-            <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))" }}>
-              {evento.menu.map((m) => {
-                const scelto = menuEffettivo === m.id;
-                return (
-                  <button key={m.id} onClick={() => setMenuScelta(m.id)} aria-pressed={scelto}
-                    className="rounded-xl py-2.5 px-1 text-sm font-semibold leading-tight transition-all"
-                    lang="it"
-                    style={{
-                      // Un nome lungo va a capo fra le parole, o sillabato —
-                      // non spezzato a caso ("Vegetarian|o").
-                      hyphens: "auto", overflowWrap: "break-word",
-                      ...(scelto ? { background: RED, color: RED_FG } : { background: "var(--secondary)", color: fg }),
-                    }}>
-                    {m.nome}
-                  </button>
-                );
-              })}
+        <div className="flex flex-col gap-4">
+          <div className="rounded-2xl border p-4" style={{ background: surf, borderColor: div }}>
+            <div>
+              <p className="text-sm font-bold mb-3" style={{ color: fg }}>{t.menuLabel}</p>
+              {/* Da uno a dieci menu, con nomi lunghi fino a 40 caratteri: una
+                  griglia che va a capo da sola, non tre colonne fisse. */}
+              <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))" }}>
+                {evento.menu.map((m) => {
+                  const scelto = menuEffettivo === m.id;
+                  return (
+                    <button key={m.id} onClick={() => setMenuScelta(m.id)} aria-pressed={scelto}
+                      className="rounded-xl py-2.5 px-1 text-sm font-semibold leading-tight transition-all"
+                      lang="it"
+                      style={{
+                        // Un nome lungo va a capo fra le parole, o sillabato —
+                        // non spezzato a caso ("Vegetarian|o").
+                        hyphens: "auto", overflowWrap: "break-word",
+                        ...(scelto ? { background: RED, color: RED_FG } : { background: "var(--secondary)", color: fg }),
+                      }}>
+                      {m.nome}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
-          <div>
-            <p className="text-sm font-semibold mb-2" style={{ color: fg }}>{t.dietaLabel}</p>
-            {/* Tre pulsanti fissi, non legati ai menu del delegato: si può
-                scegliere QUALUNQUE menu e dichiararsi comunque vegani — è
-                un'informazione a parte, non una quarta scelta di menu. */}
-            <div className="grid grid-cols-3 gap-2">
-              {([["classico", t.dietaClassico], ["vegetariano", t.dietaVegetariano], ["vegano", t.dietaVegano]] as [api.GrigliataDieta, string][]).map(([val, label]) => {
-                const scelto = dieta === val;
-                return (
-                  <button key={val} onClick={() => setDieta(val)} aria-pressed={scelto}
-                    className="rounded-xl py-2.5 px-1 text-sm font-semibold leading-tight transition-all"
-                    style={scelto
-                      ? { background: RED, color: RED_FG }
-                      : { background: "var(--secondary)", color: fg }}>
-                    {label}
-                  </button>
-                );
-              })}
+          <div className="rounded-2xl border p-4 flex flex-col gap-4" style={{ background: surf, borderColor: div }}>
+            <div>
+              <p className="text-sm font-bold" style={{ color: fg }}>{t.infoTitolo}</p>
+              <p className="text-xs mt-0.5" style={{ color: sub }}>{t.infoDesc}</p>
             </div>
+
+            <div>
+              <p className="text-sm font-semibold mb-2" style={{ color: fg }}>{t.dietaLabel}</p>
+              {/* Tre pulsanti fissi, non legati ai menu del delegato: si può
+                  scegliere QUALUNQUE menu e dichiararsi comunque vegani — è
+                  un'informazione a parte, non una quarta scelta di menu. */}
+              <div className="grid grid-cols-3 gap-2">
+                {([["classico", t.dietaClassico], ["vegetariano", t.dietaVegetariano], ["vegano", t.dietaVegano]] as [api.GrigliataDieta, string][]).map(([val, label]) => {
+                  const scelto = dieta === val;
+                  return (
+                    <button key={val} onClick={() => setDieta(val)} aria-pressed={scelto}
+                      className="rounded-xl py-2.5 px-1 text-sm font-semibold leading-tight transition-all"
+                      style={scelto
+                        ? { background: RED, color: RED_FG }
+                        : { background: "var(--secondary)", color: fg }}>
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Un interruttore e non una quarta scelta di menu: si può essere
+                vegani E senza glutine, sono due cose indipendenti. */}
+            <button onClick={() => setSenzaGlutine((v) => !v)} role="switch" aria-checked={senzaGlutine}
+              className="flex items-center justify-between gap-3 text-left">
+              <span>
+                <span className="block text-sm font-semibold" style={{ color: fg }}>{t.senzaGlutine}</span>
+                <span className="block text-xs" style={{ color: sub }}>{t.senzaGlutineHint}</span>
+              </span>
+              <span className="shrink-0 flex items-center rounded-full p-[3px] transition-colors"
+                style={{ width: 44, height: 26, background: senzaGlutine ? RED : "var(--secondary)", justifyContent: senzaGlutine ? "flex-end" : "flex-start" }}>
+                <span className="rounded-full" style={{ width: 20, height: 20, background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.3)" }} />
+              </span>
+            </button>
+
+            <label className="block">
+              <span className="block text-sm font-semibold mb-2" style={{ color: fg }}>{t.noteLabel}</span>
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} rows={2}
+                placeholder={t.notePlaceholder}
+                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none"
+                style={{ background: "var(--secondary)", color: fg, border: `1px solid ${div}` }} />
+            </label>
           </div>
-
-          {/* Un interruttore e non una quarta scelta di menu: si può essere
-              vegani E senza glutine, sono due cose indipendenti. */}
-          <button onClick={() => setSenzaGlutine((v) => !v)} role="switch" aria-checked={senzaGlutine}
-            className="flex items-center justify-between gap-3 text-left">
-            <span>
-              <span className="block text-sm font-semibold" style={{ color: fg }}>{t.senzaGlutine}</span>
-              <span className="block text-xs" style={{ color: sub }}>{t.senzaGlutineHint}</span>
-            </span>
-            <span className="shrink-0 flex items-center rounded-full p-[3px] transition-colors"
-              style={{ width: 44, height: 26, background: senzaGlutine ? RED : "var(--secondary)", justifyContent: senzaGlutine ? "flex-end" : "flex-start" }}>
-              <span className="rounded-full" style={{ width: 20, height: 20, background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.3)" }} />
-            </span>
-          </button>
-
-          <label className="block">
-            <span className="block text-sm font-semibold mb-2" style={{ color: fg }}>{t.noteLabel}</span>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} rows={2}
-              placeholder={t.notePlaceholder}
-              className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none"
-              style={{ background: "var(--secondary)", color: fg, border: `1px solid ${div}` }} />
-          </label>
 
           <button onClick={salvaAdesione} disabled={busy || menuEffettivo == null}
             className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
@@ -497,8 +523,9 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
       )}
 
       {/* Il pagamento compare solo per chi ha già aderito (non mentre si sta
-          ancora scegliendo il menu). */}
-      {miaAdesione && !modificaScelta && (
+          ancora scegliendo il menu), e solo se il delegato ha i pagamenti
+          attivi (v1.4). */}
+      {miaAdesione && !modificaScelta && evento.pagamentiAttivi && (
         <div className="rounded-2xl border p-4 mt-4 flex flex-col gap-3" style={{ background: surf, borderColor: div }}>
           <p className="text-sm font-bold" style={{ color: fg }}>{t.pagamentoTitolo}</p>
 

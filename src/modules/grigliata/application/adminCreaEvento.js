@@ -7,19 +7,22 @@
 // una sola transazione.
 //
 // v1.3: con l'elenco dei menu fra cui i residenti sceglieranno — li decide
-// il delegato, il primo è quello "di base".
+// il delegato, il primo è quello "di base". v1.4: i pagamenti si possono
+// lasciare spenti (grigliata offerta, contanti sul posto) — solo allora i
+// link non sono obbligatori. Assente = attivi, il comportamento di sempre.
 
 import { ValidationError, fromRpcError } from "../../../shared/errors/AppError.js";
 import { isFutureDateTime, controllaMenu } from "../domain/validazione.js";
 
-export async function adminCreaEvento({ titolo, scadenza, paypalLink, satispayLink, menu, attore }, { grigliataRepository }) {
+export async function adminCreaEvento({ titolo, scadenza, paypalLink, satispayLink, menu, pagamentiAttivi, attore }, { grigliataRepository }) {
   if (!isFutureDateTime(scadenza)) {
     throw new ValidationError("la scadenza deve essere una data futura");
   }
 
   const paypal = String(paypalLink || "").trim();
   const satispay = String(satispayLink || "").trim();
-  if (!paypal && !satispay) {
+  const pagamenti = pagamentiAttivi !== false;
+  if (pagamenti && !paypal && !satispay) {
     throw new ValidationError("inserisci almeno un link per il pagamento (PayPal o Satispay)");
   }
 
@@ -35,6 +38,7 @@ export async function adminCreaEvento({ titolo, scadenza, paypalLink, satispayLi
       // Un evento nuovo non ha menu esistenti: gli id, se arrivassero, non
       // significano niente — si tengono solo i nomi.
       menu: esito.menu.map(({ nome }) => ({ nome })),
+      pagamentiAttivi: pagamenti,
       attore,
     });
   } catch (err) {

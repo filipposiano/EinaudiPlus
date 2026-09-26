@@ -27,6 +27,11 @@ create table if not exists grigliata_evento (
   scadenza      timestamptz not null,
   paypal_link   text,
   satispay_link text,
+  -- v1.4: il delegato può raccogliere le quote dall'app o no (grigliata
+  -- offerta, contanti sul posto). Spenti, i link non sono obbligatori e la
+  -- scheda residenti non mostra la sezione di pagamento; i flag di
+  -- pagamento delle adesioni restano salvati, solo nascosti.
+  pagamenti_attivi boolean not null default true,
   -- Disattivata invece di cancellata, come le regole ricorrenti e gli
   -- account: un evento passato resta nella dashboard del delegato (l'ultimo,
   -- se non ce n'è uno attivo) invece di sparire senza lasciare traccia.
@@ -138,6 +143,7 @@ begin
       'id', v_evento.id,
       'titolo', v_evento.titolo,
       'scadenza', v_evento.scadenza,
+      'pagamenti_attivi', v_evento.pagamenti_attivi,
       'paypal_link', v_evento.paypal_link,
       'satispay_link', v_evento.satispay_link,
       'menu', grigliata_menu_di(v_evento.id)
@@ -217,19 +223,23 @@ $$;
 create or replace function grigliata_dichiara_pagamento(p_room text)
 returns jsonb language plpgsql as $$
 declare
-  v_evento_id bigint;
+  v_evento grigliata_evento%rowtype;
   v_id bigint;
 begin
-  select id into v_evento_id from grigliata_evento
+  select * into v_evento from grigliata_evento
     where not chiuso and now() < scadenza
     order by created_at desc limit 1;
 
-  if v_evento_id is null then
+  if v_evento.id is null then
     return jsonb_build_object('ok', false, 'error', 'nessuna grigliata attiva');
   end if;
 
+  if not v_evento.pagamenti_attivi then
+    return jsonb_build_object('ok', false, 'error', 'i pagamenti non sono attivi per questa grigliata');
+  end if;
+
   select id into v_id
-    from grigliata_adesione where evento_id = v_evento_id and room = p_room;
+    from grigliata_adesione where evento_id = v_evento.id and room = p_room;
 
   if v_id is null then
     return jsonb_build_object('ok', false, 'error', 'devi prima aderire');
@@ -319,13 +329,17 @@ $$;
 -- evento ancora attivo prima di crearne uno: una alla volta, sempre — la
 -- scheda residenti non deve mai scegliere fra due.
 create or replace function grigliata_admin_crea(
-  p_titolo text, p_scadenza timestamptz, p_paypal text, p_satispay text, p_menu jsonb, p_attore text
+  p_titolo text, p_scadenza timestamptz, p_paypal text, p_satispay text, p_menu jsonb, p_attore text,
+  -- default: il codice già in produzione (che non manda questo parametro)
+  -- continua a funzionare fra l'applicazione di questa migrazione e il deploy.
+  p_pagamenti_attivi boolean default true
 ) returns jsonb language plpgsql as $$
 declare
   v_id bigint;
   v_paypal text;
   v_satispay text;
   v_errore text;
+  v_pagamenti boolean := coalesce(p_pagamenti_attivi, true);
 begin
   if p_scadenza is null or p_scadenza <= now() then
     return jsonb_build_object('ok', false, 'error', 'la scadenza deve essere nel futuro');
@@ -334,7 +348,7 @@ begin
   v_paypal := grigliata_normalizza_link(p_paypal);
   v_satispay := grigliata_normalizza_link(p_satispay);
 
-  if v_paypal is null and v_satispay is null then
+  if v_pagamenti and v_paypal is null and v_satispay is null then
     return jsonb_build_object('ok', false, 'error', 'inserisci almeno un link per il pagamento (PayPal o Satispay)');
   end if;
 
@@ -345,10 +359,10 @@ begin
 
   update grigliata_evento set chiuso = true where not chiuso;
 
-  insert into grigliata_evento (titolo, creato_da, scadenza, paypal_link, satispay_link)
+  insert into grigliata_evento (titolo, creato_da, scadenza, paypal_link, satispay_link, pagamenti_attivi)
   values (
     coalesce(nullif(btrim(coalesce(p_titolo, '')), ''), 'Grigliata'),
-    p_attore, p_scadenza, v_paypal, v_satispay
+    p_attore, p_scadenza, v_paypal, v_satispay, v_pagamenti
   )
   returning id into v_id;
 
@@ -357,6 +371,38 @@ begin
   from jsonb_array_elements(p_menu) with ordinality as e(value, ordinality);
 
   return jsonb_build_object('ok', true, 'id', v_id);
+end;
+$$;
+
+-- Attiva/disattiva i pagamenti di un evento esistente, e ne aggiorna i
+-- link. Un link passato null o vuoto NON cancella quello salvato: così
+-- spegnere e riaccendere non chiede di riscriverli. Riattivare un evento
+-- che non ha nessun link (creato con i pagamenti spenti) li richiede.
+create or replace function grigliata_admin_imposta_pagamenti(
+  p_evento_id bigint, p_attivi boolean, p_paypal text, p_satispay text
+) returns jsonb language plpgsql as $$
+declare
+  v_evento grigliata_evento%rowtype;
+  v_paypal text;
+  v_satispay text;
+begin
+  select * into v_evento from grigliata_evento where id = p_evento_id;
+  if v_evento.id is null then
+    return jsonb_build_object('ok', false, 'error', 'evento non trovato');
+  end if;
+
+  v_paypal := coalesce(grigliata_normalizza_link(p_paypal), v_evento.paypal_link);
+  v_satispay := coalesce(grigliata_normalizza_link(p_satispay), v_evento.satispay_link);
+
+  if coalesce(p_attivi, false) and v_paypal is null and v_satispay is null then
+    return jsonb_build_object('ok', false, 'error', 'inserisci almeno un link per il pagamento (PayPal o Satispay)');
+  end if;
+
+  update grigliata_evento
+    set pagamenti_attivi = coalesce(p_attivi, false), paypal_link = v_paypal, satispay_link = v_satispay
+    where id = p_evento_id;
+
+  return jsonb_build_object('ok', true);
 end;
 $$;
 
@@ -471,6 +517,7 @@ begin
     'ok', true,
     'evento', jsonb_build_object(
       'id', v_evento.id, 'titolo', v_evento.titolo, 'scadenza', v_evento.scadenza,
+      'pagamenti_attivi', v_evento.pagamenti_attivi,
       'paypal_link', v_evento.paypal_link, 'satispay_link', v_evento.satispay_link,
       'chiuso', v_evento.chiuso, 'attiva', (not v_evento.chiuso and now() < v_evento.scadenza),
       'menu', grigliata_menu_di(v_evento.id)
@@ -634,7 +681,8 @@ revoke all on function grigliata_dichiara_pagamento(text) from public, anon, aut
 revoke all on function grigliata_normalizza_link(text) from public, anon, authenticated;
 revoke all on function grigliata_menu_errore(jsonb) from public, anon, authenticated;
 revoke all on function grigliata_menu_di(bigint) from public, anon, authenticated;
-revoke all on function grigliata_admin_crea(text, timestamptz, text, text, jsonb, text) from public, anon, authenticated;
+revoke all on function grigliata_admin_crea(text, timestamptz, text, text, jsonb, text, boolean) from public, anon, authenticated;
+revoke all on function grigliata_admin_imposta_pagamenti(bigint, boolean, text, text) from public, anon, authenticated;
 revoke all on function grigliata_admin_modifica(bigint, text, timestamptz, jsonb) from public, anon, authenticated;
 revoke all on function grigliata_admin_overview() from public, anon, authenticated;
 revoke all on function grigliata_admin_conferma_pagamento(bigint, text) from public, anon, authenticated;
@@ -651,7 +699,8 @@ grant execute on function grigliata_dichiara_pagamento(text) to service_role;
 grant execute on function grigliata_normalizza_link(text) to service_role;
 grant execute on function grigliata_menu_errore(jsonb) to service_role;
 grant execute on function grigliata_menu_di(bigint) to service_role;
-grant execute on function grigliata_admin_crea(text, timestamptz, text, text, jsonb, text) to service_role;
+grant execute on function grigliata_admin_crea(text, timestamptz, text, text, jsonb, text, boolean) to service_role;
+grant execute on function grigliata_admin_imposta_pagamenti(bigint, boolean, text, text) to service_role;
 grant execute on function grigliata_admin_modifica(bigint, text, timestamptz, jsonb) to service_role;
 grant execute on function grigliata_admin_overview() to service_role;
 grant execute on function grigliata_admin_conferma_pagamento(bigint, text) to service_role;
