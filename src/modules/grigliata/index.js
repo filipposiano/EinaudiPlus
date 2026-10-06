@@ -19,6 +19,7 @@ import { usaTicket as _usaTicket } from "./application/usaTicket.js";
 import { adminCreaEvento as _adminCreaEvento } from "./application/adminCreaEvento.js";
 import { adminOverview as _adminOverview } from "./application/adminOverview.js";
 import { adminConfermaPagamento as _adminConfermaPagamento } from "./application/adminConfermaPagamento.js";
+import { adminAnnullaConfermaPagamento as _adminAnnullaConfermaPagamento } from "./application/adminAnnullaConfermaPagamento.js";
 import { adminChiudiEvento as _adminChiudiEvento } from "./application/adminChiudiEvento.js";
 import { adminModificaEvento as _adminModificaEvento } from "./application/adminModificaEvento.js";
 import { adminAggiungiAdesione as _adminAggiungiAdesione } from "./application/adminAggiungiAdesione.js";
@@ -63,6 +64,10 @@ export async function adminOverview() {
 
 export async function adminConfermaPagamento(adesioneId, attore) {
   return _adminConfermaPagamento({ adesioneId, attore }, deps);
+}
+
+export async function adminAnnullaConfermaPagamento(adesioneId) {
+  return _adminAnnullaConfermaPagamento({ adesioneId }, deps);
 }
 
 export async function adminChiudiEvento(eventoId) {

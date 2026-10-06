@@ -57,6 +57,12 @@ export const grigliataRepository = {
     return rpc("grigliata_admin_conferma_pagamento", { p_adesione_id: id, p_attore: attore });
   },
 
+  /** Admin: annulla una conferma data per errore — rifiutato se un ticket di
+   *  quell'adesione è già stato usato. */
+  async adminAnnullaConfermaPagamento(id) {
+    return rpc("grigliata_admin_annulla_conferma_pagamento", { p_adesione_id: id });
+  },
+
   /** Admin: chiude un evento a mano, prima della scadenza naturale. */
   async adminChiudi(id) {
     return rpc("grigliata_admin_chiudi", { p_evento_id: id });

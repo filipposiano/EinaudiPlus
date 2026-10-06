@@ -873,6 +873,42 @@ begin
 end;
 $$;
 
+-- Annulla una conferma di pagamento data per errore — "torna indietro".
+-- Si rifiuta se anche un solo ticket di quell'adesione è già stato usato:
+-- il cibo è già uscito sulla base di quella conferma, annullarla adesso
+-- lascerebbe una camera servita ma segnata come non pagata. In quel caso il
+-- delegato corregge altrimenti (es. ne parla col residente), non da qui.
+-- Quando l'annullamento va a buon fine, i ticket non ancora usati spariscono
+-- con lei: sono nati dalla conferma (vedi grigliata_admin_conferma_pagamento
+-- sopra), e quella conferma non c'è più.
+create or replace function grigliata_admin_annulla_conferma_pagamento(p_adesione_id bigint)
+returns jsonb language plpgsql as $$
+declare
+  v_usati int;
+  v_room text;
+begin
+  select count(*) into v_usati from grigliata_ticket where adesione_id = p_adesione_id and usato;
+  if v_usati > 0 then
+    return jsonb_build_object('ok', false, 'error',
+      format('%s ticket già %s: non si può annullare la conferma', v_usati,
+             case when v_usati = 1 then 'usato' else 'usati' end));
+  end if;
+
+  delete from grigliata_ticket where adesione_id = p_adesione_id;
+
+  update grigliata_adesione
+    set pagamento_confermato = false, confermato_da = null, confermato_at = null, updated_at = now()
+    where id = p_adesione_id
+    returning room into v_room;
+
+  if v_room is null then
+    return jsonb_build_object('ok', false, 'error', 'adesione non trovata');
+  end if;
+
+  return jsonb_build_object('ok', true, 'room', v_room);
+end;
+$$;
+
 -- Aggiunge (o corregge) a mano l'adesione di una camera — per chi non usa
 -- l'app, o per registrare chi ha dato la sua parola di persona. Upsert come
 -- grigliata_iscrivi: se la camera aveva già risposto, la sua riga si
@@ -1004,6 +1040,7 @@ revoke all on function grigliata_admin_imposta_pagamenti(bigint, boolean, text, 
 revoke all on function grigliata_admin_modifica(bigint, text, timestamptz, date, jsonb) from public, anon, authenticated;
 revoke all on function grigliata_admin_overview() from public, anon, authenticated;
 revoke all on function grigliata_admin_conferma_pagamento(bigint, text) from public, anon, authenticated;
+revoke all on function grigliata_admin_annulla_conferma_pagamento(bigint) from public, anon, authenticated;
 revoke all on function grigliata_admin_aggiungi_adesione(bigint, text, bigint, text) from public, anon, authenticated;
 revoke all on function grigliata_admin_rimuovi_adesione(bigint) from public, anon, authenticated;
 revoke all on function grigliata_admin_chiudi(bigint) from public, anon, authenticated;
@@ -1026,6 +1063,7 @@ grant execute on function grigliata_admin_imposta_pagamenti(bigint, boolean, tex
 grant execute on function grigliata_admin_modifica(bigint, text, timestamptz, date, jsonb) to service_role;
 grant execute on function grigliata_admin_overview() to service_role;
 grant execute on function grigliata_admin_conferma_pagamento(bigint, text) to service_role;
+grant execute on function grigliata_admin_annulla_conferma_pagamento(bigint) to service_role;
 grant execute on function grigliata_admin_aggiungi_adesione(bigint, text, bigint, text) to service_role;
 grant execute on function grigliata_admin_rimuovi_adesione(bigint) to service_role;
 grant execute on function grigliata_admin_chiudi(bigint) to service_role;
