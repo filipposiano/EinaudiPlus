@@ -566,6 +566,29 @@ export function GrigliataAdmin() {
     if (await confermaPagamento(adesioneSelezionata.id)) setAdesioneSelezionata(null);
   }
 
+  /** "Torna indietro" su una conferma data per errore — la SQL la rifiuta
+   *  da sola (restando aperto il popup con l'errore) se un ticket di
+   *  quell'adesione è già stato usato. */
+  async function annullaConferma(adesioneId: number): Promise<boolean> {
+    if (busy) return false;
+    setBusy(true); setMsg(null);
+    try {
+      await call("grigliataAnnullaConfermaPagamento", { adesione_id: adesioneId });
+      await carica();
+      return true;
+    } catch (e: any) {
+      setMsg("Non è riuscito: " + e.message);
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function annullaConfermaSelezionata() {
+    if (!adesioneSelezionata) return;
+    if (await annullaConferma(adesioneSelezionata.id)) setAdesioneSelezionata(null);
+  }
+
   async function aggiungiAdesione() {
     if (!overview?.evento || busy || menuCameraEffettivo == null) return;
     setBusy(true); setMsg(null);
@@ -1245,7 +1268,9 @@ export function GrigliataAdmin() {
                 {adesioneSelezionata.ticket.map((tk) => (
                   <p key={tk.id} style={{ fontSize: 13, ...S.sub, display: "flex", alignItems: "center", gap: 5 }}>
                     <Ticket size={13} />
-                    {tk.usato ? `${tk.nome}: ticket n. ${tk.numero} già ritirato.` : `${tk.nome}: non ancora ritirato.`}
+                    {tk.usato
+                      ? `${tk.nome}: ticket n. ${tk.numero} ritirato il ${tk.usato_at ? fmtData(tk.usato_at) : "—"}.`
+                      : `${tk.nome}: non ancora ritirato.`}
                   </p>
                 ))}
               </div>
@@ -1254,6 +1279,18 @@ export function GrigliataAdmin() {
               {pagamentiAttivi && !adesioneSelezionata.pagamento_confermato && (
                 <button style={S.btn} disabled={busy} onClick={confermaSelezionata}>
                   {busy ? "In corso…" : "Conferma pagamento"}
+                </button>
+              )}
+              {/* "Torna indietro" su una conferma data per errore — niente a
+                  che fare con pagamentiAttivi (si può confermare anche con i
+                  pagamenti dell'app spenti, quindi si deve poter annullare
+                  allo stesso modo). La SQL stessa rifiuta se un ticket di
+                  questa adesione è già stato usato, col messaggio che
+                  spiega perché — non lo anticipiamo qui disabilitando il
+                  pulsante, l'errore già mostrato sotto basta. */}
+              {adesioneSelezionata.pagamento_confermato && (
+                <button style={S.btn} disabled={busy} onClick={annullaConfermaSelezionata}>
+                  {busy ? "In corso…" : "Annulla conferma"}
                 </button>
               )}
               <button style={S.danger} disabled={busy} onClick={rimuoviSelezionata}>

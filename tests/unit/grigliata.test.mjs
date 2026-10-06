@@ -10,6 +10,7 @@ import { usaTicket } from "../../src/modules/grigliata/application/usaTicket.js"
 import { adminCreaEvento } from "../../src/modules/grigliata/application/adminCreaEvento.js";
 import { adminOverview } from "../../src/modules/grigliata/application/adminOverview.js";
 import { adminConfermaPagamento } from "../../src/modules/grigliata/application/adminConfermaPagamento.js";
+import { adminAnnullaConfermaPagamento } from "../../src/modules/grigliata/application/adminAnnullaConfermaPagamento.js";
 import { adminChiudiEvento } from "../../src/modules/grigliata/application/adminChiudiEvento.js";
 import { adminModificaEvento } from "../../src/modules/grigliata/application/adminModificaEvento.js";
 import { adminAggiungiAdesione } from "../../src/modules/grigliata/application/adminAggiungiAdesione.js";
@@ -47,6 +48,10 @@ function fakeRepository() {
       calls.push({ name: "adminConfermaPagamento", args });
       return { ok: true, room: "214", titolo: "Grigliata di prova" };
     },
+    async adminAnnullaConfermaPagamento(id) {
+      calls.push({ name: "adminAnnullaConfermaPagamento", id });
+      return { ok: true, room: "214" };
+    },
     async adminChiudi(id) { calls.push({ name: "adminChiudi", id }); return { ok: true }; },
     async adminModifica(args) { calls.push({ name: "adminModifica", args }); return { ok: true }; },
     async adminAggiungiAdesione(args) { calls.push({ name: "adminAggiungiAdesione", args }); return { ok: true }; },
@@ -73,6 +78,7 @@ function repositoryCheRompe(messaggio = "Could not find the function") {
     async adminCrea() { throw err; },
     async adminOverview() { throw err; },
     async adminConfermaPagamento() { throw err; },
+    async adminAnnullaConfermaPagamento() { throw err; },
     async adminChiudi() { throw err; },
     async adminModifica() { throw err; },
     async adminAggiungiAdesione() { throw err; },
@@ -451,6 +457,25 @@ section("adminConfermaPagamento()");
   check("un esito negativo non notifica nessuno", notifyNonChiamato.calls.length === 0);
 }
 
+section("adminAnnullaConfermaPagamento()");
+{
+  const repo = fakeRepository();
+  await adminAnnullaConfermaPagamento({ adesioneId: "42" }, { grigliataRepository: repo });
+  check("l'id arriva convertito in numero", repo.calls[0].id === 42);
+
+  const errId = await throws(() =>
+    adminAnnullaConfermaPagamento({ adesioneId: "non-un-numero" }, { grigliataRepository: fakeRepository() }));
+  check("un id non numerico viene respinto prima del repository", errId?.message === "adesione non valida");
+
+  // Il rifiuto della SQL (un ticket già usato) passa inalterato: non è
+  // compito di questo use-case indovinarlo in anticipo, il messaggio della
+  // RPC è già quello giusto da mostrare.
+  const repoRifiuta = { async adminAnnullaConfermaPagamento() { return { ok: false, error: "1 ticket già usato: non si può annullare la conferma" }; } };
+  const res = await adminAnnullaConfermaPagamento({ adesioneId: "1" }, { grigliataRepository: repoRifiuta });
+  check("il rifiuto della SQL (ticket già usato) passa inalterato",
+    res.ok === false && res.error === "1 ticket già usato: non si può annullare la conferma");
+}
+
 section("adminChiudiEvento()");
 {
   const repo = fakeRepository();
@@ -611,6 +636,10 @@ section("un errore della RPC è esponibile all'admin, non generico");
     adminConfermaPagamento({ adesioneId: "1", attore: "peach" }, { grigliataRepository: repoRotto, notifyRoom: fakeNotifyRoom() }));
   check("adminConfermaPagamento: stesso comportamento dopo la validazione", errConferma?.expose === true);
 
+  const errAnnulla = await throws(() =>
+    adminAnnullaConfermaPagamento({ adesioneId: "1" }, { grigliataRepository: repoRotto }));
+  check("adminAnnullaConfermaPagamento: stesso comportamento dopo la validazione", errAnnulla?.expose === true);
+
   const errChiudi = await throws(() => adminChiudiEvento({ eventoId: "1" }, { grigliataRepository: repoRotto }));
   check("adminChiudiEvento: stesso comportamento dopo la validazione", errChiudi?.expose === true);
 
@@ -646,8 +675,8 @@ section("authorize() — policy del modulo Grigliata");
   const delegato = { u: "toad", r: "delegato" };
 
   for (const azione of [
-    "grigliataCrea", "grigliataOverview", "grigliataConfermaPagamento", "grigliataChiudi",
-    "grigliataModifica", "grigliataAggiungiAdesione", "grigliataRimuoviAdesione",
+    "grigliataCrea", "grigliataOverview", "grigliataConfermaPagamento", "grigliataAnnullaConfermaPagamento",
+    "grigliataChiudi", "grigliataModifica", "grigliataAggiungiAdesione", "grigliataRimuoviAdesione",
     "grigliataRiapri", "grigliataElimina", "grigliataPagamenti", "grigliataQuota",
   ]) {
     check(`il delegato può '${azione}'`, authorize(delegato, azione) === true);
