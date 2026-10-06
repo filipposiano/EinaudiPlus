@@ -8,7 +8,7 @@
 
 import { readBody, json, fail, botFilterTokenOk, methodOk } from "./_lib/http.js";
 import { checkRateLimit, clientIp } from "../src/shared/http/rateLimit.js";
-import { getStatoPubblico, iscriviti, dichiaraPagamento } from "../src/modules/grigliata/index.js";
+import { getStatoPubblico, iscriviti, dichiaraPagamento, usaTicket } from "../src/modules/grigliata/index.js";
 import { wrapHandler } from "../src/shared/errors/wrapHandler.js";
 
 export default wrapHandler("grigliata", async (req, res) => {
@@ -44,6 +44,9 @@ export default wrapHandler("grigliata", async (req, res) => {
 
     case "dichiaraPagamento":
       return json(res, 200, await dichiaraPagamento(room));
+
+    case "usaTicket":
+      return json(res, 200, await usaTicket(room, body.ticket_id));
 
     default:
       return fail(res, "azione sconosciuta");

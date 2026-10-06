@@ -154,6 +154,22 @@ export async function setBike(room: string, hasBike: boolean): Promise<boolean> 
   return Boolean(res.has_bike);
 }
 
+/** La preferenza di notifica del cambio biancheria di questa camera. */
+export interface LinenNotifyPref { enabled: boolean; notifyTime: string }
+
+/** Letta dalle Impostazioni dell'app — un default (attiva, 08:00) per una
+ *  camera che non ha ancora scelto nulla. */
+export async function getLinenNotifyPref(room: string): Promise<LinenNotifyPref> {
+  const res = await postAction("linenNotifyGet", { room });
+  return { enabled: Boolean(res.enabled), notifyTime: String(res.notify_time ?? "08:00:00").slice(0, 5) };
+}
+
+/** Scritta dalle Impostazioni dell'app — `notifyTime` nel formato "HH:MM"
+ *  che un `<input type="time">` produce. */
+export async function setLinenNotifyPref(room: string, enabled: boolean, notifyTime: string): Promise<void> {
+  await postAction("linenNotifySet", { room, enabled, notify_time: notifyTime });
+}
+
 /**
  * Codice usa-e-getta da incollare al bot Telegram per collegare la chat a
  * questa camera. Serve un codice perché senza, chiunque potrebbe scrivere al
@@ -296,6 +312,9 @@ export interface GrigliataMenu { id: number; nome: string }
 
 export interface GrigliataEvento {
   id: number; titolo: string; scadenza: string;
+  /** Il giorno VERO in cui si mangia — distinto dalla scadenza delle
+   *  adesioni/pagamenti, che può cadere prima (vedi GrigliataView). */
+  giornoEvento: string;
   /** v1.4: il delegato può spegnere i pagamenti — niente sezione "Invia la
    *  tua quota" per il residente. */
   pagamentiAttivi: boolean;
@@ -310,12 +329,18 @@ export interface GrigliataEvento {
  *  comunque vegani, il delegato prepara un piatto a parte. */
 export type GrigliataDieta = "classico" | "vegetariano" | "vegano";
 
+/** Una voce-ticket del menu scelto (es. "Salsiccia") — esiste solo se
+ *  pagamentoConfermato è vero (vedi GrigliataView); `numero` resta null
+ *  finché non si preme "Usa" su quella voce. */
+export interface GrigliataTicket { id: number; nome: string; usato: boolean; numero: number | null }
+
 export interface GrigliataMiaAdesione {
   menuId: number;
   dieta: GrigliataDieta;
   senzaGlutine: boolean;
   note: string | null;
   pagamentoDichiarato: boolean; pagamentoConfermato: boolean;
+  ticket: GrigliataTicket[];
 }
 
 export interface GrigliataStato {
@@ -349,7 +374,8 @@ export async function getGrigliataStato(): Promise<GrigliataStato> {
     attiva: true,
     evento: {
       id: data.evento.id, titolo: data.evento.titolo, scadenza: data.evento.scadenza,
-      // Assente (server non ancora migrato alla 048) = attivi, come prima.
+      giornoEvento: data.evento.giorno_evento,
+      // Assente (server non ancora migrato) = attivi, come prima.
       pagamentiAttivi: data.evento.pagamenti_attivi !== false,
       quota: data.evento.quota == null ? null : Number(data.evento.quota),
       paypalLink: data.evento.paypal_link ?? null, satispayLink: data.evento.satispay_link ?? null,
@@ -363,6 +389,11 @@ export async function getGrigliataStato(): Promise<GrigliataStato> {
       note: data.mia_adesione.note ?? null,
       pagamentoDichiarato: Boolean(data.mia_adesione.pagamento_dichiarato),
       pagamentoConfermato: Boolean(data.mia_adesione.pagamento_confermato),
+      ticket: Array.isArray(data.mia_adesione.ticket)
+        ? data.mia_adesione.ticket.map((t: any) => ({
+            id: t.id, nome: t.nome, usato: Boolean(t.usato), numero: t.numero ?? null,
+          }))
+        : [],
     } : null,
   };
 }
@@ -374,4 +405,11 @@ export async function grigliataIscriviti(menuId: number, dieta: GrigliataDieta, 
 
 export async function grigliataDichiaraPagamento() {
   return postGrigliataAction("dichiaraPagamento", {});
+}
+
+/** "Usa" UNA voce-ticket (es. "Salsiccia") — va premuto davanti a chi serve
+ *  il cibo, non prima: il numero progressivo esiste solo a partire da
+ *  questo momento (vedi grigliata_usa_ticket in SQL). */
+export async function grigliataUsaTicket(ticketId: number): Promise<{ ticket_numero: number; ticket_nome: string | null }> {
+  return postGrigliataAction("usaTicket", { ticket_id: ticketId });
 }

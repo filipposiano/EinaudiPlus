@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Pencil, Plus, Check, UserPlus, WheatOff, StickyNote, X, Search } from "lucide-react";
+import { Pencil, Plus, Check, UserPlus, WheatOff, StickyNote, X, Ticket, Search } from "lucide-react";
 import { call } from "../../admin-shared/adminApi";
 import { S } from "../../admin-shared/adminStyles";
 import { PIANI, pianoDi, nomePiano, colorePiano } from "../../../piani";
@@ -23,7 +23,10 @@ import { PIANI, pianoDi, nomePiano, colorePiano } from "../../../piani";
 // residente dichiara IN PIÙ, qualunque menu abbia scelto (vedi `dieta` su
 // Adesione più sotto): si può scegliere "Carne" e dichiararsi vegani, il
 // delegato prepara un piatto a parte.
-type MenuVoce = { id: number; nome: string };
+// v1.5: ogni menu si scompone in una o più voci-ticket (es. menu "Carne" =
+// "Salsiccia" + "Patatine" + "Bibita") — decise dal delegato insieme al menu.
+type MenuTicketVoce = { id: number; nome: string };
+type MenuVoce = { id: number; nome: string; ticket: MenuTicketVoce[] };
 type Dieta = "classico" | "vegetariano" | "vegano";
 const NOME_DIETA: Record<Dieta, string> = { classico: "Mangia di tutto", vegetariano: "Vegetariano", vegano: "Vegano" };
 
@@ -33,15 +36,27 @@ const NOME_DIETA: Record<Dieta, string> = { classico: "Mangia di tutto", vegetar
 // più opzionale. v1.3: "senza glutine" e una nota libera, scritti dal
 // residente — qui si leggono soltanto. v1.3.1: "dieta" torna un campo a sé
 // (nel pannello non si segna 'classico', si segnano solo gli altri due).
+// v1.5: i ticket di questa adesione — uno per voce del menu scelto, creati
+// tutti insieme alla conferma del pagamento (lo decide la UI che il pagamento
+// sia confermato, non una colonna in più); `numero` resta null finché il
+// residente non preme "Usa" su quella voce dal proprio schermo (vedi
+// Grigliata.tsx lato residente — qui si legge soltanto, il tocco non è
+// dell'admin).
+type AdesioneTicket = { id: number; nome: string; usato: boolean; numero: number | null; usato_at: string | null };
+
 type Adesione = {
   id: number; room: string; menu_id: number; dieta: Dieta;
   senza_glutine: boolean; note: string | null;
   pagamento_dichiarato: boolean; pagamento_confermato: boolean;
   confermato_da: string | null; confermato_at: string | null;
+  ticket: AdesioneTicket[];
 };
 
 type Evento = {
   id: number; titolo: string; scadenza: string;
+  // v1.4: il giorno VERO in cui si mangia — distinto dalla scadenza delle
+  // adesioni/pagamenti, che può cadere prima.
+  giorno_evento: string;
   /** v1.4 — assente se il server non ha ancora la migrazione 048: vale attivi. */
   pagamenti_attivi?: boolean;
   /** v1.4.1 — quota a persona in euro; null/assente = non indicata. */
@@ -112,32 +127,55 @@ function Interruttore({ acceso, onClick, titolo, sottotitolo, disabilitato }: {
 // altro viene ricreato a ogni render, e un <input> ricreato perde il fuoco
 // a ogni lettera digitata.
 
-type VoceEditor = { chiave: number; id?: number; nome: string };
+type VoceTicketEditor = { chiave: number; id?: number; nome: string };
+type VoceEditor = { chiave: number; id?: number; nome: string; ticket: VoceTicketEditor[] };
 
 const MENU_MAX = 10;
+const TICKET_MAX = 10;
 const MENU_DI_DEFAULT = ["Carne", "Pesce"];
 let prossimaChiave = 1;
 
-const voceNuova = (nome: string, id?: number): VoceEditor => ({ chiave: prossimaChiave++, id, nome });
+const voceTicketNuova = (nome: string, id?: number): VoceTicketEditor => ({ chiave: prossimaChiave++, id, nome });
+// Senza un elenco esplicito di ticket, una voce nuova parte con UN ticket
+// già pronto (stesso nome del menu): un menu richiede sempre almeno un
+// ticket, niente form che parte già in uno stato non valido.
+const voceNuova = (nome: string, id?: number, ticket?: VoceTicketEditor[]): VoceEditor =>
+  ({ chiave: prossimaChiave++, id, nome, ticket: ticket ?? [voceTicketNuova(nome)] });
 const vociDiDefault = () => MENU_DI_DEFAULT.map((nome) => voceNuova(nome));
 /** Il formato che si aspettano grigliataCrea/grigliataModifica. */
 const vociDaInviare = (voci: VoceEditor[]) =>
-  voci.map((v) => (v.id ? { id: v.id, nome: v.nome } : { nome: v.nome }));
+  voci.map((v) => ({
+    ...(v.id ? { id: v.id } : {}),
+    nome: v.nome,
+    ticket: v.ticket.map((t) => (t.id ? { id: t.id, nome: t.nome } : { nome: t.nome })),
+  }));
 
-function EditorMenu({ voci, onChange, scelte }: {
+function EditorMenu({ voci, onChange, scelte, ticketScelte }: {
   voci: VoceEditor[];
   onChange: (voci: VoceEditor[]) => void;
   /** Quante camere hanno già scelto ciascun menu (per id), solo in modifica. */
   scelte?: Record<number, number>;
+  /** Quante adesioni hanno già un ticket di ciascuna voce (per id), solo in modifica. */
+  ticketScelte?: Record<number, number>;
 }) {
   const rinomina = (chiave: number, nome: string) =>
     onChange(voci.map((v) => (v.chiave === chiave ? { ...v, nome } : v)));
   const togli = (chiave: number) => onChange(voci.filter((v) => v.chiave !== chiave));
+  const rinominaTicket = (chiaveMenu: number, chiaveTicket: number, nome: string) =>
+    onChange(voci.map((v) => (v.chiave === chiaveMenu
+      ? { ...v, ticket: v.ticket.map((t) => (t.chiave === chiaveTicket ? { ...t, nome } : t)) }
+      : v)));
+  const toglieTicket = (chiaveMenu: number, chiaveTicket: number) =>
+    onChange(voci.map((v) => (v.chiave === chiaveMenu
+      ? { ...v, ticket: v.ticket.filter((t) => t.chiave !== chiaveTicket) }
+      : v)));
+  const aggiungiTicket = (chiaveMenu: number) =>
+    onChange(voci.map((v) => (v.chiave === chiaveMenu ? { ...v, ticket: [...v.ticket, voceTicketNuova("")] } : v)));
 
   return (
     <div>
       <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Menu fra cui scegliere</label>
-      <div style={{ display: "grid", gap: 6 }}>
+      <div style={{ display: "grid", gap: 10 }}>
         {voci.map((v) => {
           const usato = (v.id && scelte?.[v.id]) || 0;
           // Un menu già scelto da qualcuno non si toglie (lo rifiuterebbe
@@ -145,21 +183,62 @@ function EditorMenu({ voci, onChange, scelte }: {
           // rimasto nemmeno — serve almeno un menu.
           const bloccato = usato > 0 || voci.length === 1;
           return (
-            <div key={v.chiave} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <input style={{ ...S.input, flex: 1, minWidth: 0 }} value={v.nome} maxLength={40}
-                onChange={(e) => rinomina(v.chiave, e.target.value)}
-                placeholder="Es. Carne" />
-              <button onClick={() => togli(v.chiave)} disabled={bloccato}
-                title={usato > 0 ? `Scelto da ${usato} ${usato === 1 ? "camera" : "camere"}: non si può togliere` : "Togli questo menu"}
-                aria-label={`Togli ${v.nome || "menu"}`}
-                style={{
-                  width: 30, height: 30, flexShrink: 0, borderRadius: 8, border: "1px solid var(--border)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  background: "none", color: "var(--muted-foreground)",
-                  cursor: bloccato ? "default" : "pointer", opacity: bloccato ? 0.35 : 1,
-                }}>
-                <X size={14} />
-              </button>
+            <div key={v.chiave} style={{ display: "grid", gap: 6, padding: 8, borderRadius: 10, background: "var(--secondary)" }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input style={{ ...S.input, flex: 1, minWidth: 0, background: "var(--card)" }} value={v.nome} maxLength={40}
+                  onChange={(e) => rinomina(v.chiave, e.target.value)}
+                  placeholder="Es. Carne" />
+                <button onClick={() => togli(v.chiave)} disabled={bloccato}
+                  title={usato > 0 ? `Scelto da ${usato} ${usato === 1 ? "camera" : "camere"}: non si può togliere` : "Togli questo menu"}
+                  aria-label={`Togli ${v.nome || "menu"}`}
+                  style={{
+                    width: 30, height: 30, flexShrink: 0, borderRadius: 8, border: "1px solid var(--border)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "none", color: "var(--muted-foreground)",
+                    cursor: bloccato ? "default" : "pointer", opacity: bloccato ? 0.35 : 1,
+                  }}>
+                  <X size={14} />
+                </button>
+              </div>
+
+              {/* Le voci-ticket di QUESTO menu — un livello annidato, stesso
+                  schema (nome + togli + aggiungi), un "Ticket" invece di un
+                  "Togli questo menu" quando bloccato. */}
+              <div style={{ paddingLeft: 14, display: "grid", gap: 4 }}>
+                <label style={{ fontSize: 11, ...S.sub }}>Ticket di questo menu</label>
+                {v.ticket.map((t) => {
+                  const usatoTicket = (t.id && ticketScelte?.[t.id]) || 0;
+                  const bloccatoTicket = usatoTicket > 0 || v.ticket.length === 1;
+                  return (
+                    <div key={t.chiave} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <Ticket size={12} style={{ flexShrink: 0, color: "var(--muted-foreground)" }} />
+                      <input style={{ ...S.input, flex: 1, minWidth: 0, background: "var(--card)" }} value={t.nome} maxLength={40}
+                        onChange={(e) => rinominaTicket(v.chiave, t.chiave, e.target.value)}
+                        placeholder="Es. Salsiccia" />
+                      <button onClick={() => toglieTicket(v.chiave, t.chiave)} disabled={bloccatoTicket}
+                        title={usatoTicket > 0 ? `Già assegnato a ${usatoTicket} ${usatoTicket === 1 ? "adesione" : "adesioni"}: non si può togliere` : "Togli questo ticket"}
+                        aria-label={`Togli ${t.nome || "ticket"}`}
+                        style={{
+                          width: 26, height: 26, flexShrink: 0, borderRadius: 7, border: "1px solid var(--border)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          background: "none", color: "var(--muted-foreground)",
+                          cursor: bloccatoTicket ? "default" : "pointer", opacity: bloccatoTicket ? 0.35 : 1,
+                        }}>
+                        <X size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
+                {v.ticket.length < TICKET_MAX && (
+                  <button onClick={() => aggiungiTicket(v.chiave)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 4, marginTop: 2, fontSize: 11, fontWeight: 700,
+                      color: "var(--gray-accessible-text)", background: "none", border: "none", cursor: "pointer", padding: 0,
+                    }}>
+                    <Plus size={11} /> Aggiungi un ticket
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
@@ -176,7 +255,10 @@ function EditorMenu({ voci, onChange, scelte }: {
       <p style={{ fontSize: 11, ...S.sub, marginTop: 6 }}>
         Cosa si mangia (es. "Carne"/"Pesce") — non è legato a vegetariano,
         vegano o senza glutine: quello lo dichiara il residente a parte,
-        qualunque menu scelga. Il primo è preselezionato per i residenti.
+        qualunque menu scelga. Il primo è preselezionato per i residenti. Le
+        voci-ticket di ciascun menu (es. "Salsiccia", "Bibita") sono quello
+        che il residente ritira una alla volta il giorno della grigliata —
+        servono almeno una per menu.
       </p>
     </div>
   );
@@ -233,6 +315,24 @@ function fmtData(iso: string): string {
   return new Date(iso).toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+/** Il giorno dell'evento (un `date` puro, "AAAA-MM-GG", senza orario) alla
+ *  data odierna + 3 giorni — stesso orizzonte del default della scadenza. */
+function giornoEventoDiDefault(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** "20 settembre" da un `date` puro — split sui componenti invece di
+ *  passare per `new Date(iso)`: un `date` senza orario letto come UTC e poi
+ *  riformattato in fuso locale potrebbe slittare di un giorno. */
+function fmtGiorno(dataIso: string): string {
+  const [y, m, d] = dataIso.split("-").map(Number);
+  if (!y || !m || !d) return dataIso;
+  return new Date(y, m - 1, d).toLocaleDateString("it-IT", { day: "numeric", month: "long" });
+}
+
 export function GrigliataAdmin() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -244,6 +344,7 @@ export function GrigliataAdmin() {
   const [modificaEvento, setModificaEvento] = useState(false);
   const [nuovoTitolo, setNuovoTitolo] = useState("");
   const [nuovaScadenza, setNuovaScadenza] = useState("");
+  const [nuovoGiornoEvento, setNuovoGiornoEvento] = useState("");
   const [menuModifica, setMenuModifica] = useState<VoceEditor[]>([]);
   const [nuovaQuota, setNuovaQuota] = useState("");
 
@@ -279,6 +380,7 @@ export function GrigliataAdmin() {
   const [titolo, setTitolo] = useState(titoloDaData(scadenzaDiDefault()));
   const [titoloModificato, setTitoloModificato] = useState(false);
   const [scadenza, setScadenza] = useState(scadenzaDiDefault());
+  const [giornoEvento, setGiornoEvento] = useState(giornoEventoDiDefault());
   const [paypal, setPaypal] = useState("");
   const [satispay, setSatispay] = useState("");
   const [menuNuovi, setMenuNuovi] = useState<VoceEditor[]>(vociDiDefault);
@@ -317,13 +419,14 @@ export function GrigliataAdmin() {
     setBusy(true); setMsg(null);
     try {
       await call("grigliataCrea", {
-        titolo, scadenza: new Date(scadenza).toISOString(),
+        titolo, scadenza: new Date(scadenza).toISOString(), giorno_evento: giornoEvento,
         paypal_link: pagamentiNuovi ? paypal : "", satispay_link: pagamentiNuovi ? satispay : "",
         menu: vociDaInviare(menuNuovi), pagamenti_attivi: pagamentiNuovi, quota: quotaNuova,
       });
       setMostraForm(false);
       setPaypal(""); setSatispay(""); setTitoloModificato(false);
       setMenuNuovi(vociDiDefault()); setPagamentiNuovi(true); setQuotaNuova("");
+      setGiornoEvento(giornoEventoDiDefault());
       setFiltroMenu(null); setFiltroEsigenza("tutte"); setCerca("");
       await carica();
       setMsg("Grigliata avviata.");
@@ -408,7 +511,9 @@ export function GrigliataAdmin() {
     if (!overview?.evento) return;
     setNuovoTitolo(overview.evento.titolo);
     setNuovaScadenza(isoInDatetimeLocal(overview.evento.scadenza));
-    setMenuModifica(overview.evento.menu.map((m) => voceNuova(m.nome, m.id)));
+    setNuovoGiornoEvento(overview.evento.giorno_evento);
+    setMenuModifica(overview.evento.menu.map((m) =>
+      voceNuova(m.nome, m.id, m.ticket.map((t) => voceTicketNuova(t.nome, t.id)))));
     setNuovaQuota(quotaInCampo(overview.evento.quota));
     setModificaEvento(true);
   }
@@ -419,7 +524,7 @@ export function GrigliataAdmin() {
     try {
       await call("grigliataModifica", {
         evento_id: overview.evento.id, titolo: nuovoTitolo, scadenza: new Date(nuovaScadenza).toISOString(),
-        menu: vociDaInviare(menuModifica),
+        giorno_evento: nuovoGiornoEvento, menu: vociDaInviare(menuModifica),
       });
       // La quota ha una sua azione (vale anche su un evento chiuso, e non
       // passa dai controlli di titolo/scadenza): si manda solo se è cambiata.
@@ -521,8 +626,21 @@ export function GrigliataAdmin() {
     const del = partecipanti.filter((a) => a.menu_id === id);
     return { totale: del.length, pagati: del.filter((a) => a.pagamento_confermato).length };
   };
+  /** Quante adesioni hanno un ticket di QUESTA voce (= pagate, i ticket
+   *  esistono solo a pagamento confermato) e quante l'hanno già ritirato —
+   *  il numero che conta il giorno della grigliata, distinto da "pagati". */
+  const perTicket = (ticketId: number) => {
+    let pagati = 0, usati = 0;
+    for (const a of partecipanti) {
+      const tk = a.ticket.find((t) => t.id === ticketId);
+      if (tk) { pagati++; if (tk.usato) usati++; }
+    }
+    return { pagati, usati };
+  };
   const scelteDi: Record<number, number> = {};
   for (const a of partecipanti) scelteDi[a.menu_id] = (scelteDi[a.menu_id] ?? 0) + 1;
+  const ticketScelteDi: Record<number, number> = {};
+  for (const a of partecipanti) for (const tk of a.ticket) ticketScelteDi[tk.id] = (ticketScelteDi[tk.id] ?? 0) + 1;
   const senzaGlutine = partecipanti.filter((a) => a.senza_glutine).length;
   // Chi ha qualcosa di cui chi cucina deve tenere conto: una dieta diversa
   // da "classico", senza glutine, o una nota. È la lista da leggere prima
@@ -599,6 +717,15 @@ export function GrigliataAdmin() {
             terzo colore — resta grigia, dice solo "questa ha priorità". */}
         {pagamentiAttivi && !confermato && a.pagamento_dichiarato && (
           <span style={{ fontSize: 8, color: "var(--muted-foreground)" }}>dichiarato</span>
+        )}
+        {/* Quanti dei suoi ticket sono già stati ritirati al banco: lo sa
+            solo chi guarda qui, non è un'azione dell'admin (il tocco è del
+            residente). Solo se almeno uno lo è — altrimenti è rumore su
+            ogni pastiglia confermata. */}
+        {confermato && a.ticket.some((t) => t.usato) && (
+          <span style={{ fontSize: 8, color: colore, display: "flex", alignItems: "center", gap: 2 }}>
+            <Ticket size={9} /> {a.ticket.filter((t) => t.usato).length}/{a.ticket.length} ritirati
+          </span>
         )}
         {pagamentiAttivi && confermato && (
           <span style={{
@@ -717,6 +844,16 @@ export function GrigliataAdmin() {
             <input style={S.input} type="datetime-local" value={scadenza} onChange={(e) => cambiaScadenzaForm(e.target.value)} />
           </div>
 
+          <div>
+            <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Giorno della grigliata</label>
+            <input style={S.input} type="date" value={giornoEvento} onChange={(e) => setGiornoEvento(e.target.value)} />
+            <p style={{ fontSize: 11, ...S.sub, marginTop: 4 }}>
+              Il giorno vero in cui si mangia — può cadere dopo la scadenza delle adesioni.
+              È il giorno in cui, sulla scheda dei residenti, la conferma del pagamento lascia
+              il posto al ticket da usare.
+            </p>
+          </div>
+
           <EditorMenu voci={menuNuovi} onChange={setMenuNuovi} />
 
           <div>
@@ -769,12 +906,16 @@ export function GrigliataAdmin() {
               <input style={S.input} type="datetime-local"
                 value={nuovaScadenza} onChange={(e) => setNuovaScadenza(e.target.value)} />
               <div>
+                <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Giorno della grigliata</label>
+                <input style={S.input} type="date" value={nuovoGiornoEvento} onChange={(e) => setNuovoGiornoEvento(e.target.value)} />
+              </div>
+              <div>
                 <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Quota a persona (€, vuota = nessuna)</label>
                 <input style={S.input} value={nuovaQuota} onChange={(e) => setNuovaQuota(e.target.value)}
                   inputMode="decimal" placeholder="Es. 10 oppure 12,50" />
               </div>
               <div style={{ marginTop: 4 }}>
-                <EditorMenu voci={menuModifica} onChange={setMenuModifica} scelte={scelteDi} />
+                <EditorMenu voci={menuModifica} onChange={setMenuModifica} scelte={scelteDi} ticketScelte={ticketScelteDi} />
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                 <button onClick={salvaEvento} disabled={busy} style={{ ...S.btn, opacity: busy ? 0.5 : 1 }}>Salva</button>
@@ -803,7 +944,7 @@ export function GrigliataAdmin() {
                 </button>
               </div>
               <p style={{ fontSize: 12, ...S.sub, marginBottom: 14 }}>
-                Scade {fmtData(evento.scadenza)}
+                Scade {fmtData(evento.scadenza)} · Si mangia il {fmtGiorno(evento.giorno_evento)}
                 {" · "}
                 {fmtQuota(evento.quota) ? `Quota ${fmtQuota(evento.quota)} a persona` : "Nessuna quota indicata"}
               </p>
@@ -856,9 +997,27 @@ export function GrigliataAdmin() {
               )}
               {menuEvento.map((m) => {
                 const n = perMenu(m.id);
-                return pagamentiAttivi
-                  ? <Statistica key={m.id} valore={`${n.pagati}/${n.totale}`} etichetta={`${m.nome} (pagati/tot.)`} />
-                  : <Statistica key={m.id} valore={n.totale} etichetta={m.nome} />;
+                return (
+                  <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    {pagamentiAttivi
+                      ? <Statistica valore={`${n.pagati}/${n.totale}`} etichetta={`${m.nome} (pagati/tot.)`} />
+                      : <Statistica valore={n.totale} etichetta={m.nome} />}
+                    {/* Quante porzioni di CIASCUNA voce-ticket sono DAVVERO
+                        uscite al banco, non solo pagate — il numero che
+                        conta il giorno della grigliata (i ticket esistono a
+                        pagamento confermato, indipendentemente dal fatto che
+                        i pagamenti in app siano accesi o spenti). */}
+                    {m.ticket.map((tk) => {
+                      const nt = perTicket(tk.id);
+                      if (nt.pagati === 0) return null;
+                      return (
+                        <p key={tk.id} style={{ fontSize: 10, textAlign: "center", ...S.sub, display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
+                          <Ticket size={10} /> {tk.nome}: {nt.usati}/{nt.pagati} ritirati
+                        </p>
+                      );
+                    })}
+                  </div>
+                );
               })}
             </div>
             <div title="Camere che non mangiano glutine, qualunque menu abbiano scelto"
@@ -1057,13 +1216,31 @@ export function GrigliataAdmin() {
                 Note: {adesioneSelezionata.note}
               </p>
             )}
-            {pagamentiAttivi && <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
-              {adesioneSelezionata.pagamento_confermato
-                ? "Pagamento confermato."
-                : adesioneSelezionata.pagamento_dichiarato
-                  ? "Ha dichiarato di aver pagato."
-                  : "Non ha ancora dichiarato di aver pagato — puoi confermarlo comunque, ad esempio se ha pagato in mano o senza usare l'app."}
-            </p>}
+            {pagamentiAttivi && (
+              <p style={{ fontSize: 13, ...S.sub, marginBottom: adesioneSelezionata.pagamento_confermato ? 4 : 16 }}>
+                {adesioneSelezionata.pagamento_confermato
+                  ? "Pagamento confermato."
+                  : adesioneSelezionata.pagamento_dichiarato
+                    ? "Ha dichiarato di aver pagato."
+                    : "Non ha ancora dichiarato di aver pagato — puoi confermarlo comunque, ad esempio se ha pagato in mano o senza usare l'app."}
+              </p>
+            )}
+            {/* I ticket si usano dallo schermo del residente, non da qui —
+                questo elenco è solo informativo (vedi Grigliata.tsx lato
+                residente), uno per voce del menu scelto. Mostrato a
+                prescindere da pagamentiAttivi: un ticket esiste se il
+                pagamento è confermato, anche con i pagamenti dell'app
+                spenti (es. confermato a mano per un incasso in contanti). */}
+            {adesioneSelezionata.pagamento_confermato && (
+              <div style={{ marginBottom: 16, display: "grid", gap: 3 }}>
+                {adesioneSelezionata.ticket.map((tk) => (
+                  <p key={tk.id} style={{ fontSize: 13, ...S.sub, display: "flex", alignItems: "center", gap: 5 }}>
+                    <Ticket size={13} />
+                    {tk.usato ? `${tk.nome}: ticket n. ${tk.numero} già ritirato.` : `${tk.nome}: non ancora ritirato.`}
+                  </p>
+                ))}
+              </div>
+            )}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: pagamentiAttivi ? 0 : 12 }}>
               {pagamentiAttivi && !adesioneSelezionata.pagamento_confermato && (
                 <button style={S.btn} disabled={busy} onClick={confermaSelezionata}>

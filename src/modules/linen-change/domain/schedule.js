@@ -36,3 +36,15 @@ export function isTuesdayISO(data) {
   if (Number.isNaN(d.getTime())) return false;
   return d.getUTCDay() === 2;
 }
+
+/**
+ * `v` è un orario "HH:MM" (o "HH:MM:SS") valido? L'input del form è un
+ * `<input type="time">`, che produce "HH:MM" — i secondi sono accettati per
+ * tolleranza, non richiesti. La verità finale resta comunque quella del
+ * tipo `time` di Postgres, che rifiuta da solo se questo controllo venisse
+ * aggirato chiamando l'RPC direttamente.
+ */
+export function isValidTime(v) {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/.exec(String(v || ""));
+  return m !== null;
+}

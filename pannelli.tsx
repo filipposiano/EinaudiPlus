@@ -9,7 +9,7 @@
 import { useState, useEffect } from "react";
 import {
   X, ChevronRight, Globe, Bell, BellRing, Download, Eye, ShieldCheck,
-  Send, Share, Menu, CheckCircle2, FileText, SunMoon, Sun, Moon, Monitor,
+  Send, Share, Menu, CheckCircle2, FileText, SunMoon, Sun, Moon, Monitor, Bed,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -88,6 +88,13 @@ export function SettingsSheet({ lang, room, adminRole, onLang, temaPref, onTema,
   const [reminderState, setReminderState] = useState<push.ReminderState>("unknown");
   const [remindersOpen, setRemindersOpen] = useState(false);
   const [privacyOpen, setPrivacyOpen] = useState(false);
+
+  // Notifica del cambio biancheria (grande/piccolo/nessuno) — un interruttore
+  // on/off e un orario, letti/scritti subito come lingua e tema: nessun
+  // tasto "Salva" a parte, coerente col resto di questo pannello.
+  const [linenAperto, setLinenAperto] = useState(false);
+  const [linenPref, setLinenPref] = useState<api.LinenNotifyPref | null>(null);
+  const [linenBusy, setLinenBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   // Il motivo per cui l'attivazione non e' andata a buon fine, quando a dirlo e'
   // stato il server (oggi: troppi dispositivi sulla stessa camera). Arriva gia'
@@ -99,6 +106,25 @@ export function SettingsSheet({ lang, room, adminRole, onLang, temaPref, onTema,
     (window.matchMedia("(display-mode: standalone)").matches || (navigator as any).standalone === true);
 
   useEffect(() => { push.getReminderState().then(setReminderState); }, []);
+
+  useEffect(() => {
+    if (!room) return;
+    api.getLinenNotifyPref(room).then(setLinenPref).catch(() => { /* resta null: la riga mostra solo l'icona */ });
+  }, [room]);
+
+  async function cambiaLinenPref(parziale: Partial<api.LinenNotifyPref>) {
+    if (!room || !linenPref || linenBusy) return;
+    const nuovo = { ...linenPref, ...parziale };
+    setLinenPref(nuovo);
+    setLinenBusy(true);
+    try {
+      await api.setLinenNotifyPref(room, nuovo.enabled, nuovo.notifyTime);
+    } catch {
+      setLinenPref(linenPref); // com'era prima, il tentativo non è riuscito
+    } finally {
+      setLinenBusy(false);
+    }
+  }
 
   async function toggleReminders() {
     if (busy || !room) return;
@@ -197,6 +223,34 @@ export function SettingsSheet({ lang, room, adminRole, onLang, temaPref, onTema,
               <Row icon={reminderState==="on" ? <BellRing size={18}/> : <Bell size={18}/>}
                 label={T[lang].notificheTurni} sub={reminderSub}
                 onClick={() => setRemindersOpen(true)}/>
+            </div>
+          )}
+          {room && linenPref && (
+            <div style={{ borderBottom:`1px solid ${div}` }}>
+              <Row icon={<Bed size={18}/>} label={T[lang].notificheCambioBiancheria}
+                sub={linenPref.enabled ? T[lang].attive : T[lang].nonAttive}
+                onClick={() => setLinenAperto((v) => !v)}/>
+              {linenAperto && (
+                <div className="p-3 flex flex-col gap-3" style={{ background:"var(--secondary)" }}>
+                  <button onClick={() => cambiaLinenPref({ enabled: !linenPref.enabled })} disabled={linenBusy}
+                    className="w-full flex items-center justify-between gap-3 text-left">
+                    <span className="text-xs font-semibold" style={{ color:fg }}>{T[lang].notificheCambioBiancheriaAttiva}</span>
+                    <span className="shrink-0 flex items-center rounded-full p-[3px] transition-colors"
+                      style={{ width:40, height:24, background: linenPref.enabled ? RED : "var(--border)", justifyContent: linenPref.enabled ? "flex-end" : "flex-start" }}>
+                      <span className="rounded-full" style={{ width:18, height:18, background:"#fff", boxShadow:"0 1px 3px rgba(0,0,0,.3)" }} />
+                    </span>
+                  </button>
+                  {linenPref.enabled && (
+                    <label className="flex items-center justify-between gap-3">
+                      <span className="text-xs font-semibold" style={{ color:fg }}>{T[lang].notificheCambioBiancheriaOrario}</span>
+                      <input type="time" value={linenPref.notifyTime} disabled={linenBusy}
+                        onChange={(e) => cambiaLinenPref({ notifyTime: e.target.value })}
+                        className="text-sm rounded-lg px-2 py-1 border"
+                        style={{ background:"var(--card)", borderColor:div, color:fg }}/>
+                    </label>
+                  )}
+                </div>
+              )}
             </div>
           )}
           {!standalone && (

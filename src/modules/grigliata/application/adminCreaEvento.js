@@ -12,11 +12,18 @@
 // link non sono obbligatori. Assente = attivi, il comportamento di sempre.
 
 import { ValidationError, fromRpcError } from "../../../shared/errors/AppError.js";
-import { isFutureDateTime, controllaMenu, controllaQuota } from "../domain/validazione.js";
+import { isFutureDateTime, isValidDate, controllaMenu, controllaQuota } from "../domain/validazione.js";
 
-export async function adminCreaEvento({ titolo, scadenza, paypalLink, satispayLink, menu, pagamentiAttivi, quota, attore }, { grigliataRepository }) {
+export async function adminCreaEvento(
+  { titolo, scadenza, giornoEvento, paypalLink, satispayLink, menu, pagamentiAttivi, quota, attore },
+  { grigliataRepository },
+) {
   if (!isFutureDateTime(scadenza)) {
     throw new ValidationError("la scadenza deve essere una data futura");
+  }
+
+  if (!isValidDate(giornoEvento)) {
+    throw new ValidationError("indica il giorno della grigliata");
   }
 
   const paypal = String(paypalLink || "").trim();
@@ -37,11 +44,14 @@ export async function adminCreaEvento({ titolo, scadenza, paypalLink, satispayLi
     return await grigliataRepository.adminCrea({
       titolo: String(titolo || "").trim() || "Grigliata",
       scadenza: new Date(scadenza).toISOString(),
+      // Un `date` puro (da <input type="date">, "AAAA-MM-GG"): nessuna
+      // conversione, a differenza della scadenza non porta un orario.
+      giornoEvento: String(giornoEvento).trim(),
       paypal: paypal || null,
       satispay: satispay || null,
-      // Un evento nuovo non ha menu esistenti: gli id, se arrivassero, non
-      // significano niente — si tengono solo i nomi.
-      menu: esito.menu.map(({ nome }) => ({ nome })),
+      // Un evento nuovo non ha menu (né voci-ticket) esistenti: gli id, se
+      // arrivassero, non significano niente — si tengono solo i nomi.
+      menu: esito.menu.map(({ nome, ticket }) => ({ nome, ticket: ticket.map(({ nome }) => ({ nome })) })),
       pagamentiAttivi: pagamenti,
       quota: esitoQuota.quota,
       attore,

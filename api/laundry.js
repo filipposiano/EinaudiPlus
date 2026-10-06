@@ -21,6 +21,7 @@ import { getSnapshot, bookSlot, clearSlot } from "../src/modules/laundry/index.j
 import { subscribePush, unsubscribePush, createTelegramCode } from "../src/modules/notifications/index.js";
 import { submitFeedback } from "../src/modules/feedback/index.js";
 import { getBike, setBike } from "../src/modules/bikes/index.js";
+import { getNotifyPref as getLinenNotifyPref, setNotifyPref as setLinenNotifyPref } from "../src/modules/linen-change/index.js";
 import { wrapHandler } from "../src/shared/errors/wrapHandler.js";
 
 export default wrapHandler("laundry", async (req, res) => {
@@ -141,6 +142,16 @@ export default wrapHandler("laundry", async (req, res) => {
 
     case "bikeSet":
       return json(res, 200, await setBike(room, body.has_bike));
+
+    // La preferenza di notifica del cambio biancheria (on/off + orario) di
+    // questa camera. Letta e scritta dalle Impostazioni dell'app, non ha
+    // niente a che fare con la lavanderia: vive qui per lo stesso motivo di
+    // bikeGet/bikeSet qui sopra.
+    case "linenNotifyGet":
+      return json(res, 200, await getLinenNotifyPref(room));
+
+    case "linenNotifySet":
+      return json(res, 200, await setLinenNotifyPref(room, body.enabled, body.notify_time));
 
     default:
       return fail(res, "azione sconosciuta");

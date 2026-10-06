@@ -9,14 +9,18 @@
 // menu che qualche camera ha già scelto.
 
 import { ValidationError, fromRpcError } from "../../../shared/errors/AppError.js";
-import { isFutureDateTime, controllaMenu, idValido } from "../domain/validazione.js";
+import { isFutureDateTime, isValidDate, controllaMenu, idValido } from "../domain/validazione.js";
 
-export async function adminModificaEvento({ eventoId, titolo, scadenza, menu }, { grigliataRepository }) {
+export async function adminModificaEvento({ eventoId, titolo, scadenza, giornoEvento, menu }, { grigliataRepository }) {
   const id = idValido(eventoId);
   if (!id) throw new ValidationError("evento non valido");
 
   if (!isFutureDateTime(scadenza)) {
     throw new ValidationError("la scadenza deve essere una data futura");
+  }
+
+  if (!isValidDate(giornoEvento)) {
+    throw new ValidationError("indica il giorno della grigliata");
   }
 
   const esito = controllaMenu(menu);
@@ -26,7 +30,8 @@ export async function adminModificaEvento({ eventoId, titolo, scadenza, menu }, 
     // Titolo assente: ricade su 'Grigliata' lato SQL (stessa regola di
     // grigliata_admin_crea) — qui si ripulisce solo, non si respinge.
     return await grigliataRepository.adminModifica({
-      id, titolo: String(titolo || "").trim(), scadenza: new Date(scadenza).toISOString(), menu: esito.menu,
+      id, titolo: String(titolo || "").trim(), scadenza: new Date(scadenza).toISOString(),
+      giornoEvento: String(giornoEvento).trim(), menu: esito.menu,
     });
   } catch (err) {
     throw fromRpcError(err, { exposeToClient: true });
