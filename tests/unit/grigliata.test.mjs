@@ -364,7 +364,7 @@ section("adminCreaEvento()");
   check("pagamenti assenti = attivi", repoSenzaTitolo.calls[0].args.pagamentiAttivi === true);
 
   const repoSenzaPagamenti = fakeRepository();
-  await adminCreaEvento({ titolo: "x", scadenza: futuro, paypalLink: "", satispayLink: "", menu: MENU, pagamentiAttivi: false, attore: "peach" },
+  await adminCreaEvento({ titolo: "x", scadenza: futuro, giornoEvento: GIORNO, paypalLink: "", satispayLink: "", menu: MENU, pagamentiAttivi: false, attore: "peach" },
     { grigliataRepository: repoSenzaPagamenti });
   check("con i pagamenti spenti i link non servono",
     repoSenzaPagamenti.calls.length === 1 && repoSenzaPagamenti.calls[0].args.pagamentiAttivi === false);
@@ -383,11 +383,11 @@ section("controllaQuota() / adminImpostaQuota()");
 
   const futuro = new Date(Date.now() + 3600_000).toISOString();
   const repoCrea = fakeRepository();
-  await adminCreaEvento({ titolo: "x", scadenza: futuro, paypalLink: "x", satispayLink: "", menu: MENU, quota: "15,00", attore: "peach" },
+  await adminCreaEvento({ titolo: "x", scadenza: futuro, giornoEvento: GIORNO, paypalLink: "x", satispayLink: "", menu: MENU, quota: "15,00", attore: "peach" },
     { grigliataRepository: repoCrea });
   check("la quota arriva alla creazione come numero", repoCrea.calls[0].args.quota === 15);
 
-  const errCrea = await throws(() => adminCreaEvento({ titolo: "x", scadenza: futuro, paypalLink: "x", satispayLink: "", menu: MENU, quota: "boh", attore: "peach" },
+  const errCrea = await throws(() => adminCreaEvento({ titolo: "x", scadenza: futuro, giornoEvento: GIORNO, paypalLink: "x", satispayLink: "", menu: MENU, quota: "boh", attore: "peach" },
     { grigliataRepository: fakeRepository() }));
   check("una quota non valida blocca la creazione", errCrea?.message === "quota non valida");
 
