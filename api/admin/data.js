@@ -452,7 +452,7 @@ export default wrapHandler("admin/data", async (req, res) => {
     // ── Grigliata (delegato e sistemista) ────────────────────────────────
     case "grigliataCrea":
       result = await adminCreaEvento({
-        titolo: body.titolo, scadenza: body.scadenza,
+        titolo: body.titolo, scadenza: body.scadenza, giornoEvento: body.giorno_evento,
         paypalLink: body.paypal_link, satispayLink: body.satispay_link,
         menu: body.menu, attore: me.u,
       });
@@ -471,7 +471,7 @@ export default wrapHandler("admin/data", async (req, res) => {
       break;
 
     case "grigliataModifica":
-      result = await adminModificaEvento(body.evento_id, body.titolo, body.scadenza, body.menu);
+      result = await adminModificaEvento(body.evento_id, body.titolo, body.scadenza, body.giorno_evento, body.menu);
       break;
 
     case "grigliataAggiungiAdesione":

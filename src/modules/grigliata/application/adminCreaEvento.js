@@ -10,11 +10,15 @@
 // il delegato, il primo è quello "di base".
 
 import { ValidationError, fromRpcError } from "../../../shared/errors/AppError.js";
-import { isFutureDateTime, controllaMenu } from "../domain/validazione.js";
+import { isFutureDateTime, isValidDate, controllaMenu } from "../domain/validazione.js";
 
-export async function adminCreaEvento({ titolo, scadenza, paypalLink, satispayLink, menu, attore }, { grigliataRepository }) {
+export async function adminCreaEvento({ titolo, scadenza, giornoEvento, paypalLink, satispayLink, menu, attore }, { grigliataRepository }) {
   if (!isFutureDateTime(scadenza)) {
     throw new ValidationError("la scadenza deve essere una data futura");
+  }
+
+  if (!isValidDate(giornoEvento)) {
+    throw new ValidationError("indica il giorno della grigliata");
   }
 
   const paypal = String(paypalLink || "").trim();
@@ -30,6 +34,9 @@ export async function adminCreaEvento({ titolo, scadenza, paypalLink, satispayLi
     return await grigliataRepository.adminCrea({
       titolo: String(titolo || "").trim() || "Grigliata",
       scadenza: new Date(scadenza).toISOString(),
+      // Un `date` puro (da <input type="date">, "AAAA-MM-GG"): nessuna
+      // conversione, a differenza della scadenza non porta un orario.
+      giornoEvento: String(giornoEvento).trim(),
       paypal: paypal || null,
       satispay: satispay || null,
       // Un evento nuovo non ha menu esistenti: gli id, se arrivassero, non

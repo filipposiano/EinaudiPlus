@@ -296,6 +296,9 @@ export interface GrigliataMenu { id: number; nome: string }
 
 export interface GrigliataEvento {
   id: number; titolo: string; scadenza: string;
+  /** Il giorno VERO in cui si mangia — distinto dalla scadenza delle
+   *  adesioni/pagamenti, che può cadere prima (vedi GrigliataView). */
+  giornoEvento: string;
   paypalLink: string | null; satispayLink: string | null;
   /** Nell'ordine deciso dal delegato: il primo è quello "di base". */
   menu: GrigliataMenu[];
@@ -311,6 +314,9 @@ export interface GrigliataMiaAdesione {
   senzaGlutine: boolean;
   note: string | null;
   pagamentoDichiarato: boolean; pagamentoConfermato: boolean;
+  /** Il ticket esiste solo se pagamentoConfermato è vero (vedi
+   *  GrigliataView) — ticketNumero resta null finché non si preme "Usa". */
+  ticketUsato: boolean; ticketNumero: number | null;
 }
 
 export interface GrigliataStato {
@@ -344,6 +350,7 @@ export async function getGrigliataStato(): Promise<GrigliataStato> {
     attiva: true,
     evento: {
       id: data.evento.id, titolo: data.evento.titolo, scadenza: data.evento.scadenza,
+      giornoEvento: data.evento.giorno_evento,
       paypalLink: data.evento.paypal_link ?? null, satispayLink: data.evento.satispay_link ?? null,
       menu: Array.isArray(data.evento.menu) ? data.evento.menu : [],
     },
@@ -355,6 +362,8 @@ export async function getGrigliataStato(): Promise<GrigliataStato> {
       note: data.mia_adesione.note ?? null,
       pagamentoDichiarato: Boolean(data.mia_adesione.pagamento_dichiarato),
       pagamentoConfermato: Boolean(data.mia_adesione.pagamento_confermato),
+      ticketUsato: Boolean(data.mia_adesione.ticket_usato),
+      ticketNumero: data.mia_adesione.ticket_numero ?? null,
     } : null,
   };
 }
@@ -366,4 +375,11 @@ export async function grigliataIscriviti(menuId: number, dieta: GrigliataDieta, 
 
 export async function grigliataDichiaraPagamento() {
   return postGrigliataAction("dichiaraPagamento", {});
+}
+
+/** "Usa" il proprio ticket — va premuto davanti a chi serve il cibo, non
+ *  prima: il numero progressivo esiste solo a partire da questo momento
+ *  (vedi grigliata_usa_ticket in SQL). */
+export async function grigliataUsaTicket(): Promise<{ ticket_numero: number; menu_nome: string | null }> {
+  return postGrigliataAction("usaTicket", {});
 }

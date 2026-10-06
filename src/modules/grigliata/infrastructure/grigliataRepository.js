@@ -21,11 +21,16 @@ export const grigliataRepository = {
     return rpc("grigliata_dichiara_pagamento", { p_room: room });
   },
 
+  /** Percorso pubblico: "usa" il proprio ticket — vedi application/usaTicket.js. */
+  async usaTicket(room) {
+    return rpc("grigliata_usa_ticket", { p_room: room });
+  },
+
   /** Admin (delegato/sistemista): fa partire una nuova grigliata, coi suoi menu. */
-  async adminCrea({ titolo, scadenza, paypal, satispay, menu, attore }) {
+  async adminCrea({ titolo, scadenza, giornoEvento, paypal, satispay, menu, attore }) {
     return rpc("grigliata_admin_crea", {
-      p_titolo: titolo, p_scadenza: scadenza, p_paypal: paypal, p_satispay: satispay,
-      p_menu: menu, p_attore: attore,
+      p_titolo: titolo, p_scadenza: scadenza, p_giorno_evento: giornoEvento,
+      p_paypal: paypal, p_satispay: satispay, p_menu: menu, p_attore: attore,
     });
   },
 
@@ -44,10 +49,10 @@ export const grigliataRepository = {
     return rpc("grigliata_admin_chiudi", { p_evento_id: id });
   },
 
-  /** Admin: cambia titolo, scadenza e menu di un evento esistente. */
-  async adminModifica({ id, titolo, scadenza, menu }) {
+  /** Admin: cambia titolo, scadenza, giorno e menu di un evento esistente. */
+  async adminModifica({ id, titolo, scadenza, giornoEvento, menu }) {
     return rpc("grigliata_admin_modifica", {
-      p_evento_id: id, p_titolo: titolo, p_scadenza: scadenza, p_menu: menu,
+      p_evento_id: id, p_titolo: titolo, p_scadenza: scadenza, p_giorno_evento: giornoEvento, p_menu: menu,
     });
   },
 

@@ -11,7 +11,7 @@
 // verificata — chi dice di essere la 214 aderisce per la 214.
 
 import { useState, useEffect, useCallback } from "react";
-import { Flame, Loader2, AlertTriangle, Check, ExternalLink } from "lucide-react";
+import { Flame, Loader2, AlertTriangle, Check, ExternalLink, Ticket } from "lucide-react";
 import * as api from "../../api";
 import type { Lang } from "../../i18n";
 
@@ -29,6 +29,7 @@ const T = {
     soloCamere: "Questa sezione è per le camere: la Direzione non partecipa.",
     nessunaAttiva: "Non c'è nessuna grigliata attiva al momento.",
     scadeIl: (d: string) => `Le adesioni chiudono il ${d}`,
+    siMangiaIl: (d: string) => `Si mangia il ${d}`,
     menuLabel: "Cosa mangi?",
     dietaLabel: "Segui una dieta particolare?",
     dietaClassico: "Mangio di tutto",
@@ -52,6 +53,10 @@ const T = {
     inAttesaConferma: "In attesa di conferma dal delegato",
     pagamentoConfermato: "Pagamento confermato",
     erroreAzione: "Non è riuscito, riprova.",
+    ticketTitolo: "Il tuo ticket",
+    ticketUsaBtn: "Usa",
+    ticketUsaHint: "Tocca solo davanti a chi ti serve, non prima: senza questo tocco il ticket non vale niente.",
+    ticketUsato: (n: number) => `Ticket n. ${n} — usato`,
   },
   en: {
     titolo: "Barbecue",
@@ -61,6 +66,7 @@ const T = {
     soloCamere: "This section is for rooms: the front desk doesn't take part.",
     nessunaAttiva: "There's no barbecue running right now.",
     scadeIl: (d: string) => `Sign-ups close on ${d}`,
+    siMangiaIl: (d: string) => `It's happening on ${d}`,
     menuLabel: "What do you eat?",
     dietaLabel: "Any dietary preference?",
     dietaClassico: "I eat everything",
@@ -84,6 +90,10 @@ const T = {
     inAttesaConferma: "Waiting for the organizer to confirm",
     pagamentoConfermato: "Payment confirmed",
     erroreAzione: "That didn't work, try again.",
+    ticketTitolo: "Your ticket",
+    ticketUsaBtn: "Use",
+    ticketUsaHint: "Only tap this in front of whoever's serving, not before: without that tap the ticket is worthless.",
+    ticketUsato: (n: number) => `Ticket #${n} — used`,
   },
   fr: {
     titolo: "Barbecue",
@@ -93,6 +103,7 @@ const T = {
     soloCamere: "Cette section est pour les chambres : la Direction n'y participe pas.",
     nessunaAttiva: "Il n'y a aucun barbecue en cours.",
     scadeIl: (d: string) => `Les inscriptions ferment le ${d}`,
+    siMangiaIl: (d: string) => `Ça se passe le ${d}`,
     menuLabel: "Tu manges quoi ?",
     dietaLabel: "Un régime particulier ?",
     dietaClassico: "Je mange de tout",
@@ -116,6 +127,10 @@ const T = {
     inAttesaConferma: "En attente de confirmation de l'organisateur",
     pagamentoConfermato: "Paiement confirmé",
     erroreAzione: "Ça n'a pas marché, réessaie.",
+    ticketTitolo: "Ton ticket",
+    ticketUsaBtn: "Utiliser",
+    ticketUsaHint: "Touche ça seulement devant la personne qui te sert, pas avant : sans ce geste le ticket ne vaut rien.",
+    ticketUsato: (n: number) => `Ticket n° ${n} — utilisé`,
   },
   de: {
     titolo: "Grillfest",
@@ -125,6 +140,7 @@ const T = {
     soloCamere: "Dieser Bereich ist für Zimmer: die Verwaltung nimmt nicht teil.",
     nessunaAttiva: "Gerade läuft kein Grillfest.",
     scadeIl: (d: string) => `Anmeldeschluss ist der ${d}`,
+    siMangiaIl: (d: string) => `Gefeiert wird am ${d}`,
     menuLabel: "Was isst du?",
     dietaLabel: "Ernährst du dich besonders?",
     dietaClassico: "Ich esse alles",
@@ -148,6 +164,10 @@ const T = {
     inAttesaConferma: "Wartet auf Bestätigung durch den Organisator",
     pagamentoConfermato: "Zahlung bestätigt",
     erroreAzione: "Hat nicht geklappt, versuch's nochmal.",
+    ticketTitolo: "Dein Ticket",
+    ticketUsaBtn: "Einlösen",
+    ticketUsaHint: "Nur vor den Augen der servierenden Person antippen, nicht vorher: ohne diesen Tipp ist das Ticket wertlos.",
+    ticketUsato: (n: number) => `Ticket Nr. ${n} — eingelöst`,
   },
   es: {
     titolo: "Barbacoa",
@@ -157,6 +177,7 @@ const T = {
     soloCamere: "Esta sección es para las habitaciones: la Dirección no participa.",
     nessunaAttiva: "No hay ninguna barbacoa activa ahora mismo.",
     scadeIl: (d: string) => `Las inscripciones cierran el ${d}`,
+    siMangiaIl: (d: string) => `Se celebra el ${d}`,
     menuLabel: "¿Qué comes?",
     dietaLabel: "¿Sigues alguna dieta?",
     dietaClassico: "Como de todo",
@@ -180,6 +201,10 @@ const T = {
     inAttesaConferma: "Esperando confirmación del organizador",
     pagamentoConfermato: "Pago confirmado",
     erroreAzione: "No ha funcionado, inténtalo de nuevo.",
+    ticketTitolo: "Tu ticket",
+    ticketUsaBtn: "Usar",
+    ticketUsaHint: "Tócalo solo delante de quien te sirve, no antes: sin ese toque el ticket no vale nada.",
+    ticketUsato: (n: number) => `Ticket n.º ${n} — usado`,
   },
   nap: {
     titolo: "Grigliata",
@@ -189,6 +214,7 @@ const T = {
     soloCamere: "Chesta sezione è pe' 'e cammere: 'a Direzione nun ce sta.",
     nessunaAttiva: "Mo nun ce sta nisciuna grigliata.",
     scadeIl: (d: string) => `'E adesioni chiudono ô ${d}`,
+    siMangiaIl: (d: string) => `Se magna ô ${d}`,
     menuLabel: "Che magne?",
     dietaLabel: "Tiene 'na dieta particolare?",
     dietaClassico: "Magno 'e tutto",
@@ -212,6 +238,10 @@ const T = {
     inAttesaConferma: "Aspettanno 'a conferma",
     pagamentoConfermato: "Pagamento confermato",
     erroreAzione: "Nun ha' fatto, prova n'ata vota.",
+    ticketTitolo: "'O ticket tujo",
+    ticketUsaBtn: "Adopera",
+    ticketUsaHint: "Tocca sulamente nnanz'a chi te serve, nun primm': senza chistu tocco 'o ticket nun vale niente.",
+    ticketUsato: (n: number) => `Ticket n. ${n} — adoperato`,
   },
 } as const;
 
@@ -226,6 +256,25 @@ const T = {
  */
 function href(link: string): string {
   return /^https?:\/\//i.test(link) ? link : `https://${link}`;
+}
+
+/** "20 settembre" da un `date` puro ("AAAA-MM-GG", senza orario) — split sui
+ *  componenti invece di passare per `new Date(iso)`: letto come UTC e
+ *  riformattato in fuso locale potrebbe slittare di un giorno. */
+function fmtGiorno(dataIso: string, lang: Lang): string {
+  const [y, m, d] = dataIso.split("-").map(Number);
+  if (!y || !m || !d) return dataIso;
+  const locale = { it: "it-IT", en: "en-GB", fr: "fr-FR", de: "de-DE", es: "es-ES", nap: "it-IT" }[lang];
+  return new Date(y, m - 1, d).toLocaleDateString(locale, { day: "numeric", month: "long" });
+}
+
+/** "AAAA-MM-GG" di oggi, nel fuso del dispositivo — stesso formato del
+ *  `date` che il server salva, per un confronto diretto senza passare da
+ *  `Date` (che introdurrebbe un fuso orario nel confronto). */
+function oggiISO(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNumber: string | null }) {
@@ -323,6 +372,22 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
     }
   }
 
+  // Va premuto DAVANTI a chi serve il cibo, non prima: il numero progressivo
+  // (vedi grigliata_usa_ticket in SQL) esiste solo a partire da questo
+  // tocco, mai prima — uno screenshot fatto in anticipo non mostra niente.
+  async function usaTicket() {
+    if (busy) return;
+    setBusy(true); setMsg(null);
+    try {
+      await api.grigliataUsaTicket();
+      await load();
+    } catch {
+      setMsg(t.erroreAzione);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!camera) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-4 px-8 text-center">
@@ -374,6 +439,12 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   // chiesto esplicitamente di cambiare scelta.
   const mostraForm = !miaAdesione || modificaScelta;
 
+  // Il giorno VERO dell'evento, non la scadenza delle adesioni: solo in
+  // questa finestra la conferma del pagamento lascia il posto al ticket
+  // (vedi più sotto) — confronto per data di calendario del dispositivo,
+  // stesso formato "AAAA-MM-GG" che il server salva.
+  const eGiornoEvento = evento.giornoEvento === oggiISO();
+
   return (
     <div className="flex flex-col h-full md:max-w-lg md:mx-auto md:w-full px-5 pt-3 pb-6 overflow-y-auto">
       {/* Nome della SEZIONE ("Grigliata", generico), non dell'evento: quello
@@ -388,6 +459,7 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
 
       <div className="rounded-2xl border p-4 mb-4" style={{ background: surf, borderColor: div }}>
         <p className="text-sm font-bold mb-1" style={{ color: fg }}>{evento.titolo}</p>
+        <p className="text-xs" style={{ color: sub }}>{t.siMangiaIl(fmtGiorno(evento.giornoEvento, lang))}</p>
         <p className="text-xs" style={{ color: sub }}>{t.scadeIl(scadenza)}</p>
       </div>
 
@@ -503,10 +575,42 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
           <p className="text-sm font-bold" style={{ color: fg }}>{t.pagamentoTitolo}</p>
 
           {miaAdesione.pagamentoConfermato ? (
-            <div className="flex items-center gap-2 rounded-xl px-4 py-3" style={{ background: `color-mix(in srgb, ${GREEN} 15%, transparent)`, color: GREEN }}>
-              <Check size={16} />
-              <p className="text-sm font-semibold">{t.pagamentoConfermato}</p>
-            </div>
+            eGiornoEvento ? (
+              // Il giorno VERO della grigliata: la conferma lascia il posto
+              // al ticket. Il bottone "Usa" va premuto DAVANTI a chi serve
+              // il cibo, non prima — il numero progressivo esiste solo da
+              // quel tocco in poi, uno screenshot fatto prima non mostra
+              // niente di valido (vedi la nota gemella in usaTicket() e in
+              // grigliata_usa_ticket, in SQL).
+              <div className="rounded-xl px-4 py-3 flex flex-col gap-2"
+                style={{ background: `color-mix(in srgb, ${RED} 10%, transparent)` }}>
+                <div className="flex items-center gap-2">
+                  <Ticket size={16} style={{ color: RED }} />
+                  <p className="text-sm font-bold" style={{ color: fg }}>{t.ticketTitolo}</p>
+                </div>
+                <p className="text-xs" style={{ color: sub }}>{t.menuScelto(nomeMenu(miaAdesione.menuId))}</p>
+                {miaAdesione.ticketUsato ? (
+                  <div className="flex items-center gap-2 rounded-xl px-3 py-2.5" style={{ background: `color-mix(in srgb, ${GREEN} 15%, transparent)`, color: GREEN }}>
+                    <Check size={16} />
+                    <p className="text-sm font-semibold">{t.ticketUsato(miaAdesione.ticketNumero ?? 0)}</p>
+                  </div>
+                ) : (
+                  <>
+                    <button onClick={usaTicket} disabled={busy}
+                      className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
+                      style={{ background: RED, color: RED_FG, opacity: busy ? 0.6 : 1 }}>
+                      {t.ticketUsaBtn}
+                    </button>
+                    <p className="text-xs leading-relaxed" style={{ color: sub }}>{t.ticketUsaHint}</p>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 rounded-xl px-4 py-3" style={{ background: `color-mix(in srgb, ${GREEN} 15%, transparent)`, color: GREEN }}>
+                <Check size={16} />
+                <p className="text-sm font-semibold">{t.pagamentoConfermato}</p>
+              </div>
+            )
           ) : (
             <>
               <p className="text-xs leading-relaxed" style={{ color: sub }}>{t.pagamentoDesc}</p>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Pencil, Plus, Check, UserPlus, WheatOff, StickyNote, X } from "lucide-react";
+import { Pencil, Plus, Check, UserPlus, WheatOff, StickyNote, X, Ticket } from "lucide-react";
 import { call } from "../../admin-shared/adminApi";
 import { S } from "../../admin-shared/adminStyles";
 import { PIANI, pianoDi, nomePiano, colorePiano, type Piano } from "../../../piani";
@@ -33,15 +33,23 @@ const NOME_DIETA: Record<Dieta, string> = { classico: "Mangia di tutto", vegetar
 // più opzionale. v1.3: "senza glutine" e una nota libera, scritti dal
 // residente — qui si leggono soltanto. v1.3.1: "dieta" torna un campo a sé
 // (nel pannello non si segna 'classico', si segnano solo gli altri due).
+// v1.4: il ticket di questa adesione — esiste solo se pagamento_confermato è
+// vero (lo decide la UI, non una colonna in più); ticket_numero resta null
+// finché il residente non preme "Usa" sul proprio schermo (vedi Grigliata.tsx
+// lato residente — qui si legge soltanto, il tocco non è dell'admin).
 type Adesione = {
   id: number; room: string; menu_id: number; dieta: Dieta;
   senza_glutine: boolean; note: string | null;
   pagamento_dichiarato: boolean; pagamento_confermato: boolean;
   confermato_da: string | null; confermato_at: string | null;
+  ticket_usato: boolean; ticket_numero: number | null; ticket_usato_at: string | null;
 };
 
 type Evento = {
   id: number; titolo: string; scadenza: string;
+  // v1.4: il giorno VERO in cui si mangia — distinto dalla scadenza delle
+  // adesioni/pagamenti, che può cadere prima.
+  giorno_evento: string;
   paypal_link: string | null; satispay_link: string | null;
   chiuso: boolean; attiva: boolean;
   menu: MenuVoce[];
@@ -166,6 +174,24 @@ function fmtData(iso: string): string {
   return new Date(iso).toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+/** Il giorno dell'evento (un `date` puro, "AAAA-MM-GG", senza orario) alla
+ *  data odierna + 3 giorni — stesso orizzonte del default della scadenza. */
+function giornoEventoDiDefault(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 3);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** "20 settembre" da un `date` puro — split sui componenti invece di
+ *  passare per `new Date(iso)`: un `date` senza orario letto come UTC e poi
+ *  riformattato in fuso locale potrebbe slittare di un giorno. */
+function fmtGiorno(dataIso: string): string {
+  const [y, m, d] = dataIso.split("-").map(Number);
+  if (!y || !m || !d) return dataIso;
+  return new Date(y, m - 1, d).toLocaleDateString("it-IT", { day: "numeric", month: "long" });
+}
+
 export function GrigliataAdmin() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -177,6 +203,7 @@ export function GrigliataAdmin() {
   const [modificaEvento, setModificaEvento] = useState(false);
   const [nuovoTitolo, setNuovoTitolo] = useState("");
   const [nuovaScadenza, setNuovaScadenza] = useState("");
+  const [nuovoGiornoEvento, setNuovoGiornoEvento] = useState("");
   const [menuModifica, setMenuModifica] = useState<VoceEditor[]>([]);
 
   // Aggiunta a mano di una camera — per chi non usa l'app, o per registrare
@@ -211,6 +238,7 @@ export function GrigliataAdmin() {
   const [titolo, setTitolo] = useState(titoloDaData(scadenzaDiDefault()));
   const [titoloModificato, setTitoloModificato] = useState(false);
   const [scadenza, setScadenza] = useState(scadenzaDiDefault());
+  const [giornoEvento, setGiornoEvento] = useState(giornoEventoDiDefault());
   const [paypal, setPaypal] = useState("");
   const [satispay, setSatispay] = useState("");
   const [menuNuovi, setMenuNuovi] = useState<VoceEditor[]>(vociDiDefault);
@@ -235,13 +263,14 @@ export function GrigliataAdmin() {
     setBusy(true); setMsg(null);
     try {
       await call("grigliataCrea", {
-        titolo, scadenza: new Date(scadenza).toISOString(),
+        titolo, scadenza: new Date(scadenza).toISOString(), giorno_evento: giornoEvento,
         paypal_link: paypal, satispay_link: satispay,
         menu: vociDaInviare(menuNuovi),
       });
       setMostraForm(false);
       setPaypal(""); setSatispay(""); setTitoloModificato(false);
       setMenuNuovi(vociDiDefault());
+      setGiornoEvento(giornoEventoDiDefault());
       await carica();
       setMsg("Grigliata avviata.");
     } catch (e: any) {
@@ -298,6 +327,7 @@ export function GrigliataAdmin() {
     if (!overview?.evento) return;
     setNuovoTitolo(overview.evento.titolo);
     setNuovaScadenza(isoInDatetimeLocal(overview.evento.scadenza));
+    setNuovoGiornoEvento(overview.evento.giorno_evento);
     setMenuModifica(overview.evento.menu.map((m) => voceNuova(m.nome, m.id)));
     setModificaEvento(true);
   }
@@ -308,7 +338,7 @@ export function GrigliataAdmin() {
     try {
       await call("grigliataModifica", {
         evento_id: overview.evento.id, titolo: nuovoTitolo, scadenza: new Date(nuovaScadenza).toISOString(),
-        menu: vociDaInviare(menuModifica),
+        giorno_evento: nuovoGiornoEvento, menu: vociDaInviare(menuModifica),
       });
       setModificaEvento(false);
       await carica();
@@ -402,7 +432,14 @@ export function GrigliataAdmin() {
   const confermati = partecipanti.filter((a) => a.pagamento_confermato).length;
   const perMenu = (id: number) => {
     const del = partecipanti.filter((a) => a.menu_id === id);
-    return { totale: del.length, pagati: del.filter((a) => a.pagamento_confermato).length };
+    return {
+      totale: del.length,
+      pagati: del.filter((a) => a.pagamento_confermato).length,
+      // Quante porzioni sono DAVVERO uscite (ticket usato) — distinto da
+      // "pagati": un pagamento confermato non vuol dire che il ticket sia
+      // già stato ritirato al banco.
+      usati: del.filter((a) => a.ticket_usato).length,
+    };
   };
   const scelteDi: Record<number, number> = {};
   for (const a of partecipanti) scelteDi[a.menu_id] = (scelteDi[a.menu_id] ?? 0) + 1;
@@ -467,6 +504,13 @@ export function GrigliataAdmin() {
             terzo colore — resta grigia, dice solo "questa ha priorità". */}
         {!confermato && a.pagamento_dichiarato && (
           <span style={{ fontSize: 8, color: "var(--muted-foreground)" }}>dichiarato</span>
+        )}
+        {/* Il ticket è già stato usato al banco: lo sa solo chi guarda qui,
+            non è un'azione dell'admin (il tocco è del residente). */}
+        {confermato && a.ticket_usato && (
+          <span style={{ fontSize: 8, color: colore, display: "flex", alignItems: "center", gap: 2 }}>
+            <Ticket size={9} /> ritirato
+          </span>
         )}
         {confermato && (
           <span style={{
@@ -558,6 +602,16 @@ export function GrigliataAdmin() {
             <input style={S.input} type="datetime-local" value={scadenza} onChange={(e) => cambiaScadenzaForm(e.target.value)} />
           </div>
 
+          <div>
+            <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Giorno della grigliata</label>
+            <input style={S.input} type="date" value={giornoEvento} onChange={(e) => setGiornoEvento(e.target.value)} />
+            <p style={{ fontSize: 11, ...S.sub, marginTop: 4 }}>
+              Il giorno vero in cui si mangia — può cadere dopo la scadenza delle adesioni.
+              È il giorno in cui, sulla scheda dei residenti, la conferma del pagamento lascia
+              il posto al ticket da usare.
+            </p>
+          </div>
+
           <EditorMenu voci={menuNuovi} onChange={setMenuNuovi} />
 
           <div>
@@ -590,6 +644,10 @@ export function GrigliataAdmin() {
               <input style={S.input} value={nuovoTitolo} onChange={(e) => setNuovoTitolo(e.target.value)} placeholder="Grigliata" />
               <input style={S.input} type="datetime-local"
                 value={nuovaScadenza} onChange={(e) => setNuovaScadenza(e.target.value)} />
+              <div>
+                <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Giorno della grigliata</label>
+                <input style={S.input} type="date" value={nuovoGiornoEvento} onChange={(e) => setNuovoGiornoEvento(e.target.value)} />
+              </div>
               <div style={{ marginTop: 4 }}>
                 <EditorMenu voci={menuModifica} onChange={setMenuModifica} scelte={scelteDi} />
               </div>
@@ -619,7 +677,9 @@ export function GrigliataAdmin() {
                   {evento.attiva ? "ATTIVA" : "CHIUSA"}
                 </button>
               </div>
-              <p style={{ fontSize: 12, ...S.sub, marginBottom: 14 }}>Scade {fmtData(evento.scadenza)}</p>
+              <p style={{ fontSize: 12, ...S.sub, marginBottom: 14 }}>
+                Scade {fmtData(evento.scadenza)} · Si mangia il {fmtGiorno(evento.giorno_evento)}
+              </p>
             </>
           )}
 
@@ -637,7 +697,19 @@ export function GrigliataAdmin() {
               <Statistica valore={confermati} etichetta="Pagamenti confermati" />
               {menuEvento.map((m) => {
                 const n = perMenu(m.id);
-                return <Statistica key={m.id} valore={`${n.pagati}/${n.totale}`} etichetta={`${m.nome} (pagati/tot.)`} />;
+                return (
+                  <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    <Statistica valore={`${n.pagati}/${n.totale}`} etichetta={`${m.nome} (pagati/tot.)`} />
+                    {/* Quante porzioni sono DAVVERO uscite al banco (ticket
+                        usato), non solo pagate — il numero che conta il
+                        giorno della grigliata. */}
+                    {n.pagati > 0 && (
+                      <p style={{ fontSize: 10, textAlign: "center", ...S.sub, display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
+                        <Ticket size={10} /> {n.usati}/{n.pagati} ritirati
+                      </p>
+                    )}
+                  </div>
+                );
               })}
             </div>
             <div title="Camere che non mangiano glutine, qualunque menu abbiano scelto"
@@ -773,13 +845,23 @@ export function GrigliataAdmin() {
                 Note: {adesioneSelezionata.note}
               </p>
             )}
-            <p style={{ fontSize: 13, ...S.sub, marginBottom: 16 }}>
+            <p style={{ fontSize: 13, ...S.sub, marginBottom: adesioneSelezionata.pagamento_confermato ? 4 : 16 }}>
               {adesioneSelezionata.pagamento_confermato
                 ? "Pagamento confermato."
                 : adesioneSelezionata.pagamento_dichiarato
                   ? "Ha dichiarato di aver pagato."
                   : "Non ha ancora dichiarato di aver pagato — puoi confermarlo comunque, ad esempio se ha pagato in mano o senza usare l'app."}
             </p>
+            {/* Il ticket si usa dallo schermo del residente, non da qui — questa
+                riga è solo informativa (vedi Grigliata.tsx lato residente). */}
+            {adesioneSelezionata.pagamento_confermato && (
+              <p style={{ fontSize: 13, ...S.sub, marginBottom: 16, display: "flex", alignItems: "center", gap: 5 }}>
+                <Ticket size={13} />
+                {adesioneSelezionata.ticket_usato
+                  ? `Ticket n. ${adesioneSelezionata.ticket_numero} già ritirato.`
+                  : "Ticket non ancora ritirato: comparirà sullo schermo del residente il giorno della grigliata."}
+              </p>
+            )}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {!adesioneSelezionata.pagamento_confermato && (
                 <button style={S.btn} disabled={busy} onClick={confermaSelezionata}>

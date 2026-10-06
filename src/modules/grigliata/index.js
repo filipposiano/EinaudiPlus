@@ -15,6 +15,7 @@ import { notifyRoom as notifyRoomChannel } from "../notifications/index.js";
 import { getStatoPubblico as _getStatoPubblico } from "./application/getStatoPubblico.js";
 import { iscriviti as _iscriviti } from "./application/iscriviti.js";
 import { dichiaraPagamento as _dichiaraPagamento } from "./application/dichiaraPagamento.js";
+import { usaTicket as _usaTicket } from "./application/usaTicket.js";
 import { adminCreaEvento as _adminCreaEvento } from "./application/adminCreaEvento.js";
 import { adminOverview as _adminOverview } from "./application/adminOverview.js";
 import { adminConfermaPagamento as _adminConfermaPagamento } from "./application/adminConfermaPagamento.js";
@@ -44,6 +45,10 @@ export async function dichiaraPagamento(room) {
   return _dichiaraPagamento({ room }, deps);
 }
 
+export async function usaTicket(room) {
+  return _usaTicket({ room }, deps);
+}
+
 // ── Percorso amministrativo (delegato/sistemista) ────────────────────────────
 
 export async function adminCreaEvento(input) {
@@ -62,8 +67,8 @@ export async function adminChiudiEvento(eventoId) {
   return _adminChiudiEvento({ eventoId }, deps);
 }
 
-export async function adminModificaEvento(eventoId, titolo, scadenza, menu) {
-  return _adminModificaEvento({ eventoId, titolo, scadenza, menu }, deps);
+export async function adminModificaEvento(eventoId, titolo, scadenza, giornoEvento, menu) {
+  return _adminModificaEvento({ eventoId, titolo, scadenza, giornoEvento, menu }, deps);
 }
 
 export async function adminAggiungiAdesione(eventoId, room, menuId, dieta) {

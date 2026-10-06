@@ -78,3 +78,13 @@ export function isFutureDateTime(v) {
   const t = Date.parse(String(v || ""));
   return Number.isFinite(t) && t > Date.now();
 }
+
+/**
+ * `v` è una data valida (il giorno della grigliata)? A differenza della
+ * scadenza, non deve essere nel futuro: l'evento potrebbe cadere lo stesso
+ * giorno in cui chiudono le adesioni — solo `grigliata_admin_crea`/
+ * `_modifica`, in SQL, la vuole non nulla (vedi migrations/048).
+ */
+export function isValidDate(v) {
+  return Number.isFinite(Date.parse(String(v || "")));
+}
