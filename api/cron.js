@@ -9,6 +9,7 @@
 
 import { json, methodOk } from "./_lib/http.js";
 import { sendDueReminders } from "../src/modules/notifications/index.js";
+import { sendDueLinenChangeNotifications } from "../src/modules/linen-change/index.js";
 import { wrapHandler } from "../src/shared/errors/wrapHandler.js";
 import { segretiCoincidono } from "../src/shared/crypto/constantTime.js";
 
@@ -26,6 +27,7 @@ export default wrapHandler("cron", async (req, res) => {
   }
 
   const started = Date.now();
-  const result = await sendDueReminders(10);
-  return json(res, 200, { ...result, ms: Date.now() - started });
+  // In parallelo: due use-case indipendenti, nessuno aspetta l'altro.
+  const [result, linen] = await Promise.all([sendDueReminders(10), sendDueLinenChangeNotifications()]);
+  return json(res, 200, { ...result, cambio_biancheria: linen, ms: Date.now() - started });
 }, { genericMessage: "tick fallito" });

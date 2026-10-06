@@ -13,14 +13,21 @@
 // fatta per il tema stagionale, nessun endpoint da duplicare.
 
 import { linenChangeRepository } from "./infrastructure/linenChangeRepository.js";
+import { notifyRoom as notifyRoomChannel } from "../notifications/index.js";
 import { getLinenChangeAnchor as _getLinenChangeAnchor } from "./application/getLinenChangeAnchor.js";
 import { setLinenChangeAnchor as _setLinenChangeAnchor } from "./application/setLinenChangeAnchor.js";
 import { setLinenChangeSkip as _setLinenChangeSkip } from "./application/setLinenChangeSkip.js";
+import { getNotifyPref as _getNotifyPref } from "./application/getNotifyPref.js";
+import { setNotifyPref as _setNotifyPref } from "./application/setNotifyPref.js";
+import { sendDueLinenChangeNotifications as _sendDueLinenChangeNotifications } from "./application/sendDueLinenChangeNotifications.js";
 
 export { authorize } from "./domain/policy.js";
 export { TIPI, isValidTipo } from "./domain/schedule.js";
 
-const deps = { linenChangeRepository };
+// Dipende da Notifications solo per avvisare una camera (notifyRoom),
+// stessa dipendenza cross-modulo già vista fra Bikes/Grigliata e
+// Notifications: Linen Change non sa nulla di push/Telegram.
+const deps = { linenChangeRepository, notifyRoom: notifyRoomChannel };
 
 export async function getLinenChangeAnchor() {
   return _getLinenChangeAnchor({}, deps);
@@ -32,4 +39,20 @@ export async function setLinenChangeAnchor(data, tipo) {
 
 export async function setLinenChangeSkip(data, salta) {
   return _setLinenChangeSkip({ data, salta }, deps);
+}
+
+// ── Percorso pubblico (residenti, camera autodichiarata) ─────────────────────
+
+export async function getNotifyPref(room) {
+  return _getNotifyPref({ room }, deps);
+}
+
+export async function setNotifyPref(room, enabled, notifyTime) {
+  return _setNotifyPref({ room, enabled, notifyTime }, deps);
+}
+
+// ── Cron ──────────────────────────────────────────────────────────────────────
+
+export async function sendDueLinenChangeNotifications() {
+  return _sendDueLinenChangeNotifications({}, deps);
 }

@@ -6,8 +6,11 @@
 import { getLinenChangeAnchor } from "../../src/modules/linen-change/application/getLinenChangeAnchor.js";
 import { setLinenChangeAnchor } from "../../src/modules/linen-change/application/setLinenChangeAnchor.js";
 import { setLinenChangeSkip } from "../../src/modules/linen-change/application/setLinenChangeSkip.js";
+import { getNotifyPref } from "../../src/modules/linen-change/application/getNotifyPref.js";
+import { setNotifyPref } from "../../src/modules/linen-change/application/setNotifyPref.js";
+import { sendDueLinenChangeNotifications } from "../../src/modules/linen-change/application/sendDueLinenChangeNotifications.js";
 import { authorize } from "../../src/modules/linen-change/domain/policy.js";
-import { isValidTipo, isTuesdayISO } from "../../src/modules/linen-change/domain/schedule.js";
+import { isValidTipo, isTuesdayISO, isValidTime } from "../../src/modules/linen-change/domain/schedule.js";
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -32,6 +35,9 @@ function fakeRepository(initial = { ok: true, ancora_data: null, ancora_tipo: nu
       calls.push({ name: "setSkip", args });
       return { ok: true, data: args.data, salta: args.salta };
     },
+    async getNotifyPref(room) { calls.push({ name: "getNotifyPref", room }); return { ok: true, enabled: true, notify_time: "08:00:00" }; },
+    async setNotifyPref(args) { calls.push({ name: "setNotifyPref", args }); return { ok: true }; },
+    async claimDueNotifications() { calls.push({ name: "claimDueNotifications" }); return { ok: true, tipo: "grande", righe: ["214"] }; },
   };
 }
 
@@ -75,6 +81,17 @@ section("isTuesdayISO()");
   check("stringa vuota respinta", isTuesdayISO("") === false);
   check("undefined respinto, senza sollevare", isTuesdayISO(undefined) === false);
   check("data inesistente respinta", isTuesdayISO("2026-13-99") === false);
+}
+
+section("isValidTime()");
+{
+  check("'HH:MM' valido", isValidTime("08:00") === true);
+  check("'HH:MM:SS' valido (tollerato, non richiesto)", isValidTime("23:59:59") === true);
+  check("ora fuori range respinta", isValidTime("24:00") === false);
+  check("minuti fuori range respinti", isValidTime("08:60") === false);
+  check("formato sbagliato respinto", isValidTime("8:00") === false);
+  check("stringa vuota respinta", isValidTime("") === false);
+  check("undefined respinto, senza sollevare", isValidTime(undefined) === false);
 }
 
 // ─── getLinenChangeAnchor() ──────────────────────────────────────────────────
@@ -146,6 +163,88 @@ section("setLinenChangeSkip()");
   const repoNonToccato = fakeRepository();
   await throws(() => setLinenChangeSkip({ data: "2026-09-14", salta: true }, { linenChangeRepository: repoNonToccato }));
   check("e il repository non viene chiamato", repoNonToccato.calls.length === 0);
+}
+
+// ─── getNotifyPref() / setNotifyPref() ──────────────────────────────────────
+
+section("getNotifyPref()");
+{
+  const repo = fakeRepository();
+  await getNotifyPref({ room: " 214 " }, { linenChangeRepository: repo });
+  check("la camera ripulita (numero di camera valido) passa al repository", repo.calls[0].room === "214");
+
+  const err = await throws(() => getNotifyPref({ room: "non una camera" }, { linenChangeRepository: fakeRepository() }));
+  check("una camera non valida viene respinta", err?.message === "camera non valida");
+}
+
+section("setNotifyPref()");
+{
+  const repo = fakeRepository();
+  await setNotifyPref({ room: " 214 ", enabled: false, notifyTime: "09:30" }, { linenChangeRepository: repo });
+  check("camera ripulita, enabled e orario passano al repository",
+    repo.calls[0].args.room === "214" && repo.calls[0].args.enabled === false && repo.calls[0].args.notifyTime === "09:30");
+
+  // enabled assente o non booleano ricade su true: coerente col default
+  // lato SQL, non un errore bloccante — stessa scelta di senzaGlutine in
+  // iscriviti.js ma all'inverso (qui il default e' true, non false).
+  const repoDefault = fakeRepository();
+  await setNotifyPref({ room: "214", notifyTime: "09:30" }, { linenChangeRepository: repoDefault });
+  check("enabled assente -> true", repoDefault.calls[0].args.enabled === true);
+
+  const errCamera = await throws(() =>
+    setNotifyPref({ room: "x", enabled: true, notifyTime: "09:30" }, { linenChangeRepository: fakeRepository() }));
+  check("una camera non valida viene respinta", errCamera?.message === "camera non valida");
+
+  const errOrario = await throws(() =>
+    setNotifyPref({ room: "214", enabled: true, notifyTime: "non un orario" }, { linenChangeRepository: fakeRepository() }));
+  check("un orario non valido viene respinto", errOrario?.message === "orario non valido");
+
+  const repoNonToccato = fakeRepository();
+  await throws(() => setNotifyPref({ room: "x", enabled: true, notifyTime: "09:30" }, { linenChangeRepository: repoNonToccato }));
+  check("e il repository non viene chiamato", repoNonToccato.calls.length === 0);
+}
+
+// ─── sendDueLinenChangeNotifications() ──────────────────────────────────────
+
+section("sendDueLinenChangeNotifications()");
+{
+  const repo = fakeRepository();
+  const notify = (() => {
+    const calls = [];
+    const fn = async (room, title, body, tag) => { calls.push({ room, title, body, tag }); };
+    fn.calls = calls;
+    return fn;
+  })();
+  const res = await sendDueLinenChangeNotifications({}, { linenChangeRepository: repo, notifyRoom: notify });
+  check("una camera dovuta riceve la notifica, col testo giusto per 'grande'",
+    notify.calls.length === 1 && notify.calls[0].room === "214" && /GRANDE/.test(notify.calls[0].body)
+    && notify.calls[0].tag === "cambio-biancheria", JSON.stringify(notify.calls));
+  check("il conteggio inviati torna al chiamante", res.ok === true && res.inviati === 1);
+
+  // Nessuna camera dovuta (non è martedì, o nessuna ha l'orario giusto):
+  // nessuna chiamata a notifyRoom, nessun errore.
+  const repoVuoto = { async claimDueNotifications() { return { ok: true, tipo: null, righe: [] }; } };
+  const notifyNonChiamato = (() => {
+    const calls = [];
+    const fn = async () => { calls.push(1); };
+    fn.calls = calls;
+    return fn;
+  })();
+  const resVuoto = await sendDueLinenChangeNotifications({}, { linenChangeRepository: repoVuoto, notifyRoom: notifyNonChiamato });
+  check("nessuna camera dovuta -> nessuna notifica", notifyNonChiamato.calls.length === 0 && resVuoto.inviati === 0);
+
+  // 'nessuno' (un martedì saltato apposta) avvisa comunque, con un testo
+  // diverso — non è silenzio, è un'informazione a sé.
+  const repoNessuno = { async claimDueNotifications() { return { ok: true, tipo: "nessuno", righe: ["112"] }; } };
+  const notifyNessuno = (() => {
+    const calls = [];
+    const fn = async (room, title, body, tag) => { calls.push({ room, title, body, tag }); };
+    fn.calls = calls;
+    return fn;
+  })();
+  await sendDueLinenChangeNotifications({}, { linenChangeRepository: repoNessuno, notifyRoom: notifyNessuno });
+  check("'nessuno' avvisa comunque, con un testo diverso da 'grande'/'piccolo'",
+    notifyNessuno.calls.length === 1 && /non c'è cambio biancheria/.test(notifyNessuno.calls[0].body));
 }
 
 // ─── Un fallimento della RPC arriva all'admin come diagnosi, non generico ────
