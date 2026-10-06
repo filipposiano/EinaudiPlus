@@ -63,6 +63,8 @@ const T = {
     ticketUsaBtn: "Usa",
     ticketUsaHint: "Tocca solo davanti a chi ti serve, non prima: senza questo tocco il ticket non vale niente.",
     ticketUsato: (n: number) => `Ticket n. ${n} — usato`,
+    ticketScorri: "Scorri per scegliere quale usare",
+    ticketUsatoChiudi: "Fatto",
   },
   en: {
     titolo: "Barbecue",
@@ -106,6 +108,8 @@ const T = {
     ticketUsaBtn: "Use",
     ticketUsaHint: "Only tap this in front of whoever's serving, not before: without that tap the ticket is worthless.",
     ticketUsato: (n: number) => `Ticket #${n} — used`,
+    ticketScorri: "Swipe to choose which one to use",
+    ticketUsatoChiudi: "Done",
   },
   fr: {
     titolo: "Barbecue",
@@ -149,6 +153,8 @@ const T = {
     ticketUsaBtn: "Utiliser",
     ticketUsaHint: "Touche ça seulement devant la personne qui te sert, pas avant : sans ce geste le ticket ne vaut rien.",
     ticketUsato: (n: number) => `Ticket n° ${n} — utilisé`,
+    ticketScorri: "Fais glisser pour choisir lequel utiliser",
+    ticketUsatoChiudi: "Terminé",
   },
   de: {
     titolo: "Grillfest",
@@ -192,6 +198,8 @@ const T = {
     ticketUsaBtn: "Einlösen",
     ticketUsaHint: "Nur vor den Augen der servierenden Person antippen, nicht vorher: ohne diesen Tipp ist das Ticket wertlos.",
     ticketUsato: (n: number) => `Ticket Nr. ${n} — eingelöst`,
+    ticketScorri: "Wische, um auszuwählen, welches du einlösen willst",
+    ticketUsatoChiudi: "Fertig",
   },
   es: {
     titolo: "Barbacoa",
@@ -235,6 +243,8 @@ const T = {
     ticketUsaBtn: "Usar",
     ticketUsaHint: "Tócalo solo delante de quien te sirve, no antes: sin ese toque el ticket no vale nada.",
     ticketUsato: (n: number) => `Ticket n.º ${n} — usado`,
+    ticketScorri: "Desliza para elegir cuál usar",
+    ticketUsatoChiudi: "Listo",
   },
   nap: {
     titolo: "Grigliata",
@@ -278,6 +288,8 @@ const T = {
     ticketUsaBtn: "Adopera",
     ticketUsaHint: "Tocca sulamente nnanz'a chi te serve, nun primm': senza chistu tocco 'o ticket nun vale niente.",
     ticketUsato: (n: number) => `Ticket n. ${n} — adoperato`,
+    ticketScorri: "Scorri pe' scegliere qua' adoperà",
+    ticketUsatoChiudi: "Fatto",
   },
 } as const;
 
@@ -323,6 +335,10 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  // Il tocco di "Usa" apre una schermata a tutto schermo con nome e numero
+  // in grande — la "prova" che il ticket è stato speso proprio ora, non
+  // solo una riga in più nella lista (vedi usaTicket() più sotto).
+  const [ticketAppenaUsato, setTicketAppenaUsato] = useState<{ nome: string; numero: number } | null>(null);
 
   // Form di adesione: menu, senza glutine, note. Non c'è più una scelta sì/no
   // da ricordare: aderire è l'unica azione, dichiarare un interesse attivo —
@@ -415,7 +431,8 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
     if (busy) return;
     setBusy(true); setMsg(null);
     try {
-      await api.grigliataUsaTicket(ticketId);
+      const res = await api.grigliataUsaTicket(ticketId);
+      setTicketAppenaUsato({ nome: res.ticket_nome || "", numero: res.ticket_numero });
       await load();
     } catch {
       setMsg(t.erroreAzione);
@@ -492,6 +509,7 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   const eGiornoEvento = evento.giornoEvento <= oggiISO();
 
   return (
+    <>
     <div className="flex flex-col h-full md:max-w-lg md:mx-auto md:w-full px-5 pt-3 pb-6 overflow-y-auto">
       {/* Nome della SEZIONE ("Grigliata", generico), non dell'evento: quello
           compare subito sotto, nella card. Ripetere qui evento.titolo lo
@@ -673,23 +691,41 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
                   <p className="text-sm font-bold" style={{ color: fg }}>{t.ticketTitolo}</p>
                 </div>
                 <p className="text-xs" style={{ color: sub }}>{t.menuScelto(nomeMenu(miaAdesione.menuId))}</p>
-                {miaAdesione.ticket.map((tk) => (
-                  <div key={tk.id} className="flex flex-col gap-1.5">
-                    <p className="text-xs font-semibold" style={{ color: fg }}>{tk.nome}</p>
-                    {tk.usato ? (
-                      <div className="flex items-center gap-2 rounded-xl px-3 py-2.5" style={{ background: `color-mix(in srgb, ${GREEN} 15%, transparent)`, color: GREEN }}>
-                        <Check size={16} />
-                        <p className="text-sm font-semibold">{t.ticketUsato(tk.numero ?? 0)}</p>
-                      </div>
-                    ) : (
-                      <button onClick={() => usaTicket(tk.id)} disabled={busy}
-                        className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
-                        style={{ background: RED, color: RED_FG, opacity: busy ? 0.6 : 1 }}>
-                        {t.ticketUsaBtn}
-                      </button>
-                    )}
-                  </div>
-                ))}
+
+                {/* Uno scorrimento orizzontale invece di un elenco impilato:
+                    con più di un ticket (es. "Salsiccia" + "Bibita") il
+                    residente scorre da destra a sinistra fra le carte e
+                    sceglie quale usare — ciascuna è a sé, non tutte visibili
+                    e premibili insieme. */}
+                <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1"
+                  style={{ scrollSnapType: "x mandatory" }}>
+                  {miaAdesione.ticket.map((tk) => (
+                    <div key={tk.id}
+                      className="shrink-0 rounded-xl p-3 flex flex-col items-center justify-center gap-2 text-center"
+                      style={{
+                        scrollSnapAlign: "center", width: "72%", minHeight: 112,
+                        background: tk.usato ? `color-mix(in srgb, ${GREEN} 12%, var(--card))` : "var(--card)",
+                        border: `1px solid ${tk.usato ? `color-mix(in srgb, ${GREEN} 35%, var(--border))` : div}`,
+                      }}>
+                      <p className="text-sm font-bold" style={{ color: fg }}>{tk.nome}</p>
+                      {tk.usato ? (
+                        <div className="flex items-center gap-1.5" style={{ color: GREEN }}>
+                          <Check size={16} />
+                          <p className="text-sm font-semibold">{t.ticketUsato(tk.numero ?? 0)}</p>
+                        </div>
+                      ) : (
+                        <button onClick={() => usaTicket(tk.id)} disabled={busy}
+                          className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-[0.98]"
+                          style={{ background: RED, color: RED_FG, opacity: busy ? 0.6 : 1 }}>
+                          {t.ticketUsaBtn}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {miaAdesione.ticket.length > 1 && (
+                  <p className="text-[11px] text-center" style={{ color: sub }}>{t.ticketScorri}</p>
+                )}
                 {miaAdesione.ticket.some((tk) => !tk.usato) && (
                   <p className="text-xs leading-relaxed" style={{ color: sub }}>{t.ticketUsaHint}</p>
                 )}
@@ -740,5 +776,26 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
         </div>
       )}
     </div>
+
+    {/* Schermata a tutto schermo subito dopo "Usa": nome e numero in grande,
+        la prova che il ticket è stato speso proprio ora — non una riga in
+        più da cercare nella lista. Si chiude toccando ovunque. */}
+    {ticketAppenaUsato && (
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 px-8 text-center"
+        style={{ background: RED }}
+        onClick={() => setTicketAppenaUsato(null)}>
+        <div className="rounded-full p-4" style={{ background: "rgba(255,255,255,0.18)" }}>
+          <Check size={40} style={{ color: RED_FG }} />
+        </div>
+        <p className="text-2xl font-bold" style={{ color: RED_FG }}>{ticketAppenaUsato.nome}</p>
+        <p className="text-7xl font-extrabold tabular-nums" style={{ color: RED_FG }}>#{ticketAppenaUsato.numero}</p>
+        <button onClick={() => setTicketAppenaUsato(null)}
+          className="mt-4 px-8 py-3 rounded-2xl text-sm font-bold"
+          style={{ background: RED_FG, color: RED }}>
+          {t.ticketUsatoChiudi}
+        </button>
+      </div>
+    )}
+    </>
   );
 }
