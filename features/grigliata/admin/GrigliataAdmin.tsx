@@ -23,7 +23,10 @@ import { PIANI, pianoDi, nomePiano, colorePiano, type Piano } from "../../../pia
 // residente dichiara IN PIÙ, qualunque menu abbia scelto (vedi `dieta` su
 // Adesione più sotto): si può scegliere "Carne" e dichiararsi vegani, il
 // delegato prepara un piatto a parte.
-type MenuVoce = { id: number; nome: string };
+// v1.5: ogni menu si scompone in una o più voci-ticket (es. menu "Carne" =
+// "Salsiccia" + "Patatine" + "Bibita") — decise dal delegato insieme al menu.
+type MenuTicketVoce = { id: number; nome: string };
+type MenuVoce = { id: number; nome: string; ticket: MenuTicketVoce[] };
 type Dieta = "classico" | "vegetariano" | "vegano";
 const NOME_DIETA: Record<Dieta, string> = { classico: "Mangia di tutto", vegetariano: "Vegetariano", vegano: "Vegano" };
 
@@ -33,16 +36,20 @@ const NOME_DIETA: Record<Dieta, string> = { classico: "Mangia di tutto", vegetar
 // più opzionale. v1.3: "senza glutine" e una nota libera, scritti dal
 // residente — qui si leggono soltanto. v1.3.1: "dieta" torna un campo a sé
 // (nel pannello non si segna 'classico', si segnano solo gli altri due).
-// v1.4: il ticket di questa adesione — esiste solo se pagamento_confermato è
-// vero (lo decide la UI, non una colonna in più); ticket_numero resta null
-// finché il residente non preme "Usa" sul proprio schermo (vedi Grigliata.tsx
-// lato residente — qui si legge soltanto, il tocco non è dell'admin).
+// v1.5: i ticket di questa adesione — uno per voce del menu scelto, creati
+// tutti insieme alla conferma del pagamento (lo decide la UI che il pagamento
+// sia confermato, non una colonna in più); `numero` resta null finché il
+// residente non preme "Usa" su quella voce dal proprio schermo (vedi
+// Grigliata.tsx lato residente — qui si legge soltanto, il tocco non è
+// dell'admin).
+type AdesioneTicket = { id: number; nome: string; usato: boolean; numero: number | null; usato_at: string | null };
+
 type Adesione = {
   id: number; room: string; menu_id: number; dieta: Dieta;
   senza_glutine: boolean; note: string | null;
   pagamento_dichiarato: boolean; pagamento_confermato: boolean;
   confermato_da: string | null; confermato_at: string | null;
-  ticket_usato: boolean; ticket_numero: number | null; ticket_usato_at: string | null;
+  ticket: AdesioneTicket[];
 };
 
 type Evento = {
@@ -66,32 +73,55 @@ type Evento = {
 // altro viene ricreato a ogni render, e un <input> ricreato perde il fuoco
 // a ogni lettera digitata.
 
-type VoceEditor = { chiave: number; id?: number; nome: string };
+type VoceTicketEditor = { chiave: number; id?: number; nome: string };
+type VoceEditor = { chiave: number; id?: number; nome: string; ticket: VoceTicketEditor[] };
 
 const MENU_MAX = 10;
+const TICKET_MAX = 10;
 const MENU_DI_DEFAULT = ["Carne", "Pesce"];
 let prossimaChiave = 1;
 
-const voceNuova = (nome: string, id?: number): VoceEditor => ({ chiave: prossimaChiave++, id, nome });
+const voceTicketNuova = (nome: string, id?: number): VoceTicketEditor => ({ chiave: prossimaChiave++, id, nome });
+// Senza un elenco esplicito di ticket, una voce nuova parte con UN ticket
+// già pronto (stesso nome del menu): un menu richiede sempre almeno un
+// ticket, niente form che parte già in uno stato non valido.
+const voceNuova = (nome: string, id?: number, ticket?: VoceTicketEditor[]): VoceEditor =>
+  ({ chiave: prossimaChiave++, id, nome, ticket: ticket ?? [voceTicketNuova(nome)] });
 const vociDiDefault = () => MENU_DI_DEFAULT.map((nome) => voceNuova(nome));
 /** Il formato che si aspettano grigliataCrea/grigliataModifica. */
 const vociDaInviare = (voci: VoceEditor[]) =>
-  voci.map((v) => (v.id ? { id: v.id, nome: v.nome } : { nome: v.nome }));
+  voci.map((v) => ({
+    ...(v.id ? { id: v.id } : {}),
+    nome: v.nome,
+    ticket: v.ticket.map((t) => (t.id ? { id: t.id, nome: t.nome } : { nome: t.nome })),
+  }));
 
-function EditorMenu({ voci, onChange, scelte }: {
+function EditorMenu({ voci, onChange, scelte, ticketScelte }: {
   voci: VoceEditor[];
   onChange: (voci: VoceEditor[]) => void;
   /** Quante camere hanno già scelto ciascun menu (per id), solo in modifica. */
   scelte?: Record<number, number>;
+  /** Quante adesioni hanno già un ticket di ciascuna voce (per id), solo in modifica. */
+  ticketScelte?: Record<number, number>;
 }) {
   const rinomina = (chiave: number, nome: string) =>
     onChange(voci.map((v) => (v.chiave === chiave ? { ...v, nome } : v)));
   const togli = (chiave: number) => onChange(voci.filter((v) => v.chiave !== chiave));
+  const rinominaTicket = (chiaveMenu: number, chiaveTicket: number, nome: string) =>
+    onChange(voci.map((v) => (v.chiave === chiaveMenu
+      ? { ...v, ticket: v.ticket.map((t) => (t.chiave === chiaveTicket ? { ...t, nome } : t)) }
+      : v)));
+  const toglieTicket = (chiaveMenu: number, chiaveTicket: number) =>
+    onChange(voci.map((v) => (v.chiave === chiaveMenu
+      ? { ...v, ticket: v.ticket.filter((t) => t.chiave !== chiaveTicket) }
+      : v)));
+  const aggiungiTicket = (chiaveMenu: number) =>
+    onChange(voci.map((v) => (v.chiave === chiaveMenu ? { ...v, ticket: [...v.ticket, voceTicketNuova("")] } : v)));
 
   return (
     <div>
       <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Menu fra cui scegliere</label>
-      <div style={{ display: "grid", gap: 6 }}>
+      <div style={{ display: "grid", gap: 10 }}>
         {voci.map((v) => {
           const usato = (v.id && scelte?.[v.id]) || 0;
           // Un menu già scelto da qualcuno non si toglie (lo rifiuterebbe
@@ -99,21 +129,62 @@ function EditorMenu({ voci, onChange, scelte }: {
           // rimasto nemmeno — serve almeno un menu.
           const bloccato = usato > 0 || voci.length === 1;
           return (
-            <div key={v.chiave} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-              <input style={{ ...S.input, flex: 1, minWidth: 0 }} value={v.nome} maxLength={40}
-                onChange={(e) => rinomina(v.chiave, e.target.value)}
-                placeholder="Es. Carne" />
-              <button onClick={() => togli(v.chiave)} disabled={bloccato}
-                title={usato > 0 ? `Scelto da ${usato} ${usato === 1 ? "camera" : "camere"}: non si può togliere` : "Togli questo menu"}
-                aria-label={`Togli ${v.nome || "menu"}`}
-                style={{
-                  width: 30, height: 30, flexShrink: 0, borderRadius: 8, border: "1px solid var(--border)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  background: "none", color: "var(--muted-foreground)",
-                  cursor: bloccato ? "default" : "pointer", opacity: bloccato ? 0.35 : 1,
-                }}>
-                <X size={14} />
-              </button>
+            <div key={v.chiave} style={{ display: "grid", gap: 6, padding: 8, borderRadius: 10, background: "var(--secondary)" }}>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <input style={{ ...S.input, flex: 1, minWidth: 0, background: "var(--card)" }} value={v.nome} maxLength={40}
+                  onChange={(e) => rinomina(v.chiave, e.target.value)}
+                  placeholder="Es. Carne" />
+                <button onClick={() => togli(v.chiave)} disabled={bloccato}
+                  title={usato > 0 ? `Scelto da ${usato} ${usato === 1 ? "camera" : "camere"}: non si può togliere` : "Togli questo menu"}
+                  aria-label={`Togli ${v.nome || "menu"}`}
+                  style={{
+                    width: 30, height: 30, flexShrink: 0, borderRadius: 8, border: "1px solid var(--border)",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "none", color: "var(--muted-foreground)",
+                    cursor: bloccato ? "default" : "pointer", opacity: bloccato ? 0.35 : 1,
+                  }}>
+                  <X size={14} />
+                </button>
+              </div>
+
+              {/* Le voci-ticket di QUESTO menu — un livello annidato, stesso
+                  schema (nome + togli + aggiungi), un "Ticket" invece di un
+                  "Togli questo menu" quando bloccato. */}
+              <div style={{ paddingLeft: 14, display: "grid", gap: 4 }}>
+                <label style={{ fontSize: 11, ...S.sub }}>Ticket di questo menu</label>
+                {v.ticket.map((t) => {
+                  const usatoTicket = (t.id && ticketScelte?.[t.id]) || 0;
+                  const bloccatoTicket = usatoTicket > 0 || v.ticket.length === 1;
+                  return (
+                    <div key={t.chiave} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <Ticket size={12} style={{ flexShrink: 0, color: "var(--muted-foreground)" }} />
+                      <input style={{ ...S.input, flex: 1, minWidth: 0, background: "var(--card)" }} value={t.nome} maxLength={40}
+                        onChange={(e) => rinominaTicket(v.chiave, t.chiave, e.target.value)}
+                        placeholder="Es. Salsiccia" />
+                      <button onClick={() => toglieTicket(v.chiave, t.chiave)} disabled={bloccatoTicket}
+                        title={usatoTicket > 0 ? `Già assegnato a ${usatoTicket} ${usatoTicket === 1 ? "adesione" : "adesioni"}: non si può togliere` : "Togli questo ticket"}
+                        aria-label={`Togli ${t.nome || "ticket"}`}
+                        style={{
+                          width: 26, height: 26, flexShrink: 0, borderRadius: 7, border: "1px solid var(--border)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          background: "none", color: "var(--muted-foreground)",
+                          cursor: bloccatoTicket ? "default" : "pointer", opacity: bloccatoTicket ? 0.35 : 1,
+                        }}>
+                        <X size={12} />
+                      </button>
+                    </div>
+                  );
+                })}
+                {v.ticket.length < TICKET_MAX && (
+                  <button onClick={() => aggiungiTicket(v.chiave)}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 4, marginTop: 2, fontSize: 11, fontWeight: 700,
+                      color: "var(--gray-accessible-text)", background: "none", border: "none", cursor: "pointer", padding: 0,
+                    }}>
+                    <Plus size={11} /> Aggiungi un ticket
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
@@ -130,7 +201,10 @@ function EditorMenu({ voci, onChange, scelte }: {
       <p style={{ fontSize: 11, ...S.sub, marginTop: 6 }}>
         Cosa si mangia (es. "Carne"/"Pesce") — non è legato a vegetariano,
         vegano o senza glutine: quello lo dichiara il residente a parte,
-        qualunque menu scelga. Il primo è preselezionato per i residenti.
+        qualunque menu scelga. Il primo è preselezionato per i residenti. Le
+        voci-ticket di ciascun menu (es. "Salsiccia", "Bibita") sono quello
+        che il residente ritira una alla volta il giorno della grigliata —
+        servono almeno una per menu.
       </p>
     </div>
   );
@@ -328,7 +402,8 @@ export function GrigliataAdmin() {
     setNuovoTitolo(overview.evento.titolo);
     setNuovaScadenza(isoInDatetimeLocal(overview.evento.scadenza));
     setNuovoGiornoEvento(overview.evento.giorno_evento);
-    setMenuModifica(overview.evento.menu.map((m) => voceNuova(m.nome, m.id)));
+    setMenuModifica(overview.evento.menu.map((m) =>
+      voceNuova(m.nome, m.id, m.ticket.map((t) => voceTicketNuova(t.nome, t.id)))));
     setModificaEvento(true);
   }
 
@@ -432,17 +507,23 @@ export function GrigliataAdmin() {
   const confermati = partecipanti.filter((a) => a.pagamento_confermato).length;
   const perMenu = (id: number) => {
     const del = partecipanti.filter((a) => a.menu_id === id);
-    return {
-      totale: del.length,
-      pagati: del.filter((a) => a.pagamento_confermato).length,
-      // Quante porzioni sono DAVVERO uscite (ticket usato) — distinto da
-      // "pagati": un pagamento confermato non vuol dire che il ticket sia
-      // già stato ritirato al banco.
-      usati: del.filter((a) => a.ticket_usato).length,
-    };
+    return { totale: del.length, pagati: del.filter((a) => a.pagamento_confermato).length };
+  };
+  /** Quante adesioni hanno un ticket di QUESTA voce (= pagate, i ticket
+   *  esistono solo a pagamento confermato) e quante l'hanno già ritirato —
+   *  il numero che conta il giorno della grigliata, distinto da "pagati". */
+  const perTicket = (ticketId: number) => {
+    let pagati = 0, usati = 0;
+    for (const a of partecipanti) {
+      const tk = a.ticket.find((t) => t.id === ticketId);
+      if (tk) { pagati++; if (tk.usato) usati++; }
+    }
+    return { pagati, usati };
   };
   const scelteDi: Record<number, number> = {};
   for (const a of partecipanti) scelteDi[a.menu_id] = (scelteDi[a.menu_id] ?? 0) + 1;
+  const ticketScelteDi: Record<number, number> = {};
+  for (const a of partecipanti) for (const tk of a.ticket) ticketScelteDi[tk.id] = (ticketScelteDi[tk.id] ?? 0) + 1;
   const senzaGlutine = partecipanti.filter((a) => a.senza_glutine).length;
   // Chi ha qualcosa di cui chi cucina deve tenere conto: una dieta diversa
   // da "classico", senza glutine, o una nota. È la lista da leggere prima
@@ -505,11 +586,13 @@ export function GrigliataAdmin() {
         {!confermato && a.pagamento_dichiarato && (
           <span style={{ fontSize: 8, color: "var(--muted-foreground)" }}>dichiarato</span>
         )}
-        {/* Il ticket è già stato usato al banco: lo sa solo chi guarda qui,
-            non è un'azione dell'admin (il tocco è del residente). */}
-        {confermato && a.ticket_usato && (
+        {/* Quanti dei suoi ticket sono già stati ritirati al banco: lo sa
+            solo chi guarda qui, non è un'azione dell'admin (il tocco è del
+            residente). Solo se almeno uno lo è — altrimenti è rumore su
+            ogni pastiglia confermata. */}
+        {confermato && a.ticket.some((t) => t.usato) && (
           <span style={{ fontSize: 8, color: colore, display: "flex", alignItems: "center", gap: 2 }}>
-            <Ticket size={9} /> ritirato
+            <Ticket size={9} /> {a.ticket.filter((t) => t.usato).length}/{a.ticket.length} ritirati
           </span>
         )}
         {confermato && (
@@ -649,7 +732,7 @@ export function GrigliataAdmin() {
                 <input style={S.input} type="date" value={nuovoGiornoEvento} onChange={(e) => setNuovoGiornoEvento(e.target.value)} />
               </div>
               <div style={{ marginTop: 4 }}>
-                <EditorMenu voci={menuModifica} onChange={setMenuModifica} scelte={scelteDi} />
+                <EditorMenu voci={menuModifica} onChange={setMenuModifica} scelte={scelteDi} ticketScelte={ticketScelteDi} />
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                 <button onClick={salvaEvento} disabled={busy} style={{ ...S.btn, opacity: busy ? 0.5 : 1 }}>Salva</button>
@@ -700,14 +783,18 @@ export function GrigliataAdmin() {
                 return (
                   <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
                     <Statistica valore={`${n.pagati}/${n.totale}`} etichetta={`${m.nome} (pagati/tot.)`} />
-                    {/* Quante porzioni sono DAVVERO uscite al banco (ticket
-                        usato), non solo pagate — il numero che conta il
-                        giorno della grigliata. */}
-                    {n.pagati > 0 && (
-                      <p style={{ fontSize: 10, textAlign: "center", ...S.sub, display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
-                        <Ticket size={10} /> {n.usati}/{n.pagati} ritirati
-                      </p>
-                    )}
+                    {/* Quante porzioni di CIASCUNA voce-ticket sono DAVVERO
+                        uscite al banco, non solo pagate — il numero che
+                        conta il giorno della grigliata. */}
+                    {m.ticket.map((tk) => {
+                      const nt = perTicket(tk.id);
+                      if (nt.pagati === 0) return null;
+                      return (
+                        <p key={tk.id} style={{ fontSize: 10, textAlign: "center", ...S.sub, display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
+                          <Ticket size={10} /> {tk.nome}: {nt.usati}/{nt.pagati} ritirati
+                        </p>
+                      );
+                    })}
                   </div>
                 );
               })}
@@ -852,15 +939,18 @@ export function GrigliataAdmin() {
                   ? "Ha dichiarato di aver pagato."
                   : "Non ha ancora dichiarato di aver pagato — puoi confermarlo comunque, ad esempio se ha pagato in mano o senza usare l'app."}
             </p>
-            {/* Il ticket si usa dallo schermo del residente, non da qui — questa
-                riga è solo informativa (vedi Grigliata.tsx lato residente). */}
+            {/* I ticket si usano dallo schermo del residente, non da qui —
+                questo elenco è solo informativo (vedi Grigliata.tsx lato
+                residente), uno per voce del menu scelto. */}
             {adesioneSelezionata.pagamento_confermato && (
-              <p style={{ fontSize: 13, ...S.sub, marginBottom: 16, display: "flex", alignItems: "center", gap: 5 }}>
-                <Ticket size={13} />
-                {adesioneSelezionata.ticket_usato
-                  ? `Ticket n. ${adesioneSelezionata.ticket_numero} già ritirato.`
-                  : "Ticket non ancora ritirato: comparirà sullo schermo del residente il giorno della grigliata."}
-              </p>
+              <div style={{ marginBottom: 16, display: "grid", gap: 3 }}>
+                {adesioneSelezionata.ticket.map((tk) => (
+                  <p key={tk.id} style={{ fontSize: 13, ...S.sub, display: "flex", alignItems: "center", gap: 5 }}>
+                    <Ticket size={13} />
+                    {tk.usato ? `${tk.nome}: ticket n. ${tk.numero} già ritirato.` : `${tk.nome}: non ancora ritirato.`}
+                  </p>
+                ))}
+              </div>
             )}
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {!adesioneSelezionata.pagamento_confermato && (

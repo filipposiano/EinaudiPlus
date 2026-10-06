@@ -21,9 +21,9 @@ export const grigliataRepository = {
     return rpc("grigliata_dichiara_pagamento", { p_room: room });
   },
 
-  /** Percorso pubblico: "usa" il proprio ticket — vedi application/usaTicket.js. */
-  async usaTicket(room) {
-    return rpc("grigliata_usa_ticket", { p_room: room });
+  /** Percorso pubblico: "usa" UNA voce-ticket — vedi application/usaTicket.js. */
+  async usaTicket(room, ticketId) {
+    return rpc("grigliata_usa_ticket", { p_room: room, p_ticket_id: ticketId });
   },
 
   /** Admin (delegato/sistemista): fa partire una nuova grigliata, coi suoi menu. */

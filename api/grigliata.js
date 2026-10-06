@@ -46,7 +46,7 @@ export default wrapHandler("grigliata", async (req, res) => {
       return json(res, 200, await dichiaraPagamento(room));
 
     case "usaTicket":
-      return json(res, 200, await usaTicket(room));
+      return json(res, 200, await usaTicket(room, body.ticket_id));
 
     default:
       return fail(res, "azione sconosciuta");

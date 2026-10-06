@@ -45,8 +45,8 @@ export async function dichiaraPagamento(room) {
   return _dichiaraPagamento({ room }, deps);
 }
 
-export async function usaTicket(room) {
-  return _usaTicket({ room }, deps);
+export async function usaTicket(room, ticketId) {
+  return _usaTicket({ room, ticketId }, deps);
 }
 
 // ── Percorso amministrativo (delegato/sistemista) ────────────────────────────

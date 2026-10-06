@@ -13,11 +13,53 @@ export const NOTE_MAX = 300;
 export const MENU_MAX = 10;
 export const MENU_NOME_MAX = 40;
 
+// v1.5: ogni menu si scompone in una o più voci-ticket (es. menu "Carne" =
+// "Salsiccia" + "Patatine" + "Bibita"), decise dal delegato insieme al menu
+// stesso — un'adesione riceve, alla conferma del pagamento, un ticket vero
+// per ciascuna (vedi grigliata_admin_conferma_pagamento in SQL). Stessi
+// tetti del menu, un livello più in basso.
+export const TICKET_MAX = 10;
+export const TICKET_NOME_MAX = 40;
+
+/**
+ * Ripulisce e controlla l'elenco delle voci-ticket di UN menu: un array di
+ * `{ id?, nome }`, stesse regole di controllaMenu() un livello più in
+ * basso — stesse regole di grigliata_ticket_errore().
+ */
+export function controllaTicket(lista) {
+  if (!Array.isArray(lista)) return { errore: "elenco ticket non valido" };
+  if (lista.length < 1) return { errore: "serve almeno un ticket per menu" };
+  if (lista.length > TICKET_MAX) return { errore: `al massimo ${TICKET_MAX} ticket per menu` };
+
+  const visti = new Set();
+  const ids = new Set();
+  const ticket = [];
+  for (const voce of lista) {
+    const nome = String(voce?.nome ?? "").trim();
+    if (!nome) return { errore: "ogni ticket deve avere un nome" };
+    if (nome.length > TICKET_NOME_MAX) return { errore: `nome del ticket troppo lungo (massimo ${TICKET_NOME_MAX} caratteri)` };
+    const chiave = nome.toLowerCase();
+    if (visti.has(chiave)) return { errore: `due ticket con lo stesso nome: ${nome}` };
+    visti.add(chiave);
+
+    const id = idValido(voce?.id);
+    if (id) {
+      if (ids.has(id)) return { errore: "ticket non valido" };
+      ids.add(id);
+      ticket.push({ id, nome });
+    } else {
+      ticket.push({ nome });
+    }
+  }
+  return { ticket };
+}
+
 /**
  * Ripulisce e controlla l'elenco dei menu scritto dal delegato: un array di
- * `{ id?, nome }` nell'ordine voluto (`id` presente solo per un menu che
- * esiste già e si sta rinominando). Torna `{ menu }` ripulito, o `{ errore }`
- * con il messaggio da mostrare — stesse regole di grigliata_menu_errore().
+ * `{ id?, nome, ticket }` nell'ordine voluto (`id` presente solo per un menu
+ * che esiste già e si sta rinominando). Torna `{ menu }` ripulito, o
+ * `{ errore }` con il messaggio da mostrare — stesse regole di
+ * grigliata_menu_errore().
  */
 export function controllaMenu(lista) {
   if (!Array.isArray(lista)) return { errore: "menu non valido" };
@@ -35,15 +77,18 @@ export function controllaMenu(lista) {
     if (visti.has(chiave)) return { errore: `due menu con lo stesso nome: ${nome}` };
     visti.add(chiave);
 
+    const esitoTicket = controllaTicket(voce?.ticket);
+    if (esitoTicket.errore) return { errore: `menu "${nome}": ${esitoTicket.errore}` };
+
     const id = idValido(voce?.id);
     if (id) {
       // Lo stesso menu esistente elencato due volte: uno dei due nomi
       // sparirebbe in silenzio.
       if (ids.has(id)) return { errore: "menu non valido" };
       ids.add(id);
-      menu.push({ id, nome });
+      menu.push({ id, nome, ticket: esitoTicket.ticket });
     } else {
-      menu.push({ nome });
+      menu.push({ nome, ticket: esitoTicket.ticket });
     }
   }
   return { menu };

@@ -6,10 +6,14 @@
 // camera autodichiarata.
 
 import { ValidationError } from "../../../shared/errors/AppError.js";
+import { idValido } from "../domain/validazione.js";
 
-export async function usaTicket({ room }, { grigliataRepository }) {
+export async function usaTicket({ room, ticketId }, { grigliataRepository }) {
   const trimmedRoom = String(room || "").trim();
   if (!trimmedRoom) throw new ValidationError("camera mancante");
 
-  return grigliataRepository.usaTicket(trimmedRoom);
+  const id = idValido(ticketId);
+  if (!id) throw new ValidationError("ticket non valido");
+
+  return grigliataRepository.usaTicket(trimmedRoom, id);
 }

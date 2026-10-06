@@ -53,7 +53,7 @@ const T = {
     inAttesaConferma: "In attesa di conferma dal delegato",
     pagamentoConfermato: "Pagamento confermato",
     erroreAzione: "Non è riuscito, riprova.",
-    ticketTitolo: "Il tuo ticket",
+    ticketTitolo: "I tuoi ticket",
     ticketUsaBtn: "Usa",
     ticketUsaHint: "Tocca solo davanti a chi ti serve, non prima: senza questo tocco il ticket non vale niente.",
     ticketUsato: (n: number) => `Ticket n. ${n} — usato`,
@@ -90,7 +90,7 @@ const T = {
     inAttesaConferma: "Waiting for the organizer to confirm",
     pagamentoConfermato: "Payment confirmed",
     erroreAzione: "That didn't work, try again.",
-    ticketTitolo: "Your ticket",
+    ticketTitolo: "Your tickets",
     ticketUsaBtn: "Use",
     ticketUsaHint: "Only tap this in front of whoever's serving, not before: without that tap the ticket is worthless.",
     ticketUsato: (n: number) => `Ticket #${n} — used`,
@@ -127,7 +127,7 @@ const T = {
     inAttesaConferma: "En attente de confirmation de l'organisateur",
     pagamentoConfermato: "Paiement confirmé",
     erroreAzione: "Ça n'a pas marché, réessaie.",
-    ticketTitolo: "Ton ticket",
+    ticketTitolo: "Tes tickets",
     ticketUsaBtn: "Utiliser",
     ticketUsaHint: "Touche ça seulement devant la personne qui te sert, pas avant : sans ce geste le ticket ne vaut rien.",
     ticketUsato: (n: number) => `Ticket n° ${n} — utilisé`,
@@ -164,7 +164,7 @@ const T = {
     inAttesaConferma: "Wartet auf Bestätigung durch den Organisator",
     pagamentoConfermato: "Zahlung bestätigt",
     erroreAzione: "Hat nicht geklappt, versuch's nochmal.",
-    ticketTitolo: "Dein Ticket",
+    ticketTitolo: "Deine Tickets",
     ticketUsaBtn: "Einlösen",
     ticketUsaHint: "Nur vor den Augen der servierenden Person antippen, nicht vorher: ohne diesen Tipp ist das Ticket wertlos.",
     ticketUsato: (n: number) => `Ticket Nr. ${n} — eingelöst`,
@@ -201,7 +201,7 @@ const T = {
     inAttesaConferma: "Esperando confirmación del organizador",
     pagamentoConfermato: "Pago confirmado",
     erroreAzione: "No ha funcionado, inténtalo de nuevo.",
-    ticketTitolo: "Tu ticket",
+    ticketTitolo: "Tus tickets",
     ticketUsaBtn: "Usar",
     ticketUsaHint: "Tócalo solo delante de quien te sirve, no antes: sin ese toque el ticket no vale nada.",
     ticketUsato: (n: number) => `Ticket n.º ${n} — usado`,
@@ -238,7 +238,7 @@ const T = {
     inAttesaConferma: "Aspettanno 'a conferma",
     pagamentoConfermato: "Pagamento confermato",
     erroreAzione: "Nun ha' fatto, prova n'ata vota.",
-    ticketTitolo: "'O ticket tujo",
+    ticketTitolo: "'E ticket tuoje",
     ticketUsaBtn: "Adopera",
     ticketUsaHint: "Tocca sulamente nnanz'a chi te serve, nun primm': senza chistu tocco 'o ticket nun vale niente.",
     ticketUsato: (n: number) => `Ticket n. ${n} — adoperato`,
@@ -375,11 +375,11 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   // Va premuto DAVANTI a chi serve il cibo, non prima: il numero progressivo
   // (vedi grigliata_usa_ticket in SQL) esiste solo a partire da questo
   // tocco, mai prima — uno screenshot fatto in anticipo non mostra niente.
-  async function usaTicket() {
+  async function usaTicket(ticketId: number) {
     if (busy) return;
     setBusy(true); setMsg(null);
     try {
-      await api.grigliataUsaTicket();
+      await api.grigliataUsaTicket(ticketId);
       await load();
     } catch {
       setMsg(t.erroreAzione);
@@ -577,32 +577,38 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
           {miaAdesione.pagamentoConfermato ? (
             eGiornoEvento ? (
               // Il giorno VERO della grigliata: la conferma lascia il posto
-              // al ticket. Il bottone "Usa" va premuto DAVANTI a chi serve
-              // il cibo, non prima — il numero progressivo esiste solo da
-              // quel tocco in poi, uno screenshot fatto prima non mostra
+              // ai ticket — uno per voce del menu scelto (es. "Carne" =
+              // "Salsiccia" + "Patatine"). Ciascuno va premuto DAVANTI a chi
+              // serve il cibo, non prima — il numero progressivo esiste solo
+              // da quel tocco in poi, uno screenshot fatto prima non mostra
               // niente di valido (vedi la nota gemella in usaTicket() e in
               // grigliata_usa_ticket, in SQL).
-              <div className="rounded-xl px-4 py-3 flex flex-col gap-2"
+              <div className="rounded-xl px-4 py-3 flex flex-col gap-3"
                 style={{ background: `color-mix(in srgb, ${RED} 10%, transparent)` }}>
                 <div className="flex items-center gap-2">
                   <Ticket size={16} style={{ color: RED }} />
                   <p className="text-sm font-bold" style={{ color: fg }}>{t.ticketTitolo}</p>
                 </div>
                 <p className="text-xs" style={{ color: sub }}>{t.menuScelto(nomeMenu(miaAdesione.menuId))}</p>
-                {miaAdesione.ticketUsato ? (
-                  <div className="flex items-center gap-2 rounded-xl px-3 py-2.5" style={{ background: `color-mix(in srgb, ${GREEN} 15%, transparent)`, color: GREEN }}>
-                    <Check size={16} />
-                    <p className="text-sm font-semibold">{t.ticketUsato(miaAdesione.ticketNumero ?? 0)}</p>
+                {miaAdesione.ticket.map((tk) => (
+                  <div key={tk.id} className="flex flex-col gap-1.5">
+                    <p className="text-xs font-semibold" style={{ color: fg }}>{tk.nome}</p>
+                    {tk.usato ? (
+                      <div className="flex items-center gap-2 rounded-xl px-3 py-2.5" style={{ background: `color-mix(in srgb, ${GREEN} 15%, transparent)`, color: GREEN }}>
+                        <Check size={16} />
+                        <p className="text-sm font-semibold">{t.ticketUsato(tk.numero ?? 0)}</p>
+                      </div>
+                    ) : (
+                      <button onClick={() => usaTicket(tk.id)} disabled={busy}
+                        className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
+                        style={{ background: RED, color: RED_FG, opacity: busy ? 0.6 : 1 }}>
+                        {t.ticketUsaBtn}
+                      </button>
+                    )}
                   </div>
-                ) : (
-                  <>
-                    <button onClick={usaTicket} disabled={busy}
-                      className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
-                      style={{ background: RED, color: RED_FG, opacity: busy ? 0.6 : 1 }}>
-                      {t.ticketUsaBtn}
-                    </button>
-                    <p className="text-xs leading-relaxed" style={{ color: sub }}>{t.ticketUsaHint}</p>
-                  </>
+                ))}
+                {miaAdesione.ticket.some((tk) => !tk.usato) && (
+                  <p className="text-xs leading-relaxed" style={{ color: sub }}>{t.ticketUsaHint}</p>
                 )}
               </div>
             ) : (

@@ -39,9 +39,9 @@ export async function adminCreaEvento({ titolo, scadenza, giornoEvento, paypalLi
       giornoEvento: String(giornoEvento).trim(),
       paypal: paypal || null,
       satispay: satispay || null,
-      // Un evento nuovo non ha menu esistenti: gli id, se arrivassero, non
-      // significano niente — si tengono solo i nomi.
-      menu: esito.menu.map(({ nome }) => ({ nome })),
+      // Un evento nuovo non ha menu (né voci-ticket) esistenti: gli id, se
+      // arrivassero, non significano niente — si tengono solo i nomi.
+      menu: esito.menu.map(({ nome, ticket }) => ({ nome, ticket: ticket.map(({ nome }) => ({ nome })) })),
       attore,
     });
   } catch (err) {
