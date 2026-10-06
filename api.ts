@@ -311,7 +311,12 @@ export async function clearAsDirezione(day: number, slot: number, machine: strin
 export interface GrigliataMenu { id: number; nome: string }
 
 export interface GrigliataEvento {
-  id: number; titolo: string; scadenza: string;
+  id: number; titolo: string;
+  /** Quando si fermano le iscrizioni — può essere già passata. */
+  scadenza: string;
+  /** false dopo la scadenza: la scheda resta visibile (fino al giorno dopo
+   *  la grigliata) ma non ci si può più iscrivere né cambiare scelta. */
+  iscrizioniAperte: boolean;
   /** Il giorno VERO in cui si mangia — distinto dalla scadenza delle
    *  adesioni/pagamenti, che può cadere prima (vedi GrigliataView). */
   giornoEvento: string;
@@ -374,6 +379,8 @@ export async function getGrigliataStato(): Promise<GrigliataStato> {
     attiva: true,
     evento: {
       id: data.evento.id, titolo: data.evento.titolo, scadenza: data.evento.scadenza,
+      // Assente (server non ancora migrato) = aperte, come prima.
+      iscrizioniAperte: data.evento.iscrizioni_aperte !== false,
       giornoEvento: data.evento.giorno_evento,
       // Assente (server non ancora migrato) = attivi, come prima.
       pagamentiAttivi: data.evento.pagamenti_attivi !== false,

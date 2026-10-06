@@ -115,20 +115,13 @@ export function dietaValida(v) {
 }
 
 /**
- * `v` è una data/ora nel futuro? Accetta qualunque stringa che `Date` sappia
- * interpretare (l'input del form è un `<input type="datetime-local">`, che
- * produce "2026-10-03T18:30").
- */
-export function isFutureDateTime(v) {
-  const t = Date.parse(String(v || ""));
-  return Number.isFinite(t) && t > Date.now();
-}
-
-/**
- * `v` è una data valida (il giorno della grigliata)? A differenza della
- * scadenza, non deve essere nel futuro: l'evento potrebbe cadere lo stesso
- * giorno in cui chiudono le adesioni — solo `grigliata_admin_crea`/
- * `_modifica`, in SQL, la vuole non nulla (vedi migrations/048).
+ * `v` è una data/ora valida? Vale sia per la scadenza delle iscrizioni (un
+ * `<input type="datetime-local">`, "2026-10-03T18:30") sia per il giorno
+ * della grigliata (`<input type="date">`, "2026-10-03"). Nessuna delle due
+ * deve essere nel futuro: dalla v1.6 la scadenza delle iscrizioni può essere
+ * già passata (la scheda resta visibile fino al giorno dopo la grigliata, non
+ * fino alla scadenza — vedi grigliata_visibile in SQL); l'evento potrebbe
+ * anche cadere lo stesso giorno in cui chiudono le iscrizioni.
  */
 export function isValidDate(v) {
   return Number.isFinite(Date.parse(String(v || "")));
