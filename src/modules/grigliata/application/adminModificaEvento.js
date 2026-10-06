@@ -9,14 +9,16 @@
 // menu che qualche camera ha già scelto.
 
 import { ValidationError, fromRpcError } from "../../../shared/errors/AppError.js";
-import { isFutureDateTime, isValidDate, controllaMenu, idValido } from "../domain/validazione.js";
+import { isValidDate, controllaMenu, idValido } from "../domain/validazione.js";
 
 export async function adminModificaEvento({ eventoId, titolo, scadenza, giornoEvento, menu }, { grigliataRepository }) {
   const id = idValido(eventoId);
   if (!id) throw new ValidationError("evento non valido");
 
-  if (!isFutureDateTime(scadenza)) {
-    throw new ValidationError("la scadenza deve essere una data futura");
+  // Può essere anche già passata: iscrizioni chiuse alla partenza, scheda
+  // comunque visibile fino al giorno dopo la grigliata.
+  if (!isValidDate(scadenza)) {
+    throw new ValidationError("indica la scadenza delle iscrizioni");
   }
 
   if (!isValidDate(giornoEvento)) {

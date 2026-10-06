@@ -29,6 +29,8 @@ const T = {
     soloCamere: "Questa sezione è per le camere: la Direzione non partecipa.",
     nessunaAttiva: "Non c'è nessuna grigliata attiva al momento.",
     scadeIl: (d: string) => `Le adesioni chiudono il ${d}`,
+    scadeIlChiuse: (d: string) => `Le adesioni sono chiuse dal ${d}`,
+    adesioniChiuse: "Le adesioni sono chiuse: non si può più aderire né cambiare scelta.",
     siMangiaIl: (d: string) => `Si mangia il ${d}`,
     menuLabel: "Quale menu desideri?",
     infoTitolo: "Informazioni su di te",
@@ -70,6 +72,8 @@ const T = {
     soloCamere: "This section is for rooms: the front desk doesn't take part.",
     nessunaAttiva: "There's no barbecue running right now.",
     scadeIl: (d: string) => `Sign-ups close on ${d}`,
+    scadeIlChiuse: (d: string) => `Sign-ups closed on ${d}`,
+    adesioniChiuse: "Sign-ups are closed: you can no longer join or change your choice.",
     siMangiaIl: (d: string) => `It's happening on ${d}`,
     menuLabel: "Which menu would you like?",
     infoTitolo: "About you",
@@ -111,6 +115,8 @@ const T = {
     soloCamere: "Cette section est pour les chambres : la Direction n'y participe pas.",
     nessunaAttiva: "Il n'y a aucun barbecue en cours.",
     scadeIl: (d: string) => `Les inscriptions ferment le ${d}`,
+    scadeIlChiuse: (d: string) => `Inscriptions fermées depuis le ${d}`,
+    adesioniChiuse: "Les inscriptions sont fermées : tu ne peux plus t'inscrire ni modifier ton choix.",
     siMangiaIl: (d: string) => `Ça se passe le ${d}`,
     menuLabel: "Quel menu souhaites-tu ?",
     infoTitolo: "À propos de toi",
@@ -152,6 +158,8 @@ const T = {
     soloCamere: "Dieser Bereich ist für Zimmer: die Verwaltung nimmt nicht teil.",
     nessunaAttiva: "Gerade läuft kein Grillfest.",
     scadeIl: (d: string) => `Anmeldeschluss ist der ${d}`,
+    scadeIlChiuse: (d: string) => `Anmeldeschluss war der ${d}`,
+    adesioniChiuse: "Die Anmeldung ist geschlossen: du kannst dich nicht mehr anmelden oder deine Wahl ändern.",
     siMangiaIl: (d: string) => `Gefeiert wird am ${d}`,
     menuLabel: "Welches Menü möchtest du?",
     infoTitolo: "Über dich",
@@ -193,6 +201,8 @@ const T = {
     soloCamere: "Esta sección es para las habitaciones: la Dirección no participa.",
     nessunaAttiva: "No hay ninguna barbacoa activa ahora mismo.",
     scadeIl: (d: string) => `Las inscripciones cierran el ${d}`,
+    scadeIlChiuse: (d: string) => `Inscripciones cerradas desde el ${d}`,
+    adesioniChiuse: "Las inscripciones están cerradas: ya no puedes apuntarte ni cambiar tu elección.",
     siMangiaIl: (d: string) => `Se celebra el ${d}`,
     menuLabel: "¿Qué menú quieres?",
     infoTitolo: "Sobre ti",
@@ -234,6 +244,8 @@ const T = {
     soloCamere: "Chesta sezione è pe' 'e cammere: 'a Direzione nun ce sta.",
     nessunaAttiva: "Mo nun ce sta nisciuna grigliata.",
     scadeIl: (d: string) => `'E adesioni chiudono ô ${d}`,
+    scadeIlChiuse: (d: string) => `'E adesioni so' chiuse da ô ${d}`,
+    adesioniChiuse: "'E adesioni so' chiuse: nun se pò cchiù aderì né cagnà.",
     siMangiaIl: (d: string) => `Se magna ô ${d}`,
     menuLabel: "Qua menu vuò?",
     infoTitolo: "Dimme 'e te",
@@ -464,14 +476,20 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   });
 
   // Il form di adesione compare se non si e' ancora deciso, o se si e'
-  // chiesto esplicitamente di cambiare scelta.
-  const mostraForm = !miaAdesione || modificaScelta;
+  // chiesto esplicitamente di cambiare scelta — ma solo finche' le iscrizioni
+  // sono aperte: la scheda resta visibile fino al giorno dopo la grigliata,
+  // e dopo la scadenza non si aderisce ne' si cambia piu' (vedi
+  // grigliata_iscrivi in SQL).
+  const iscrizioniAperte = evento.iscrizioniAperte;
+  const mostraForm = iscrizioniAperte && (!miaAdesione || modificaScelta);
 
-  // Il giorno VERO dell'evento, non la scadenza delle adesioni: solo in
-  // questa finestra la conferma del pagamento lascia il posto al ticket
-  // (vedi più sotto) — confronto per data di calendario del dispositivo,
-  // stesso formato "AAAA-MM-GG" che il server salva.
-  const eGiornoEvento = evento.giornoEvento === oggiISO();
+  // Dal giorno VERO dell'evento in poi (non dalla scadenza delle adesioni):
+  // solo da qui la conferma del pagamento lascia il posto al ticket (vedi
+  // più sotto). "In poi" e non "esattamente quel giorno" perche' la scheda
+  // resta visibile anche il giorno dopo, e il server accetta l'uso dei
+  // ticket fino ad allora — confronto per data di calendario del
+  // dispositivo, stesso formato "AAAA-MM-GG" che il server salva.
+  const eGiornoEvento = evento.giornoEvento <= oggiISO();
 
   return (
     <div className="flex flex-col h-full md:max-w-lg md:mx-auto md:w-full px-5 pt-3 pb-6 overflow-y-auto">
@@ -488,7 +506,9 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
       <div className="rounded-2xl border p-4 mb-4" style={{ background: surf, borderColor: div }}>
         <p className="text-sm font-bold mb-1" style={{ color: fg }}>{evento.titolo}</p>
         <p className="text-xs" style={{ color: sub }}>{t.siMangiaIl(fmtGiorno(evento.giornoEvento, lang))}</p>
-        <p className="text-xs" style={{ color: sub }}>{t.scadeIl(scadenza)}</p>
+        <p className="text-xs" style={{ color: sub }}>
+          {iscrizioniAperte ? t.scadeIl(scadenza) : t.scadeIlChiuse(scadenza)}
+        </p>
         {quota && <p className="text-xs font-semibold mt-1" style={{ color: fg }}>{t.quota(quota)}</p>}
       </div>
 
@@ -498,12 +518,20 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
         </div>
       )}
 
+      {/* Iscrizioni chiuse e nessuna adesione: la scheda resta visibile ma non
+          c'è niente da fare — niente form, niente pagamento. */}
+      {!iscrizioniAperte && !miaAdesione && (
+        <div className="rounded-2xl border p-4 text-sm" style={{ background: surf, borderColor: div, color: sub }}>
+          {t.adesioniChiuse}
+        </div>
+      )}
+
       {/* v1.4: il form è diviso in due blocchi — COSA si mangia (il menu del
           delegato) e CHI sei (dieta, glutine, note) — invece di un'unica
           card: sono due domande diverse, e la seconda vale qualunque menu
           si scelga. Il pulsante sta sotto entrambi: salva tutto insieme,
           i dati viaggiano come prima (stessa grigliata_iscrivi). */}
-      {mostraForm ? (
+      {!iscrizioniAperte && !miaAdesione ? null : mostraForm ? (
         <div className="flex flex-col gap-4">
           <div className="rounded-2xl border p-4" style={{ background: surf, borderColor: div }}>
             <div>
@@ -594,9 +622,11 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
               <Check size={16} style={{ color: RED }} />
               <p className="text-sm font-semibold" style={{ color: RED }}>{t.partecipi}</p>
             </div>
-            <button onClick={apriModifica} className="text-xs font-semibold underline" style={{ color: sub }}>
-              {t.cambiaScelta}
-            </button>
+            {iscrizioniAperte && (
+              <button onClick={apriModifica} className="text-xs font-semibold underline" style={{ color: sub }}>
+                {t.cambiaScelta}
+              </button>
+            )}
           </div>
           <p className="text-xs" style={{ color: sub }}>
             {t.menuScelto(nomeMenu(miaAdesione!.menuId))}

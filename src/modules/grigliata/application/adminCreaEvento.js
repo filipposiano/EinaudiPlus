@@ -12,14 +12,16 @@
 // link non sono obbligatori. Assente = attivi, il comportamento di sempre.
 
 import { ValidationError, fromRpcError } from "../../../shared/errors/AppError.js";
-import { isFutureDateTime, isValidDate, controllaMenu, controllaQuota } from "../domain/validazione.js";
+import { isValidDate, controllaMenu, controllaQuota } from "../domain/validazione.js";
 
 export async function adminCreaEvento(
   { titolo, scadenza, giornoEvento, paypalLink, satispayLink, menu, pagamentiAttivi, quota, attore },
   { grigliataRepository },
 ) {
-  if (!isFutureDateTime(scadenza)) {
-    throw new ValidationError("la scadenza deve essere una data futura");
+  // Può essere anche già passata: iscrizioni chiuse alla partenza, scheda
+  // comunque visibile fino al giorno dopo la grigliata.
+  if (!isValidDate(scadenza)) {
+    throw new ValidationError("indica la scadenza delle iscrizioni");
   }
 
   if (!isValidDate(giornoEvento)) {

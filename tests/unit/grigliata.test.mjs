@@ -19,7 +19,7 @@ import { adminEliminaEvento } from "../../src/modules/grigliata/application/admi
 import { adminImpostaPagamenti } from "../../src/modules/grigliata/application/adminImpostaPagamenti.js";
 import { adminImpostaQuota } from "../../src/modules/grigliata/application/adminImpostaQuota.js";
 import { authorize } from "../../src/modules/grigliata/domain/policy.js";
-import { controllaMenu, controllaTicket, idValido, dietaValida, isFutureDateTime, isValidDate, controllaQuota } from "../../src/modules/grigliata/domain/validazione.js";
+import { controllaMenu, controllaTicket, idValido, dietaValida, isValidDate, controllaQuota } from "../../src/modules/grigliata/domain/validazione.js";
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -93,7 +93,7 @@ const MENU = [{ nome: "Mangio tutto", ticket: [{ nome: "Porzione" }] }, { nome: 
 // differenza della scadenza non deve essere nel futuro.
 const GIORNO = "2026-09-20";
 
-section("controllaMenu() / controllaTicket() / idValido() / isFutureDateTime() / isValidDate()");
+section("controllaMenu() / controllaTicket() / idValido() / isValidDate()");
 {
   const ok = controllaMenu([
     { nome: "  Mangio tutto ", ticket: [{ nome: " Porzione " }] },
@@ -155,14 +155,10 @@ section("controllaMenu() / controllaTicket() / idValido() / isFutureDateTime() /
 
   const futuro = new Date(Date.now() + 3600_000).toISOString();
   const passato = new Date(Date.now() - 3600_000).toISOString();
-  check("una data futura passa", isFutureDateTime(futuro) === true);
-  check("una data passata viene respinta", isFutureDateTime(passato) === false);
-  check("una stringa non-data viene respinta, senza sollevare", isFutureDateTime("non e' una data") === false);
-  check("vuoto/undefined respinti", isFutureDateTime("") === false && isFutureDateTime(undefined) === false);
 
-  // isValidDate: a differenza di isFutureDateTime, una data passata va bene
-  // — il giorno della grigliata non deve essere nel futuro (vedi la nota
-  // gemella in domain/validazione.js).
+  // isValidDate vale per la scadenza delle iscrizioni E per il giorno della
+  // grigliata: nessuna delle due deve essere nel futuro (v1.6, vedi la nota
+  // in domain/validazione.js).
   check("isValidDate: una data valida passa, passata o futura",
     isValidDate(GIORNO) === true && isValidDate(passato) === true);
   check("isValidDate: stringa non-data, vuoto o undefined respinti, senza sollevare",
@@ -315,9 +311,16 @@ section("adminCreaEvento()");
     JSON.stringify(repo.calls[0].args.menu));
 
   const errScadenza = await throws(() =>
-    adminCreaEvento({ titolo: "x", scadenza: "2020-01-01T00:00:00Z", giornoEvento: GIORNO, paypalLink: "x", satispayLink: "", menu: MENU, attore: "peach" },
+    adminCreaEvento({ titolo: "x", scadenza: "non e' una data", giornoEvento: GIORNO, paypalLink: "x", satispayLink: "", menu: MENU, attore: "peach" },
       { grigliataRepository: fakeRepository() }));
-  check("una scadenza nel passato viene respinta", errScadenza?.message === "la scadenza deve essere una data futura");
+  check("una scadenza non-data viene respinta", errScadenza?.message === "indica la scadenza delle iscrizioni");
+
+  // v1.6: la scadenza delle iscrizioni può essere già passata.
+  const repoPassato = fakeRepository();
+  await adminCreaEvento({ titolo: "x", scadenza: "2020-01-01T00:00:00Z", giornoEvento: GIORNO, paypalLink: "x", satispayLink: "", menu: MENU, attore: "peach" },
+    { grigliataRepository: repoPassato });
+  check("una scadenza nel passato viene accettata", repoPassato.calls.length === 1
+    && repoPassato.calls[0].args.scadenza === "2020-01-01T00:00:00.000Z");
 
   const errGiorno = await throws(() =>
     adminCreaEvento({ titolo: "x", scadenza: futuro, giornoEvento: "", paypalLink: "x", satispayLink: "", menu: MENU, attore: "peach" },
@@ -346,7 +349,7 @@ section("adminCreaEvento()");
   check("un menu senza voci-ticket viene respinto", /serve almeno un ticket per menu/.test(errTicket?.message || ""));
 
   const repoNonToccato = fakeRepository();
-  await throws(() => adminCreaEvento({ titolo: "x", scadenza: "2020-01-01", giornoEvento: GIORNO, paypalLink: "", satispayLink: "", menu: MENU, attore: "peach" },
+  await throws(() => adminCreaEvento({ titolo: "x", scadenza: "", giornoEvento: GIORNO, paypalLink: "x", satispayLink: "", menu: MENU, attore: "peach" },
     { grigliataRepository: repoNonToccato }));
   await throws(() => adminCreaEvento({ titolo: "x", scadenza: futuro, giornoEvento: GIORNO, paypalLink: "x", satispayLink: "", menu: [{ nome: "" }], attore: "peach" },
     { grigliataRepository: repoNonToccato }));
@@ -487,8 +490,14 @@ section("adminModificaEvento()");
   check("un id non numerico viene respinto", errId?.message === "evento non valido");
 
   const errData = await throws(() =>
-    adminModificaEvento({ eventoId: "7", titolo: "x", scadenza: "2020-01-01T00:00:00Z", giornoEvento: GIORNO, menu: MENU }, { grigliataRepository: fakeRepository() }));
-  check("una scadenza nel passato viene respinta", errData?.message === "la scadenza deve essere una data futura");
+    adminModificaEvento({ eventoId: "7", titolo: "x", scadenza: "non e' una data", giornoEvento: GIORNO, menu: MENU }, { grigliataRepository: fakeRepository() }));
+  check("una scadenza non-data viene respinta", errData?.message === "indica la scadenza delle iscrizioni");
+
+  // v1.6: la scadenza delle iscrizioni può essere già passata.
+  const repoPassata = fakeRepository();
+  await adminModificaEvento({ eventoId: "7", titolo: "x", scadenza: "2020-01-01T00:00:00Z", giornoEvento: GIORNO, menu: MENU }, { grigliataRepository: repoPassata });
+  check("una scadenza nel passato viene accettata", repoPassata.calls.length === 1
+    && repoPassata.calls[0].args.scadenza === "2020-01-01T00:00:00.000Z");
 
   const errGiorno = await throws(() =>
     adminModificaEvento({ eventoId: "7", titolo: "x", scadenza: futuro, giornoEvento: "", menu: MENU }, { grigliataRepository: fakeRepository() }));
@@ -501,7 +510,7 @@ section("adminModificaEvento()");
   check("due menu con lo stesso nome vengono respinti", /stesso nome/.test(errMenuDoppio?.message || ""));
 
   const repoNonToccato = fakeRepository();
-  await throws(() => adminModificaEvento({ eventoId: "7", titolo: "x", scadenza: "2020-01-01", giornoEvento: GIORNO, menu: MENU }, { grigliataRepository: repoNonToccato }));
+  await throws(() => adminModificaEvento({ eventoId: "7", titolo: "x", scadenza: "", giornoEvento: GIORNO, menu: MENU }, { grigliataRepository: repoNonToccato }));
   await throws(() => adminModificaEvento({ eventoId: "7", titolo: "x", scadenza: futuro, giornoEvento: GIORNO }, { grigliataRepository: repoNonToccato }));
   check("e il repository non viene chiamato", repoNonToccato.calls.length === 0);
 

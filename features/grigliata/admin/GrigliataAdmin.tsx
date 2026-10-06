@@ -63,6 +63,9 @@ type Evento = {
   quota?: number | string | null;
   paypal_link: string | null; satispay_link: string | null;
   chiuso: boolean; attiva: boolean;
+  /** v1.6 — assente se il server non ha ancora la migrazione 052: vale aperte
+   *  finche' non e' passata `scadenza`. */
+  iscrizioni_aperte?: boolean;
   menu: MenuVoce[];
 };
 
@@ -840,17 +843,20 @@ export function GrigliataAdmin() {
           </div>
 
           <div>
-            <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Scadenza delle adesioni</label>
+            <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Fine delle iscrizioni</label>
             <input style={S.input} type="datetime-local" value={scadenza} onChange={(e) => cambiaScadenzaForm(e.target.value)} />
+            <p style={{ fontSize: 11, ...S.sub, marginTop: 4 }}>
+              Dopo questa data non ci si può più iscrivere. Può anche essere già passata.
+            </p>
           </div>
 
           <div>
             <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Giorno della grigliata</label>
             <input style={S.input} type="date" value={giornoEvento} onChange={(e) => setGiornoEvento(e.target.value)} />
             <p style={{ fontSize: 11, ...S.sub, marginTop: 4 }}>
-              Il giorno vero in cui si mangia — può cadere dopo la scadenza delle adesioni.
-              È il giorno in cui, sulla scheda dei residenti, la conferma del pagamento lascia
-              il posto al ticket da usare.
+              Il giorno vero in cui si mangia — può cadere dopo la fine delle iscrizioni.
+              Dal giorno stesso, sulla scheda dei residenti, la conferma del pagamento lascia
+              il posto al ticket da usare. La scheda resta visibile fino al giorno dopo la grigliata.
             </p>
           </div>
 
@@ -944,7 +950,10 @@ export function GrigliataAdmin() {
                 </button>
               </div>
               <p style={{ fontSize: 12, ...S.sub, marginBottom: 14 }}>
-                Scade {fmtData(evento.scadenza)} · Si mangia il {fmtGiorno(evento.giorno_evento)}
+                {evento.iscrizioni_aperte === false || new Date(evento.scadenza).getTime() <= Date.now()
+                  ? `Iscrizioni chiuse dal ${fmtData(evento.scadenza)}`
+                  : `Iscrizioni fino al ${fmtData(evento.scadenza)}`}
+                {" · "}Si mangia il {fmtGiorno(evento.giorno_evento)}
                 {" · "}
                 {fmtQuota(evento.quota) ? `Quota ${fmtQuota(evento.quota)} a persona` : "Nessuna quota indicata"}
               </p>

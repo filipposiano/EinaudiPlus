@@ -136,6 +136,21 @@ alter table grigliata_ticket enable row level security;
 -- Percorso pubblico (residenti)
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- v1.6: DUE date, due significati distinti.
+--   * `scadenza`      = quando si fermano le ISCRIZIONI (adesioni). Può essere
+--                       anche già passata alla creazione: il delegato può far
+--                       partire una grigliata a iscrizioni già chiuse.
+--   * `giorno_evento` = il giorno VERO della grigliata. La scheda resta
+--                       VISIBILE ai residenti fino al giorno DOPO (compreso),
+--                       perché è lì che si usano i ticket e si vede com'è andata.
+-- "Visibile" (non chiusa a mano e non oltre il giorno dopo) e "iscrizioni
+-- aperte" (now() < scadenza) sono quindi due condizioni separate. Il confronto
+-- sul giorno è in Europe/Rome, come il resto dell'app, non in UTC del server.
+create or replace function grigliata_visibile(p_chiuso boolean, p_giorno_evento date)
+returns boolean language sql stable as $$
+  select not p_chiuso and (now() at time zone 'Europe/Rome')::date <= p_giorno_evento + 1;
+$$;
+
 -- Solo il booleano, non l'evento intero: è quello che laundry_snapshot
 -- incorpora (vedi functions.sql) per decidere se mostrare la scheda
 -- "Grigliata" in navigazione, con la stessa cadenza di aggiornamento di tema
@@ -145,13 +160,15 @@ alter table grigliata_ticket enable row level security;
 -- apre.
 create or replace function grigliata_attiva_bool()
 returns boolean language sql stable as $$
-  select exists (select 1 from grigliata_evento where not chiuso and now() < scadenza);
+  select exists (select 1 from grigliata_evento where grigliata_visibile(chiuso, giorno_evento));
 $$;
 
 -- Cosa vede un residente: se c'è una grigliata attiva, i suoi dati, e la
--- propria adesione se ne ha già fatta una. 'attiva' e non chiusa e non
--- scaduta — le stesse due condizioni ripetute in ogni funzione qui sotto
--- che deve decidere "quale evento conta adesso".
+-- propria adesione se ne ha già fatta una. 'attiva' = visibile (non chiusa e
+-- non oltre il giorno dopo la grigliata, vedi grigliata_visibile) — la stessa
+-- condizione ripetuta in ogni funzione qui sotto che deve decidere "quale
+-- evento conta adesso". Le iscrizioni possono essere già chiuse
+-- ('iscrizioni_aperte' = false) anche se la scheda è ancora visibile.
 create or replace function grigliata_stato_pubblico(p_room text)
 returns jsonb language plpgsql stable as $$
 declare
@@ -159,7 +176,7 @@ declare
   v_adesione grigliata_adesione%rowtype;
 begin
   select * into v_evento from grigliata_evento
-    where not chiuso and now() < scadenza
+    where grigliata_visibile(chiuso, giorno_evento)
     order by created_at desc limit 1;
 
   if v_evento.id is null then
@@ -176,6 +193,7 @@ begin
       'id', v_evento.id,
       'titolo', v_evento.titolo,
       'scadenza', v_evento.scadenza,
+      'iscrizioni_aperte', now() < v_evento.scadenza,
       'giorno_evento', v_evento.giorno_evento,
       'pagamenti_attivi', v_evento.pagamenti_attivi,
       'quota', v_evento.quota,
@@ -214,16 +232,24 @@ create or replace function grigliata_iscrivi(
   p_room text, p_menu_id bigint, p_dieta text, p_senza_glutine boolean, p_note text
 ) returns jsonb language plpgsql as $$
 declare
+  v_evento grigliata_evento%rowtype;
   v_evento_id bigint;
   v_dieta text;
   v_note text;
 begin
-  select id into v_evento_id from grigliata_evento
-    where not chiuso and now() < scadenza
+  select * into v_evento from grigliata_evento
+    where grigliata_visibile(chiuso, giorno_evento)
     order by created_at desc limit 1;
 
-  if v_evento_id is null then
+  if v_evento.id is null then
     return jsonb_build_object('ok', false, 'error', 'nessuna grigliata attiva');
+  end if;
+  v_evento_id := v_evento.id;
+
+  -- La scheda può restare visibile a iscrizioni chiuse: solo QUESTA azione
+  -- (iscriversi o cambiare scelta) si ferma alla scadenza.
+  if now() >= v_evento.scadenza then
+    return jsonb_build_object('ok', false, 'error', 'le iscrizioni sono chiuse');
   end if;
 
   -- Il menu deve essere uno di QUESTA grigliata, non di una precedente.
@@ -263,7 +289,7 @@ declare
   v_id bigint;
 begin
   select * into v_evento from grigliata_evento
-    where not chiuso and now() < scadenza
+    where grigliata_visibile(chiuso, giorno_evento)
     order by created_at desc limit 1;
 
   if v_evento.id is null then
@@ -307,7 +333,7 @@ declare
   v_ricontrollo boolean;
 begin
   select id into v_evento_id from grigliata_evento
-    where not chiuso and now() < scadenza
+    where grigliata_visibile(chiuso, giorno_evento)
     order by created_at desc limit 1;
 
   if v_evento_id is null then
@@ -510,8 +536,11 @@ declare
   v_menu_id bigint;
   v_pagamenti boolean := coalesce(p_pagamenti_attivi, true);
 begin
-  if p_scadenza is null or p_scadenza <= now() then
-    return jsonb_build_object('ok', false, 'error', 'la scadenza deve essere nel futuro');
+  -- La scadenza delle iscrizioni può anche essere già passata (v1.6): serve
+  -- solo che ci sia. La visibilità della scheda dipende dal giorno della
+  -- grigliata, non da questa.
+  if p_scadenza is null then
+    return jsonb_build_object('ok', false, 'error', 'indica la scadenza delle iscrizioni');
   end if;
 
   if p_giorno_evento is null then
@@ -627,8 +656,11 @@ declare
   v_quante int;
   v_voce record;
 begin
-  if p_scadenza is null or p_scadenza <= now() then
-    return jsonb_build_object('ok', false, 'error', 'la scadenza deve essere nel futuro');
+  -- La scadenza delle iscrizioni può anche essere già passata (v1.6): serve
+  -- solo che ci sia. La visibilità della scheda dipende dal giorno della
+  -- grigliata, non da questa.
+  if p_scadenza is null then
+    return jsonb_build_object('ok', false, 'error', 'indica la scadenza delle iscrizioni');
   end if;
 
   if p_giorno_evento is null then
@@ -780,7 +812,8 @@ begin
       'giorno_evento', v_evento.giorno_evento,
       'pagamenti_attivi', v_evento.pagamenti_attivi, 'quota', v_evento.quota,
       'paypal_link', v_evento.paypal_link, 'satispay_link', v_evento.satispay_link,
-      'chiuso', v_evento.chiuso, 'attiva', (not v_evento.chiuso and now() < v_evento.scadenza),
+      'chiuso', v_evento.chiuso, 'attiva', grigliata_visibile(v_evento.chiuso, v_evento.giorno_evento),
+      'iscrizioni_aperte', now() < v_evento.scadenza,
       'menu', grigliata_menu_di(v_evento.id)
     ),
     'adesioni', coalesce((
@@ -905,18 +938,19 @@ end;
 $$;
 
 -- Riapre un evento chiuso. Chiude prima qualunque ALTRO evento ancora
--- attivo: "attiva" è calcolato (not chiuso and now() < scadenza), non un
--- flag a sé — senza questo passaggio si potrebbero ritrovare due grigliate
--- attive insieme, e la scheda residenti ne mostra sempre una sola.
+-- attivo: "attiva" è calcolato (grigliata_visibile), non un flag a sé —
+-- senza questo passaggio si potrebbero ritrovare due grigliate attive
+-- insieme, e la scheda residenti ne mostra sempre una sola.
 --
--- Non tocca la scadenza: se era già passata, l'evento torna "non chiuso"
--- ma resta comunque non attivo finché non si sposta anche la data (vedi
--- grigliata_admin_modifica) — due decisioni separate, non una.
+-- Non tocca le date: se il giorno della grigliata è passato da più di un
+-- giorno, l'evento torna "non chiuso" ma resta comunque non attivo finché
+-- non si sposta anche il giorno (vedi grigliata_admin_modifica) — due
+-- decisioni separate, non una.
 create or replace function grigliata_admin_riapri(p_evento_id bigint)
 returns jsonb language plpgsql as $$
 begin
   update grigliata_evento set chiuso = true
-    where id <> p_evento_id and not chiuso and now() < scadenza;
+    where id <> p_evento_id and grigliata_visibile(chiuso, giorno_evento);
 
   update grigliata_evento set chiuso = false where id = p_evento_id;
   if not found then
@@ -954,6 +988,7 @@ $$;
 -- Permessi
 -- ─────────────────────────────────────────────────────────────────────────────
 
+revoke all on function grigliata_visibile(boolean, date) from public, anon, authenticated;
 revoke all on function grigliata_attiva_bool() from public, anon, authenticated;
 revoke all on function grigliata_stato_pubblico(text) from public, anon, authenticated;
 revoke all on function grigliata_iscrivi(text, bigint, text, boolean, text) from public, anon, authenticated;
@@ -975,6 +1010,7 @@ revoke all on function grigliata_admin_chiudi(bigint) from public, anon, authent
 revoke all on function grigliata_admin_riapri(bigint) from public, anon, authenticated;
 revoke all on function grigliata_admin_elimina(bigint) from public, anon, authenticated;
 
+grant execute on function grigliata_visibile(boolean, date) to service_role;
 grant execute on function grigliata_attiva_bool() to service_role;
 grant execute on function grigliata_stato_pubblico(text) to service_role;
 grant execute on function grigliata_iscrivi(text, bigint, text, boolean, text) to service_role;
