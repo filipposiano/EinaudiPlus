@@ -16,8 +16,10 @@ import { adminAggiungiAdesione } from "../../src/modules/grigliata/application/a
 import { adminRimuoviAdesione } from "../../src/modules/grigliata/application/adminRimuoviAdesione.js";
 import { adminRiapriEvento } from "../../src/modules/grigliata/application/adminRiapriEvento.js";
 import { adminEliminaEvento } from "../../src/modules/grigliata/application/adminEliminaEvento.js";
+import { adminImpostaPagamenti } from "../../src/modules/grigliata/application/adminImpostaPagamenti.js";
+import { adminImpostaQuota } from "../../src/modules/grigliata/application/adminImpostaQuota.js";
 import { authorize } from "../../src/modules/grigliata/domain/policy.js";
-import { controllaMenu, controllaTicket, idValido, dietaValida, isFutureDateTime, isValidDate } from "../../src/modules/grigliata/domain/validazione.js";
+import { controllaMenu, controllaTicket, idValido, dietaValida, isFutureDateTime, isValidDate, controllaQuota } from "../../src/modules/grigliata/domain/validazione.js";
 
 let pass = 0, fail = 0;
 const failures = [];
@@ -51,6 +53,8 @@ function fakeRepository() {
     async adminRimuoviAdesione(id) { calls.push({ name: "adminRimuoviAdesione", id }); return { ok: true }; },
     async adminRiapri(id) { calls.push({ name: "adminRiapri", id }); return { ok: true }; },
     async adminElimina(id) { calls.push({ name: "adminElimina", id }); return { ok: true }; },
+    async adminImpostaPagamenti(args) { calls.push({ name: "adminImpostaPagamenti", args }); return { ok: true }; },
+    async adminImpostaQuota(args) { calls.push({ name: "adminImpostaQuota", args }); return { ok: true }; },
   };
 }
 
@@ -74,6 +78,8 @@ function repositoryCheRompe(messaggio = "Could not find the function") {
     async adminAggiungiAdesione() { throw err; },
     async adminRimuoviAdesione() { throw err; },
     async adminRiapri() { throw err; },
+    async adminImpostaPagamenti() { throw err; },
+    async adminImpostaQuota() { throw err; },
     async adminElimina() { throw err; },
   };
 }
@@ -352,6 +358,65 @@ section("adminCreaEvento()");
   await adminCreaEvento({ titolo: "", scadenza: futuro, giornoEvento: GIORNO, paypalLink: "x", satispayLink: "", menu: MENU, attore: "peach" },
     { grigliataRepository: repoSenzaTitolo });
   check("titolo assente ricade su 'Grigliata'", repoSenzaTitolo.calls[0].args.titolo === "Grigliata");
+
+  // v1.4: pagamenti attivabili. Assente = attivi (il comportamento di
+  // sempre, e quello di un client vecchio che non manda il campo).
+  check("pagamenti assenti = attivi", repoSenzaTitolo.calls[0].args.pagamentiAttivi === true);
+
+  const repoSenzaPagamenti = fakeRepository();
+  await adminCreaEvento({ titolo: "x", scadenza: futuro, paypalLink: "", satispayLink: "", menu: MENU, pagamentiAttivi: false, attore: "peach" },
+    { grigliataRepository: repoSenzaPagamenti });
+  check("con i pagamenti spenti i link non servono",
+    repoSenzaPagamenti.calls.length === 1 && repoSenzaPagamenti.calls[0].args.pagamentiAttivi === false);
+}
+
+section("controllaQuota() / adminImpostaQuota()");
+{
+  check("vuota = nessuna quota", controllaQuota("").quota === null && controllaQuota(undefined).quota === null);
+  check("virgola italiana", controllaQuota("12,50").quota === 12.5);
+  check("con il simbolo €", controllaQuota("10 €").quota === 10);
+  check("numero già numero", controllaQuota(8).quota === 8);
+  check("negativa respinta", Boolean(controllaQuota("-5").errore));
+  check("tre decimali respinti", Boolean(controllaQuota("1,234").errore));
+  check("testo respinto", Boolean(controllaQuota("dieci").errore));
+  check("oltre il massimo respinta", Boolean(controllaQuota("1001").errore));
+
+  const futuro = new Date(Date.now() + 3600_000).toISOString();
+  const repoCrea = fakeRepository();
+  await adminCreaEvento({ titolo: "x", scadenza: futuro, paypalLink: "x", satispayLink: "", menu: MENU, quota: "15,00", attore: "peach" },
+    { grigliataRepository: repoCrea });
+  check("la quota arriva alla creazione come numero", repoCrea.calls[0].args.quota === 15);
+
+  const errCrea = await throws(() => adminCreaEvento({ titolo: "x", scadenza: futuro, paypalLink: "x", satispayLink: "", menu: MENU, quota: "boh", attore: "peach" },
+    { grigliataRepository: fakeRepository() }));
+  check("una quota non valida blocca la creazione", errCrea?.message === "quota non valida");
+
+  const repo = fakeRepository();
+  await adminImpostaQuota({ eventoId: "3", quota: "7,5" }, { grigliataRepository: repo });
+  check("adminImpostaQuota: id e quota ripuliti", repo.calls[0].args.id === 3 && repo.calls[0].args.quota === 7.5);
+  await adminImpostaQuota({ eventoId: 3, quota: "" }, { grigliataRepository: repo });
+  check("adminImpostaQuota: vuota toglie la quota (null)", repo.calls[1].args.quota === null);
+  const errId = await throws(() => adminImpostaQuota({ eventoId: "x", quota: "5" }, { grigliataRepository: fakeRepository() }));
+  check("adminImpostaQuota: id non valido respinto", errId?.message === "evento non valido");
+}
+
+section("adminImpostaPagamenti()");
+{
+  const repo = fakeRepository();
+  await adminImpostaPagamenti({ eventoId: "4", attivi: false }, { grigliataRepository: repo });
+  check("spegnere non richiede link, e non li cancella (arrivano null)",
+    JSON.stringify(repo.calls[0].args) === JSON.stringify({ id: 4, attivi: false, paypal: null, satispay: null }),
+    JSON.stringify(repo.calls[0].args));
+
+  await adminImpostaPagamenti({ eventoId: 4, attivi: true, paypalLink: " paypal.me/x ", satispayLink: "" }, { grigliataRepository: repo });
+  check("i link vengono ripuliti", repo.calls[1].args.paypal === "paypal.me/x" && repo.calls[1].args.satispay === null);
+
+  const errId = await throws(() => adminImpostaPagamenti({ eventoId: "x", attivi: true }, { grigliataRepository: fakeRepository() }));
+  check("un id non valido viene respinto", errId?.message === "evento non valido");
+
+  // "false" stringa non deve diventare true per sbaglio.
+  const errAttivi = await throws(() => adminImpostaPagamenti({ eventoId: 4, attivi: "false" }, { grigliataRepository: fakeRepository() }));
+  check("attivi deve essere un booleano vero", errAttivi?.message === "valore non valido");
 }
 
 // ─── adminOverview() / adminConfermaPagamento() / adminChiudiEvento() ──────────
@@ -557,6 +622,9 @@ section("un errore della RPC è esponibile all'admin, non generico");
 
   const errElimina = await throws(() => adminEliminaEvento({ eventoId: "1" }, { grigliataRepository: repoRotto }));
   check("adminEliminaEvento: stesso comportamento dopo la validazione", errElimina?.expose === true);
+
+  const errPagamenti = await throws(() => adminImpostaPagamenti({ eventoId: "1", attivi: true }, { grigliataRepository: repoRotto }));
+  check("adminImpostaPagamenti: stesso comportamento dopo la validazione", errPagamenti?.expose === true);
 }
 
 // ─── Policy di autorizzazione ────────────────────────────────────────────────
@@ -571,7 +639,7 @@ section("authorize() — policy del modulo Grigliata");
   for (const azione of [
     "grigliataCrea", "grigliataOverview", "grigliataConfermaPagamento", "grigliataChiudi",
     "grigliataModifica", "grigliataAggiungiAdesione", "grigliataRimuoviAdesione",
-    "grigliataRiapri", "grigliataElimina",
+    "grigliataRiapri", "grigliataElimina", "grigliataPagamenti", "grigliataQuota",
   ]) {
     check(`il delegato può '${azione}'`, authorize(delegato, azione) === true);
     check(`il sistemista può '${azione}'`, authorize(sistemista, azione) === true);

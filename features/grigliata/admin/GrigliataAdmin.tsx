@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
-import { Pencil, Plus, Check, UserPlus, WheatOff, StickyNote, X, Ticket } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Pencil, Plus, Check, UserPlus, WheatOff, StickyNote, X, Ticket, Search } from "lucide-react";
 import { call } from "../../admin-shared/adminApi";
 import { S } from "../../admin-shared/adminStyles";
-import { PIANI, pianoDi, nomePiano, colorePiano, type Piano } from "../../../piani";
+import { PIANI, pianoDi, nomePiano, colorePiano } from "../../../piani";
 
 // ─── Grigliata (delegato) ──────────────────────────────────────────────────────
 //
@@ -57,10 +57,64 @@ type Evento = {
   // v1.4: il giorno VERO in cui si mangia — distinto dalla scadenza delle
   // adesioni/pagamenti, che può cadere prima.
   giorno_evento: string;
+  /** v1.4 — assente se il server non ha ancora la migrazione 048: vale attivi. */
+  pagamenti_attivi?: boolean;
+  /** v1.4.1 — quota a persona in euro; null/assente = non indicata. */
+  quota?: number | string | null;
   paypal_link: string | null; satispay_link: string | null;
   chiuso: boolean; attiva: boolean;
   menu: MenuVoce[];
 };
+
+// ─── Filtri e raggruppamento delle camere ──────────────────────────────────────
+//
+// v1.4: con decine di camere la griglia per piano non basta più a rispondere
+// a "quante vegane?", "chi ha scritto di un'allergia?". Due filtri che si
+// sommano (menu E esigenza) più una ricerca libera nelle note, e la scelta
+// di raggruppare per piano (dove sono) o per menu (cosa preparare).
+type FiltroEsigenza = "tutte" | "vegetariano" | "vegano" | "senza_glutine" | "note" | "nessuna";
+type Raggruppa = "piano" | "menu";
+
+function haEsigenza(a: Adesione, f: FiltroEsigenza): boolean {
+  switch (f) {
+    case "tutte": return true;
+    case "vegetariano": return a.dieta === "vegetariano";
+    case "vegano": return a.dieta === "vegano";
+    case "senza_glutine": return a.senza_glutine;
+    case "note": return Boolean(a.note);
+    case "nessuna": return a.dieta === "classico" && !a.senza_glutine && !a.note;
+  }
+}
+
+/** Un interruttore con titolo e sottotitolo — fuori da GrigliataAdmin per lo
+ *  stesso motivo di EditorMenu qui sotto. Stesso disegno del "senza glutine"
+ *  lato residenti (features/grigliata/Grigliata.tsx). */
+function Interruttore({ acceso, onClick, titolo, sottotitolo, disabilitato }: {
+  acceso: boolean; onClick: () => void; titolo: string; sottotitolo?: string; disabilitato?: boolean;
+}) {
+  return (
+    <button onClick={onClick} role="switch" aria-checked={acceso} disabled={disabilitato}
+      style={{
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, width: "100%",
+        background: "none", border: "none", padding: 0, textAlign: "left", color: "var(--foreground)",
+        cursor: disabilitato ? "default" : "pointer", opacity: disabilitato ? 0.6 : 1,
+      }}>
+      <span style={{ minWidth: 0 }}>
+        <span style={{ display: "block", fontSize: 13, fontWeight: 700 }}>{titolo}</span>
+        {sottotitolo && <span style={{ display: "block", fontSize: 11, ...S.sub }}>{sottotitolo}</span>}
+      </span>
+      <span style={{
+        flexShrink: 0, display: "flex", alignItems: "center", borderRadius: 99, padding: 3,
+        width: 40, height: 24, boxSizing: "border-box",
+        background: acceso ? "var(--primary)" : "var(--secondary)",
+        border: acceso ? "none" : "1px solid var(--border)",
+        justifyContent: acceso ? "flex-end" : "flex-start",
+      }}>
+        <span style={{ width: 18, height: 18, borderRadius: 99, background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.3)" }} />
+      </span>
+    </button>
+  );
+}
 
 // ─── Editor dell'elenco dei menu ──────────────────────────────────────────────
 //
@@ -244,6 +298,19 @@ function isoInDatetimeLocal(iso: string): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+/** "12,50 €" — o null se la quota non è indicata. PostgREST restituisce un
+ *  `numeric` come numero, ma non lo si dà per scontato. */
+function fmtQuota(q: number | string | null | undefined): string | null {
+  if (q == null || q === "") return null;
+  const n = Number(q);
+  return Number.isFinite(n) ? n.toLocaleString("it-IT", { style: "currency", currency: "EUR" }) : null;
+}
+
+/** Per precompilare il campo: "12,5" invece di "12.5". */
+function quotaInCampo(q: number | string | null | undefined): string {
+  return q == null || q === "" ? "" : String(Number(q)).replace(".", ",");
+}
+
 function fmtData(iso: string): string {
   return new Date(iso).toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
@@ -279,6 +346,7 @@ export function GrigliataAdmin() {
   const [nuovaScadenza, setNuovaScadenza] = useState("");
   const [nuovoGiornoEvento, setNuovoGiornoEvento] = useState("");
   const [menuModifica, setMenuModifica] = useState<VoceEditor[]>([]);
+  const [nuovaQuota, setNuovaQuota] = useState("");
 
   // Aggiunta a mano di una camera — per chi non usa l'app, o per registrare
   // chi ha dato la sua parola di persona. Sempre "partecipa", con un menu:
@@ -316,6 +384,20 @@ export function GrigliataAdmin() {
   const [paypal, setPaypal] = useState("");
   const [satispay, setSatispay] = useState("");
   const [menuNuovi, setMenuNuovi] = useState<VoceEditor[]>(vociDiDefault);
+  // v1.4: raccogliere le quote dall'app è una scelta, non un obbligo.
+  const [pagamentiNuovi, setPagamentiNuovi] = useState(true);
+  const [quotaNuova, setQuotaNuova] = useState("");
+
+  // Riattivare i pagamenti su un evento che non ha nessun link (creato con
+  // i pagamenti spenti) chiede prima i link: si apre questo mini-form.
+  const [chiediLink, setChiediLink] = useState(false);
+  const [linkPaypal, setLinkPaypal] = useState("");
+  const [linkSatispay, setLinkSatispay] = useState("");
+
+  const [filtroMenu, setFiltroMenu] = useState<number | null>(null);
+  const [filtroEsigenza, setFiltroEsigenza] = useState<FiltroEsigenza>("tutte");
+  const [cerca, setCerca] = useState("");
+  const [raggruppa, setRaggruppa] = useState<Raggruppa>("piano");
 
   const carica = () =>
     call<Overview>("grigliataOverview")
@@ -338,13 +420,14 @@ export function GrigliataAdmin() {
     try {
       await call("grigliataCrea", {
         titolo, scadenza: new Date(scadenza).toISOString(), giorno_evento: giornoEvento,
-        paypal_link: paypal, satispay_link: satispay,
-        menu: vociDaInviare(menuNuovi),
+        paypal_link: pagamentiNuovi ? paypal : "", satispay_link: pagamentiNuovi ? satispay : "",
+        menu: vociDaInviare(menuNuovi), pagamenti_attivi: pagamentiNuovi, quota: quotaNuova,
       });
       setMostraForm(false);
       setPaypal(""); setSatispay(""); setTitoloModificato(false);
-      setMenuNuovi(vociDiDefault());
+      setMenuNuovi(vociDiDefault()); setPagamentiNuovi(true); setQuotaNuova("");
       setGiornoEvento(giornoEventoDiDefault());
+      setFiltroMenu(null); setFiltroEsigenza("tutte"); setCerca("");
       await carica();
       setMsg("Grigliata avviata.");
     } catch (e: any) {
@@ -397,6 +480,33 @@ export function GrigliataAdmin() {
     }
   }
 
+  /** Accende o spegne i pagamenti. Spegnerli non tocca i flag delle
+   *  adesioni: li nasconde soltanto, riaccendendo ricompaiono. */
+  async function impostaPagamenti(attivi: boolean, paypalLink = "", satispayLink = "") {
+    if (!overview?.evento || busy) return;
+    setBusy(true); setMsg(null);
+    try {
+      await call("grigliataPagamenti", {
+        evento_id: overview.evento.id, attivi, paypal_link: paypalLink, satispay_link: satispayLink,
+      });
+      setChiediLink(false); setLinkPaypal(""); setLinkSatispay("");
+      await carica();
+      setMsg(attivi ? "Pagamenti attivati." : "Pagamenti disattivati.");
+    } catch (e: any) {
+      setMsg("Non è riuscito: " + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toccaPagamenti() {
+    const e = overview?.evento;
+    if (!e) return;
+    if (pagamentiAttivi) { impostaPagamenti(false); return; }
+    if (e.paypal_link || e.satispay_link) { impostaPagamenti(true); return; }
+    setChiediLink((v) => !v);
+  }
+
   function apriModificaEvento() {
     if (!overview?.evento) return;
     setNuovoTitolo(overview.evento.titolo);
@@ -404,6 +514,7 @@ export function GrigliataAdmin() {
     setNuovoGiornoEvento(overview.evento.giorno_evento);
     setMenuModifica(overview.evento.menu.map((m) =>
       voceNuova(m.nome, m.id, m.ticket.map((t) => voceTicketNuova(t.nome, t.id)))));
+    setNuovaQuota(quotaInCampo(overview.evento.quota));
     setModificaEvento(true);
   }
 
@@ -415,6 +526,11 @@ export function GrigliataAdmin() {
         evento_id: overview.evento.id, titolo: nuovoTitolo, scadenza: new Date(nuovaScadenza).toISOString(),
         giorno_evento: nuovoGiornoEvento, menu: vociDaInviare(menuModifica),
       });
+      // La quota ha una sua azione (vale anche su un evento chiuso, e non
+      // passa dai controlli di titolo/scadenza): si manda solo se è cambiata.
+      if (nuovaQuota.trim() !== quotaInCampo(overview.evento.quota)) {
+        await call("grigliataQuota", { evento_id: overview.evento.id, quota: nuovaQuota });
+      }
       setModificaEvento(false);
       await carica();
       setMsg("Grigliata aggiornata.");
@@ -488,6 +604,7 @@ export function GrigliataAdmin() {
   }
 
   const evento = overview?.evento ?? null;
+  const pagamentiAttivi = evento?.pagamenti_attivi !== false;
   // Ogni adesione è già una camera che partecipa — non serve più filtrarle.
   const partecipanti = overview?.adesioni ?? [];
 
@@ -531,6 +648,18 @@ export function GrigliataAdmin() {
   // pastiglia alla volta.
   const conEsigenze = partecipanti.filter((a) => a.dieta !== "classico" || a.senza_glutine || a.note);
 
+  // Menu filtrato che non esiste più (rimosso nel frattempo): come nessun filtro.
+  const menuFiltrato = menuEvento.some((m) => m.id === filtroMenu) ? filtroMenu : null;
+  const testoCercato = cerca.trim().toLowerCase();
+  const passaFiltri = (a: Adesione, esigenza: FiltroEsigenza = filtroEsigenza, menu: number | null = menuFiltrato) =>
+    (menu == null || a.menu_id === menu)
+    && haEsigenza(a, esigenza)
+    && (!testoCercato || a.room.toLowerCase().includes(testoCercato) || (a.note ?? "").toLowerCase().includes(testoCercato));
+  const filtrati = partecipanti.filter((a) => passaFiltri(a));
+  const filtriAttivi = menuFiltrato != null || filtroEsigenza !== "tutte" || testoCercato !== "";
+  const azzeraFiltri = () => { setFiltroMenu(null); setFiltroEsigenza("tutte"); setCerca(""); };
+  const esigenzeFiltrate = conEsigenze.filter((a) => passaFiltri(a));
+
   const Statistica = ({ valore, etichetta }: { valore: string | number; etichetta: string }) => (
     <div style={{ textAlign: "center" }}>
       <p style={{ fontSize: 22, fontWeight: 800 }}>{valore}</p>
@@ -547,7 +676,10 @@ export function GrigliataAdmin() {
   // no): il popup che apre serve anche a togliere la camera, non solo a
   // confermare un pagamento.
   const AdesioneChip = ({ a, colore }: { a: Adesione; colore: string }) => {
-    const confermato = a.pagamento_confermato;
+    // Pagamenti spenti (v1.4): nessun incasso da seguire, la pastiglia è
+    // sempre a colori e senza distintivi di pagamento — i flag salvati
+    // restano, solo non si mostrano.
+    const confermato = pagamentiAttivi ? a.pagamento_confermato : true;
     const stile = {
       position: "relative" as const,
       display: "flex", flexDirection: "column" as const, alignItems: "center", justifyContent: "center", gap: 2,
@@ -583,7 +715,7 @@ export function GrigliataAdmin() {
         )}
         {/* Non confermato ma già dichiarato: un'informazione in più, non un
             terzo colore — resta grigia, dice solo "questa ha priorità". */}
-        {!confermato && a.pagamento_dichiarato && (
+        {pagamentiAttivi && !confermato && a.pagamento_dichiarato && (
           <span style={{ fontSize: 8, color: "var(--muted-foreground)" }}>dichiarato</span>
         )}
         {/* Quanti dei suoi ticket sono già stati ritirati al banco: lo sa
@@ -595,7 +727,7 @@ export function GrigliataAdmin() {
             <Ticket size={9} /> {a.ticket.filter((t) => t.usato).length}/{a.ticket.length} ritirati
           </span>
         )}
-        {confermato && (
+        {pagamentiAttivi && confermato && (
           <span style={{
             position: "absolute", top: -5, right: -5, width: 15, height: 15, borderRadius: 99,
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -613,25 +745,52 @@ export function GrigliataAdmin() {
   // salgono dal primo al quarto, poi il basso fabbricato. Solo chi
   // partecipa: chi ha detto di no non interessa a questa scheda (righe
   // arriva già filtrata da chi la chiama).
-  const GruppoPiano = ({ piano, righe }: { piano: Piano; righe: Adesione[] }) => {
+  //
+  // v1.4: lo stesso gruppo serve anche a raggruppare per menu — lì il pallino
+  // del titolo non c'è (un menu non ha un colore), ma ogni pastiglia tiene il
+  // colore del SUO piano, così si vede comunque dove andare a cercarla.
+  const colorePastiglia = (a: Adesione) => {
+    const p = pianoDi(a.room);
+    return p === null ? "var(--foreground)" : colorePiano(p);
+  };
+  const Gruppo = ({ titolo, colore, righe }: { titolo: string; colore?: string; righe: Adesione[] }) => {
     if (righe.length === 0) return null;
-    const colore = colorePiano(piano);
     return (
       <div style={{ marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
-          <span style={{ width: 9, height: 9, borderRadius: 99, background: colore, flexShrink: 0 }} />
+          {colore && <span style={{ width: 9, height: 9, borderRadius: 99, background: colore, flexShrink: 0 }} />}
           <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", ...S.sub }}>
-            {nomePiano(piano)} · {righe.length}
+            {titolo} · {righe.length}
           </p>
         </div>
         <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(84px, 1fr))" }}>
-          {righe.map((a) => <AdesioneChip key={a.id} a={a} colore={colore} />)}
+          {righe.map((a) => <AdesioneChip key={a.id} a={a} colore={colore ?? colorePastiglia(a)} />)}
         </div>
       </div>
     );
   };
 
-  const fuoriSchema = partecipanti.filter((a) => pianoDi(a.room) === null);
+  const fuoriSchema = filtrati.filter((a) => pianoDi(a.room) === null);
+
+  // Una pastiglia-filtro: stessa forma per menu, esigenze e raggruppamento.
+  // Il numero accanto dice quante camere resterebbero scegliendola (dati gli
+  // altri filtri già attivi), così un filtro "vuoto" si vede prima di toccarlo.
+  const Filtro = ({ attivo, onClick, children, n }: { attivo: boolean; onClick: () => void; children: ReactNode; n?: number }) => (
+    <button onClick={onClick} aria-pressed={attivo}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0,
+        padding: "4px 10px", borderRadius: 99, fontSize: 12, fontWeight: 600, cursor: "pointer",
+        border: `1px solid ${attivo ? "var(--primary)" : "var(--border)"}`,
+        background: attivo ? "color-mix(in srgb, var(--primary) 14%, transparent)" : "transparent",
+        color: attivo ? "var(--primary)" : "var(--foreground)",
+        opacity: n === 0 && !attivo ? 0.5 : 1,
+      }}>
+      {children}
+      {n !== undefined && <span style={{ fontSize: 11, opacity: 0.7 }}>{n}</span>}
+    </button>
+  );
+  const quantiConEsigenza = (f: FiltroEsigenza) => partecipanti.filter((a) => passaFiltri(a, f)).length;
+  const quantiConMenu = (id: number | null) => partecipanti.filter((a) => passaFiltri(a, filtroEsigenza, id)).length;
 
   return (
     <>
@@ -698,17 +857,36 @@ export function GrigliataAdmin() {
           <EditorMenu voci={menuNuovi} onChange={setMenuNuovi} />
 
           <div>
-            <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Link PayPal</label>
-            <input style={S.input} value={paypal} onChange={(e) => setPaypal(e.target.value)} placeholder="paypal.me/..." />
+            <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Quota a persona (€, facoltativa)</label>
+            <input style={S.input} value={quotaNuova} onChange={(e) => setQuotaNuova(e.target.value)}
+              inputMode="decimal" placeholder="Es. 10 oppure 12,50" />
+            <p style={{ fontSize: 11, ...S.sub, marginTop: 4 }}>
+              I residenti la vedono nella scheda, anche con i pagamenti disattivati.
+            </p>
           </div>
 
-          <div>
-            <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Link Satispay</label>
-            <input style={S.input} value={satispay} onChange={(e) => setSatispay(e.target.value)} placeholder="satispay.com/..." />
-          </div>
-          <p style={{ fontSize: 11, ...S.sub, marginTop: -6 }}>
-            Serve almeno uno dei due link. "https://" davanti non è necessario, si aggiunge da solo.
-          </p>
+          <Interruttore acceso={pagamentiNuovi} onClick={() => setPagamentiNuovi((v) => !v)}
+            titolo="Raccogli le quote dall'app"
+            sottotitolo={pagamentiNuovi
+              ? "I residenti vedono i link e il pulsante \"Ho pagato\"."
+              : "Nessun pagamento nell'app (es. grigliata offerta, o contanti sul posto). Si può attivare dopo."} />
+
+          {pagamentiNuovi && (
+            <>
+              <div>
+                <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Link PayPal</label>
+                <input style={S.input} value={paypal} onChange={(e) => setPaypal(e.target.value)} placeholder="paypal.me/..." />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Link Satispay</label>
+                <input style={S.input} value={satispay} onChange={(e) => setSatispay(e.target.value)} placeholder="satispay.com/..." />
+              </div>
+              <p style={{ fontSize: 11, ...S.sub, marginTop: -6 }}>
+                Serve almeno uno dei due link. "https://" davanti non è necessario, si aggiunge da solo.
+              </p>
+            </>
+          )}
 
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={creaEvento} disabled={busy} style={{ ...S.btn, opacity: busy ? 0.5 : 1 }}>
@@ -730,6 +908,11 @@ export function GrigliataAdmin() {
               <div>
                 <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Giorno della grigliata</label>
                 <input style={S.input} type="date" value={nuovoGiornoEvento} onChange={(e) => setNuovoGiornoEvento(e.target.value)} />
+              </div>
+              <div>
+                <label style={{ fontSize: 12, ...S.sub, display: "block", marginBottom: 4 }}>Quota a persona (€, vuota = nessuna)</label>
+                <input style={S.input} value={nuovaQuota} onChange={(e) => setNuovaQuota(e.target.value)}
+                  inputMode="decimal" placeholder="Es. 10 oppure 12,50" />
               </div>
               <div style={{ marginTop: 4 }}>
                 <EditorMenu voci={menuModifica} onChange={setMenuModifica} scelte={scelteDi} ticketScelte={ticketScelteDi} />
@@ -762,9 +945,37 @@ export function GrigliataAdmin() {
               </div>
               <p style={{ fontSize: 12, ...S.sub, marginBottom: 14 }}>
                 Scade {fmtData(evento.scadenza)} · Si mangia il {fmtGiorno(evento.giorno_evento)}
+                {" · "}
+                {fmtQuota(evento.quota) ? `Quota ${fmtQuota(evento.quota)} a persona` : "Nessuna quota indicata"}
               </p>
             </>
           )}
+
+          {/* v1.4: i pagamenti si accendono e spengono qui, in qualunque
+              momento. Spegnerli nasconde soltanto lo stato dei pagamenti,
+              non lo cancella. */}
+          <div style={{ paddingTop: 12, marginBottom: 12, borderTop: "1px solid var(--border)" }}>
+            <Interruttore acceso={pagamentiAttivi} onClick={toccaPagamenti} disabilitato={busy}
+              titolo="Pagamenti nell'app"
+              sottotitolo={pagamentiAttivi
+                ? [evento.paypal_link && "PayPal", evento.satispay_link && "Satispay"].filter(Boolean).join(" · ") || "Attivi"
+                : "Disattivati: i residenti non vedono la sezione di pagamento"} />
+            {chiediLink && !pagamentiAttivi && (
+              <div style={{ display: "grid", gap: 8, marginTop: 10 }}>
+                <p style={{ fontSize: 12, ...S.sub }}>Per attivarli serve almeno un link:</p>
+                <input style={S.input} value={linkPaypal} onChange={(e) => setLinkPaypal(e.target.value)} placeholder="paypal.me/..." />
+                <input style={S.input} value={linkSatispay} onChange={(e) => setLinkSatispay(e.target.value)} placeholder="satispay.com/..." />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => impostaPagamenti(true, linkPaypal, linkSatispay)}
+                    disabled={busy || (!linkPaypal.trim() && !linkSatispay.trim())}
+                    style={{ ...S.btn, opacity: busy || (!linkPaypal.trim() && !linkSatispay.trim()) ? 0.5 : 1 }}>
+                    Attiva
+                  </button>
+                  <button onClick={() => setChiediLink(false)} style={S.btn}>Annulla</button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Quanti numeri dipende da quanti menu ha deciso il delegato: uno
               per menu (pagati/tot.), auto-fit invece di colonne fisse così
@@ -777,15 +988,25 @@ export function GrigliataAdmin() {
           <div style={{ display: "flex", gap: 10, alignItems: "stretch", paddingTop: 12, borderTop: "1px solid var(--border)" }}>
             <div style={{ flex: 1, minWidth: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))", gap: 8 }}>
               <Statistica valore={partecipanti.length} etichetta="Partecipano" />
-              <Statistica valore={confermati} etichetta="Pagamenti confermati" />
+              {pagamentiAttivi && <Statistica valore={confermati} etichetta="Pagamenti confermati" />}
+              {/* Con una quota indicata: quanto è già entrato su quanto
+                  dovrebbe entrare, il numero che serve per la spesa. */}
+              {pagamentiAttivi && fmtQuota(evento.quota) && (
+                <Statistica valore={fmtQuota(confermati * Number(evento.quota))!}
+                  etichetta={`Incassati su ${fmtQuota(partecipanti.length * Number(evento.quota))}`} />
+              )}
               {menuEvento.map((m) => {
                 const n = perMenu(m.id);
                 return (
                   <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    <Statistica valore={`${n.pagati}/${n.totale}`} etichetta={`${m.nome} (pagati/tot.)`} />
+                    {pagamentiAttivi
+                      ? <Statistica valore={`${n.pagati}/${n.totale}`} etichetta={`${m.nome} (pagati/tot.)`} />
+                      : <Statistica valore={n.totale} etichetta={m.nome} />}
                     {/* Quante porzioni di CIASCUNA voce-ticket sono DAVVERO
                         uscite al banco, non solo pagate — il numero che
-                        conta il giorno della grigliata. */}
+                        conta il giorno della grigliata (i ticket esistono a
+                        pagamento confermato, indipendentemente dal fatto che
+                        i pagamenti in app siano accesi o spenti). */}
                     {m.ticket.map((tk) => {
                       const nt = perTicket(tk.id);
                       if (nt.pagati === 0) return null;
@@ -871,30 +1092,93 @@ export function GrigliataAdmin() {
             <p style={{ fontSize: 12, ...S.sub }}>Ancora nessun partecipante.</p>
           )}
 
-          {PIANI.map((p) => (
-            <GruppoPiano key={p} piano={p} righe={partecipanti.filter((a) => pianoDi(a.room) === p)} />
-          ))}
-          {fuoriSchema.length > 0 && (
-            <div>
-              <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", ...S.sub, marginBottom: 8 }}>
-                Altre · {fuoriSchema.length}
-              </p>
-              <div style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fill, minmax(84px, 1fr))" }}>
-                {fuoriSchema.map((a) => <AdesioneChip key={a.id} a={a} colore="var(--foreground)" />)}
+          {/* ── Filtri: menu E esigenza E ricerca, si sommano ─────────── */}
+          {partecipanti.length > 0 && (
+            <div style={{ display: "grid", gap: 8, marginBottom: 14, paddingBottom: 12, borderBottom: "1px solid var(--border)" }}>
+              <div style={{ position: "relative" }}>
+                <Search size={14} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--muted-foreground)" }} />
+                <input style={{ ...S.input, paddingLeft: 30 }} value={cerca} onChange={(e) => setCerca(e.target.value)}
+                  placeholder="Cerca camera o parola nelle note (es. lattosio)" />
+              </div>
+
+              {menuEvento.length > 1 && (
+                <div style={{ display: "flex", gap: 6, overflowX: "auto", alignItems: "center" }}>
+                  <span style={{ fontSize: 11, ...S.sub, flexShrink: 0, width: 58 }}>Menu</span>
+                  <Filtro attivo={menuFiltrato == null} onClick={() => setFiltroMenu(null)} n={quantiConMenu(null)}>Tutti</Filtro>
+                  {menuEvento.map((m) => (
+                    <Filtro key={m.id} attivo={menuFiltrato === m.id} n={quantiConMenu(m.id)}
+                      onClick={() => setFiltroMenu(menuFiltrato === m.id ? null : m.id)}>
+                      {m.nome}
+                    </Filtro>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 6, overflowX: "auto", alignItems: "center" }}>
+                <span style={{ fontSize: 11, ...S.sub, flexShrink: 0, width: 58 }}>Esigenze</span>
+                {([
+                  ["tutte", "Tutte"],
+                  ["vegetariano", "Vegetariano"],
+                  ["vegano", "Vegano"],
+                  ["senza_glutine", "Senza glutine"],
+                  ["note", "Con note"],
+                  ["nessuna", "Nessuna"],
+                ] as [FiltroEsigenza, string][]).map(([f, label]) => (
+                  <Filtro key={f} attivo={filtroEsigenza === f} n={quantiConEsigenza(f)}
+                    onClick={() => setFiltroEsigenza(filtroEsigenza === f && f !== "tutte" ? "tutte" : f)}>
+                    {f === "senza_glutine" && <WheatOff size={12} />}
+                    {f === "note" && <StickyNote size={12} />}
+                    {label}
+                  </Filtro>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                <span style={{ fontSize: 11, ...S.sub, flexShrink: 0, width: 58 }}>Raggruppa</span>
+                <Filtro attivo={raggruppa === "piano"} onClick={() => setRaggruppa("piano")}>Per piano</Filtro>
+                <Filtro attivo={raggruppa === "menu"} onClick={() => setRaggruppa("menu")}>Per menu</Filtro>
+                {filtriAttivi && (
+                  <span style={{ marginLeft: "auto", fontSize: 12, ...S.sub }}>
+                    {filtrati.length} di {partecipanti.length} ·{" "}
+                    <button onClick={azzeraFiltri}
+                      style={{ fontSize: 12, fontWeight: 700, color: "var(--gray-accessible-text)", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+                      Azzera filtri
+                    </button>
+                  </span>
+                )}
               </div>
             </div>
+          )}
+
+          {partecipanti.length > 0 && filtrati.length === 0 && (
+            <p style={{ fontSize: 12, ...S.sub }}>Nessuna camera corrisponde ai filtri.</p>
+          )}
+
+          {raggruppa === "piano" ? (
+            <>
+              {PIANI.map((p) => (
+                <Gruppo key={p} titolo={nomePiano(p)} colore={colorePiano(p)} righe={filtrati.filter((a) => pianoDi(a.room) === p)} />
+              ))}
+              <Gruppo titolo="Altre" righe={fuoriSchema} />
+            </>
+          ) : (
+            menuEvento.map((m) => (
+              <Gruppo key={m.id} titolo={m.nome} righe={filtrati.filter((a) => a.menu_id === m.id)} />
+            ))
           )}
         </div>
       )}
 
       {/* ── Esigenze alimentari: tutto quello che serve a chi cucina ────── */}
-      {evento && conEsigenze.length > 0 && (
+      {/* Segue gli stessi filtri della griglia: "Con note" + una ricerca
+          ("lattosio") dà subito l'elenco da portare a chi fa la spesa. */}
+      {evento && esigenzeFiltrate.length > 0 && (
         <div style={{ ...S.card, padding: 14, marginTop: 16 }}>
           <p style={{ fontSize: 12, ...S.sub, marginBottom: 10 }}>
-            Esigenze alimentari · {conEsigenze.length}
+            Esigenze alimentari · {esigenzeFiltrate.length}{filtriAttivi && ` (filtrate, su ${conEsigenze.length})`}
           </p>
           <div style={{ display: "grid", gap: 8 }}>
-            {conEsigenze.map((a) => (
+            {esigenzeFiltrate.map((a) => (
               <div key={a.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13 }}>
                 <span style={{ fontFamily: "monospace", fontWeight: 700, minWidth: 44 }}>{a.room}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -932,16 +1216,21 @@ export function GrigliataAdmin() {
                 Note: {adesioneSelezionata.note}
               </p>
             )}
-            <p style={{ fontSize: 13, ...S.sub, marginBottom: adesioneSelezionata.pagamento_confermato ? 4 : 16 }}>
-              {adesioneSelezionata.pagamento_confermato
-                ? "Pagamento confermato."
-                : adesioneSelezionata.pagamento_dichiarato
-                  ? "Ha dichiarato di aver pagato."
-                  : "Non ha ancora dichiarato di aver pagato — puoi confermarlo comunque, ad esempio se ha pagato in mano o senza usare l'app."}
-            </p>
+            {pagamentiAttivi && (
+              <p style={{ fontSize: 13, ...S.sub, marginBottom: adesioneSelezionata.pagamento_confermato ? 4 : 16 }}>
+                {adesioneSelezionata.pagamento_confermato
+                  ? "Pagamento confermato."
+                  : adesioneSelezionata.pagamento_dichiarato
+                    ? "Ha dichiarato di aver pagato."
+                    : "Non ha ancora dichiarato di aver pagato — puoi confermarlo comunque, ad esempio se ha pagato in mano o senza usare l'app."}
+              </p>
+            )}
             {/* I ticket si usano dallo schermo del residente, non da qui —
                 questo elenco è solo informativo (vedi Grigliata.tsx lato
-                residente), uno per voce del menu scelto. */}
+                residente), uno per voce del menu scelto. Mostrato a
+                prescindere da pagamentiAttivi: un ticket esiste se il
+                pagamento è confermato, anche con i pagamenti dell'app
+                spenti (es. confermato a mano per un incasso in contanti). */}
             {adesioneSelezionata.pagamento_confermato && (
               <div style={{ marginBottom: 16, display: "grid", gap: 3 }}>
                 {adesioneSelezionata.ticket.map((tk) => (
@@ -952,8 +1241,8 @@ export function GrigliataAdmin() {
                 ))}
               </div>
             )}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {!adesioneSelezionata.pagamento_confermato && (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: pagamentiAttivi ? 0 : 12 }}>
+              {pagamentiAttivi && !adesioneSelezionata.pagamento_confermato && (
                 <button style={S.btn} disabled={busy} onClick={confermaSelezionata}>
                   {busy ? "In corso…" : "Conferma pagamento"}
                 </button>

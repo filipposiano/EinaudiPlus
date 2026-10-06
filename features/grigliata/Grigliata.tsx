@@ -30,7 +30,9 @@ const T = {
     nessunaAttiva: "Non c'è nessuna grigliata attiva al momento.",
     scadeIl: (d: string) => `Le adesioni chiudono il ${d}`,
     siMangiaIl: (d: string) => `Si mangia il ${d}`,
-    menuLabel: "Cosa mangi?",
+    menuLabel: "Quale menu desideri?",
+    infoTitolo: "Informazioni su di te",
+    infoDesc: "Così chi cucina può preparare qualcosa anche per te.",
     dietaLabel: "Segui una dieta particolare?",
     dietaClassico: "Mangio di tutto",
     dietaVegetariano: "Vegetariano",
@@ -45,6 +47,8 @@ const T = {
     partecipi: "Partecipi!",
     menuScelto: (m: string) => `Menu: ${m}`,
     pagamentoTitolo: "Invia la tua quota",
+    quota: (q: string) => `Quota a persona: ${q}`,
+    pagamentiDisattivati: "Per ora i pagamenti sono disattivati: non devi inviare niente dall'app. Il delegato ti farà sapere se e come pagare.",
     pagamentoDesc: "Usa uno dei link qui sotto per inviare la quota al delegato, poi tocca \"Ho pagato\".",
     causalePagamento: "Importante: scrivi il numero della tua camera nella causale (nota) del pagamento, così il delegato può abbinarlo a te.",
     paypalBtn: "Paga con PayPal",
@@ -67,7 +71,9 @@ const T = {
     nessunaAttiva: "There's no barbecue running right now.",
     scadeIl: (d: string) => `Sign-ups close on ${d}`,
     siMangiaIl: (d: string) => `It's happening on ${d}`,
-    menuLabel: "What do you eat?",
+    menuLabel: "Which menu would you like?",
+    infoTitolo: "About you",
+    infoDesc: "So the cooks can prepare something for you too.",
     dietaLabel: "Any dietary preference?",
     dietaClassico: "I eat everything",
     dietaVegetariano: "Vegetarian",
@@ -82,6 +88,8 @@ const T = {
     partecipi: "You're in!",
     menuScelto: (m: string) => `Menu: ${m}`,
     pagamentoTitolo: "Send your share",
+    quota: (q: string) => `Share per person: ${q}`,
+    pagamentiDisattivati: "Payments are turned off for now: you don't need to send anything through the app. The organizer will let you know if and how to pay.",
     pagamentoDesc: "Use one of the links below to send your share to the organizer, then tap \"I've paid\".",
     causalePagamento: "Important: put your room number in the payment note, so the organizer can match it to you.",
     paypalBtn: "Pay with PayPal",
@@ -104,7 +112,9 @@ const T = {
     nessunaAttiva: "Il n'y a aucun barbecue en cours.",
     scadeIl: (d: string) => `Les inscriptions ferment le ${d}`,
     siMangiaIl: (d: string) => `Ça se passe le ${d}`,
-    menuLabel: "Tu manges quoi ?",
+    menuLabel: "Quel menu souhaites-tu ?",
+    infoTitolo: "À propos de toi",
+    infoDesc: "Pour que les cuisiniers puissent prévoir quelque chose pour toi aussi.",
     dietaLabel: "Un régime particulier ?",
     dietaClassico: "Je mange de tout",
     dietaVegetariano: "Végétarien",
@@ -119,6 +129,8 @@ const T = {
     partecipi: "Tu es inscrit·e !",
     menuScelto: (m: string) => `Menu : ${m}`,
     pagamentoTitolo: "Envoie ta part",
+    quota: (q: string) => `Part par personne : ${q}`,
+    pagamentiDisattivati: "Les paiements sont désactivés pour le moment : tu n'as rien à envoyer depuis l'app. L'organisateur te dira si et comment payer.",
     pagamentoDesc: "Utilise un des liens ci-dessous pour envoyer ta part à l'organisateur, puis touche \"J'ai payé\".",
     causalePagamento: "Important : indique le numéro de ta chambre dans la note du paiement, pour que l'organisateur puisse te retrouver.",
     paypalBtn: "Payer avec PayPal",
@@ -141,7 +153,9 @@ const T = {
     nessunaAttiva: "Gerade läuft kein Grillfest.",
     scadeIl: (d: string) => `Anmeldeschluss ist der ${d}`,
     siMangiaIl: (d: string) => `Gefeiert wird am ${d}`,
-    menuLabel: "Was isst du?",
+    menuLabel: "Welches Menü möchtest du?",
+    infoTitolo: "Über dich",
+    infoDesc: "Damit die Köche auch für dich etwas vorbereiten können.",
     dietaLabel: "Ernährst du dich besonders?",
     dietaClassico: "Ich esse alles",
     dietaVegetariano: "Vegetarisch",
@@ -156,6 +170,8 @@ const T = {
     partecipi: "Du bist dabei!",
     menuScelto: (m: string) => `Menü: ${m}`,
     pagamentoTitolo: "Sende deinen Anteil",
+    quota: (q: string) => `Anteil pro Person: ${q}`,
+    pagamentiDisattivati: "Zahlungen sind vorerst deaktiviert: du musst über die App nichts senden. Der Organisator sagt dir, ob und wie du zahlst.",
     pagamentoDesc: "Nutze einen der Links unten, um deinen Anteil an den Organisator zu senden, und tippe dann auf \"Bezahlt\".",
     causalePagamento: "Wichtig: Gib deine Zimmernummer in der Zahlungsnotiz an, damit der Organisator sie dir zuordnen kann.",
     paypalBtn: "Mit PayPal bezahlen",
@@ -178,7 +194,9 @@ const T = {
     nessunaAttiva: "No hay ninguna barbacoa activa ahora mismo.",
     scadeIl: (d: string) => `Las inscripciones cierran el ${d}`,
     siMangiaIl: (d: string) => `Se celebra el ${d}`,
-    menuLabel: "¿Qué comes?",
+    menuLabel: "¿Qué menú quieres?",
+    infoTitolo: "Sobre ti",
+    infoDesc: "Así quienes cocinan pueden preparar algo también para ti.",
     dietaLabel: "¿Sigues alguna dieta?",
     dietaClassico: "Como de todo",
     dietaVegetariano: "Vegetariano",
@@ -193,6 +211,8 @@ const T = {
     partecipi: "¡Estás dentro!",
     menuScelto: (m: string) => `Menú: ${m}`,
     pagamentoTitolo: "Envía tu parte",
+    quota: (q: string) => `Cuota por persona: ${q}`,
+    pagamentiDisattivati: "Por ahora los pagos están desactivados: no tienes que enviar nada desde la app. El organizador te dirá si hay que pagar y cómo.",
     pagamentoDesc: "Usa uno de los enlaces de abajo para enviar tu parte al organizador, luego toca \"Ya he pagado\".",
     causalePagamento: "Importante: escribe el número de tu habitación en la nota del pago, para que el organizador pueda identificarte.",
     paypalBtn: "Pagar con PayPal",
@@ -215,7 +235,9 @@ const T = {
     nessunaAttiva: "Mo nun ce sta nisciuna grigliata.",
     scadeIl: (d: string) => `'E adesioni chiudono ô ${d}`,
     siMangiaIl: (d: string) => `Se magna ô ${d}`,
-    menuLabel: "Che magne?",
+    menuLabel: "Qua menu vuò?",
+    infoTitolo: "Dimme 'e te",
+    infoDesc: "Accussì chi cucina te prepara pure a te quaccosa.",
     dietaLabel: "Tiene 'na dieta particolare?",
     dietaClassico: "Magno 'e tutto",
     dietaVegetariano: "Vegetariano",
@@ -230,6 +252,8 @@ const T = {
     partecipi: "Staje dinto!",
     menuScelto: (m: string) => `Menu: ${m}`,
     pagamentoTitolo: "Manna 'a quota toja",
+    quota: (q: string) => `Quota a cristiano: ${q}`,
+    pagamentiDisattivati: "P' mo' 'e pagamente so' stutate: nun hê 'a mannà niente dall'app. 'O delegato te fa sapé si e comme pagà.",
     pagamentoDesc: "Adopera uno d''e link ccà sotto pe' mannà 'a quota, po' tocca \"Aggio pagato\".",
     causalePagamento: "Importante: scrive 'o nummero d''a cammera toja dint''a nota d''o pagamento, accussì 'o delegato te ricanosce.",
     paypalBtn: "Paga cu PayPal",
@@ -431,6 +455,10 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   }
 
   const { evento, miaAdesione } = stato;
+  // v1.4.1: la quota a persona, se il delegato l'ha indicata — vale anche
+  // con i pagamenti spenti (quanto portare sul posto).
+  const quota = evento.quota == null ? null
+    : evento.quota.toLocaleString("it-IT", { style: "currency", currency: "EUR" });
   const scadenza = new Date(evento.scadenza).toLocaleString("it-IT", {
     day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
   });
@@ -461,6 +489,7 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
         <p className="text-sm font-bold mb-1" style={{ color: fg }}>{evento.titolo}</p>
         <p className="text-xs" style={{ color: sub }}>{t.siMangiaIl(fmtGiorno(evento.giornoEvento, lang))}</p>
         <p className="text-xs" style={{ color: sub }}>{t.scadeIl(scadenza)}</p>
+        {quota && <p className="text-xs font-semibold mt-1" style={{ color: fg }}>{t.quota(quota)}</p>}
       </div>
 
       {msg && (
@@ -469,74 +498,88 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
         </div>
       )}
 
+      {/* v1.4: il form è diviso in due blocchi — COSA si mangia (il menu del
+          delegato) e CHI sei (dieta, glutine, note) — invece di un'unica
+          card: sono due domande diverse, e la seconda vale qualunque menu
+          si scelga. Il pulsante sta sotto entrambi: salva tutto insieme,
+          i dati viaggiano come prima (stessa grigliata_iscrivi). */}
       {mostraForm ? (
-        <div className="rounded-2xl border p-4 flex flex-col gap-4" style={{ background: surf, borderColor: div }}>
-          <div>
-            <p className="text-sm font-semibold mb-2" style={{ color: fg }}>{t.menuLabel}</p>
-            {/* Da uno a dieci menu, con nomi lunghi fino a 40 caratteri: una
-                griglia che va a capo da sola, non tre colonne fisse. */}
-            <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))" }}>
-              {evento.menu.map((m) => {
-                const scelto = menuEffettivo === m.id;
-                return (
-                  <button key={m.id} onClick={() => setMenuScelta(m.id)} aria-pressed={scelto}
-                    className="rounded-xl py-2.5 px-1 text-sm font-semibold leading-tight transition-all"
-                    lang="it"
-                    style={{
-                      // Un nome lungo va a capo fra le parole, o sillabato —
-                      // non spezzato a caso ("Vegetarian|o").
-                      hyphens: "auto", overflowWrap: "break-word",
-                      ...(scelto ? { background: RED, color: RED_FG } : { background: "var(--secondary)", color: fg }),
-                    }}>
-                    {m.nome}
-                  </button>
-                );
-              })}
+        <div className="flex flex-col gap-4">
+          <div className="rounded-2xl border p-4" style={{ background: surf, borderColor: div }}>
+            <div>
+              <p className="text-sm font-bold mb-3" style={{ color: fg }}>{t.menuLabel}</p>
+              {/* Da uno a dieci menu, con nomi lunghi fino a 40 caratteri: una
+                  griglia che va a capo da sola, non tre colonne fisse. */}
+              <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))" }}>
+                {evento.menu.map((m) => {
+                  const scelto = menuEffettivo === m.id;
+                  return (
+                    <button key={m.id} onClick={() => setMenuScelta(m.id)} aria-pressed={scelto}
+                      className="rounded-xl py-2.5 px-1 text-sm font-semibold leading-tight transition-all"
+                      lang="it"
+                      style={{
+                        // Un nome lungo va a capo fra le parole, o sillabato —
+                        // non spezzato a caso ("Vegetarian|o").
+                        hyphens: "auto", overflowWrap: "break-word",
+                        ...(scelto ? { background: RED, color: RED_FG } : { background: "var(--secondary)", color: fg }),
+                      }}>
+                      {m.nome}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
-          <div>
-            <p className="text-sm font-semibold mb-2" style={{ color: fg }}>{t.dietaLabel}</p>
-            {/* Tre pulsanti fissi, non legati ai menu del delegato: si può
-                scegliere QUALUNQUE menu e dichiararsi comunque vegani — è
-                un'informazione a parte, non una quarta scelta di menu. */}
-            <div className="grid grid-cols-3 gap-2">
-              {([["classico", t.dietaClassico], ["vegetariano", t.dietaVegetariano], ["vegano", t.dietaVegano]] as [api.GrigliataDieta, string][]).map(([val, label]) => {
-                const scelto = dieta === val;
-                return (
-                  <button key={val} onClick={() => setDieta(val)} aria-pressed={scelto}
-                    className="rounded-xl py-2.5 px-1 text-sm font-semibold leading-tight transition-all"
-                    style={scelto
-                      ? { background: RED, color: RED_FG }
-                      : { background: "var(--secondary)", color: fg }}>
-                    {label}
-                  </button>
-                );
-              })}
+          <div className="rounded-2xl border p-4 flex flex-col gap-4" style={{ background: surf, borderColor: div }}>
+            <div>
+              <p className="text-sm font-bold" style={{ color: fg }}>{t.infoTitolo}</p>
+              <p className="text-xs mt-0.5" style={{ color: sub }}>{t.infoDesc}</p>
             </div>
+
+            <div>
+              <p className="text-sm font-semibold mb-2" style={{ color: fg }}>{t.dietaLabel}</p>
+              {/* Tre pulsanti fissi, non legati ai menu del delegato: si può
+                  scegliere QUALUNQUE menu e dichiararsi comunque vegani — è
+                  un'informazione a parte, non una quarta scelta di menu. */}
+              <div className="grid grid-cols-3 gap-2">
+                {([["classico", t.dietaClassico], ["vegetariano", t.dietaVegetariano], ["vegano", t.dietaVegano]] as [api.GrigliataDieta, string][]).map(([val, label]) => {
+                  const scelto = dieta === val;
+                  return (
+                    <button key={val} onClick={() => setDieta(val)} aria-pressed={scelto}
+                      className="rounded-xl py-2.5 px-1 text-sm font-semibold leading-tight transition-all"
+                      style={scelto
+                        ? { background: RED, color: RED_FG }
+                        : { background: "var(--secondary)", color: fg }}>
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Un interruttore e non una quarta scelta di menu: si può essere
+                vegani E senza glutine, sono due cose indipendenti. */}
+            <button onClick={() => setSenzaGlutine((v) => !v)} role="switch" aria-checked={senzaGlutine}
+              className="flex items-center justify-between gap-3 text-left">
+              <span>
+                <span className="block text-sm font-semibold" style={{ color: fg }}>{t.senzaGlutine}</span>
+                <span className="block text-xs" style={{ color: sub }}>{t.senzaGlutineHint}</span>
+              </span>
+              <span className="shrink-0 flex items-center rounded-full p-[3px] transition-colors"
+                style={{ width: 44, height: 26, background: senzaGlutine ? RED : "var(--secondary)", justifyContent: senzaGlutine ? "flex-end" : "flex-start" }}>
+                <span className="rounded-full" style={{ width: 20, height: 20, background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.3)" }} />
+              </span>
+            </button>
+
+            <label className="block">
+              <span className="block text-sm font-semibold mb-2" style={{ color: fg }}>{t.noteLabel}</span>
+              <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} rows={2}
+                placeholder={t.notePlaceholder}
+                className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none"
+                style={{ background: "var(--secondary)", color: fg, border: `1px solid ${div}` }} />
+            </label>
           </div>
-
-          {/* Un interruttore e non una quarta scelta di menu: si può essere
-              vegani E senza glutine, sono due cose indipendenti. */}
-          <button onClick={() => setSenzaGlutine((v) => !v)} role="switch" aria-checked={senzaGlutine}
-            className="flex items-center justify-between gap-3 text-left">
-            <span>
-              <span className="block text-sm font-semibold" style={{ color: fg }}>{t.senzaGlutine}</span>
-              <span className="block text-xs" style={{ color: sub }}>{t.senzaGlutineHint}</span>
-            </span>
-            <span className="shrink-0 flex items-center rounded-full p-[3px] transition-colors"
-              style={{ width: 44, height: 26, background: senzaGlutine ? RED : "var(--secondary)", justifyContent: senzaGlutine ? "flex-end" : "flex-start" }}>
-              <span className="rounded-full" style={{ width: 20, height: 20, background: "#fff", boxShadow: "0 1px 3px rgba(0,0,0,.3)" }} />
-            </span>
-          </button>
-
-          <label className="block">
-            <span className="block text-sm font-semibold mb-2" style={{ color: fg }}>{t.noteLabel}</span>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} rows={2}
-              placeholder={t.notePlaceholder}
-              className="w-full rounded-xl px-3 py-2.5 text-sm outline-none resize-none"
-              style={{ background: "var(--secondary)", color: fg, border: `1px solid ${div}` }} />
-          </label>
 
           <button onClick={salvaAdesione} disabled={busy || menuEffettivo == null}
             className="w-full py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
@@ -569,12 +612,22 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
       )}
 
       {/* Il pagamento compare solo per chi ha già aderito (non mentre si sta
-          ancora scegliendo il menu). */}
+          ancora scegliendo il menu). Con i pagamenti spenti dal delegato
+          (v1.4) la card resta, ma dice solo che per ora non si paga — niente
+          link né "Ho pagato". */}
       {miaAdesione && !modificaScelta && (
         <div className="rounded-2xl border p-4 mt-4 flex flex-col gap-3" style={{ background: surf, borderColor: div }}>
-          <p className="text-sm font-bold" style={{ color: fg }}>{t.pagamentoTitolo}</p>
+          <div>
+            <p className="text-sm font-bold" style={{ color: fg }}>{t.pagamentoTitolo}</p>
+            {quota && <p className="text-xs mt-0.5" style={{ color: sub }}>{t.quota(quota)}</p>}
+          </div>
 
-          {miaAdesione.pagamentoConfermato ? (
+          {!evento.pagamentiAttivi ? (
+            <p className="text-xs leading-relaxed rounded-xl px-3 py-2 font-medium"
+              style={{ background: "var(--secondary)", color: fg }}>
+              {t.pagamentiDisattivati}
+            </p>
+          ) : miaAdesione.pagamentoConfermato ? (
             eGiornoEvento ? (
               // Il giorno VERO della grigliata: la conferma lascia il posto
               // ai ticket — uno per voce del menu scelto (es. "Carne" =

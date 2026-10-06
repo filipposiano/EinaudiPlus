@@ -27,10 +27,23 @@ export const grigliataRepository = {
   },
 
   /** Admin (delegato/sistemista): fa partire una nuova grigliata, coi suoi menu. */
-  async adminCrea({ titolo, scadenza, giornoEvento, paypal, satispay, menu, attore }) {
+  async adminCrea({ titolo, scadenza, giornoEvento, paypal, satispay, menu, pagamentiAttivi, quota, attore }) {
     return rpc("grigliata_admin_crea", {
       p_titolo: titolo, p_scadenza: scadenza, p_giorno_evento: giornoEvento,
       p_paypal: paypal, p_satispay: satispay, p_menu: menu, p_attore: attore,
+      p_pagamenti_attivi: pagamentiAttivi, p_quota: quota,
+    });
+  },
+
+  /** Admin: imposta (o toglie, con null) la quota a persona di un evento. */
+  async adminImpostaQuota({ id, quota }) {
+    return rpc("grigliata_admin_imposta_quota", { p_evento_id: id, p_quota: quota });
+  },
+
+  /** Admin: attiva/disattiva i pagamenti di un evento (e ne aggiorna i link). */
+  async adminImpostaPagamenti({ id, attivi, paypal, satispay }) {
+    return rpc("grigliata_admin_imposta_pagamenti", {
+      p_evento_id: id, p_attivi: attivi, p_paypal: paypal, p_satispay: satispay,
     });
   },
 

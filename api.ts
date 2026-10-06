@@ -315,6 +315,11 @@ export interface GrigliataEvento {
   /** Il giorno VERO in cui si mangia — distinto dalla scadenza delle
    *  adesioni/pagamenti, che può cadere prima (vedi GrigliataView). */
   giornoEvento: string;
+  /** v1.4: il delegato può spegnere i pagamenti — niente sezione "Invia la
+   *  tua quota" per il residente. */
+  pagamentiAttivi: boolean;
+  /** v1.4.1: quota a persona in euro, null se il delegato non l'ha indicata. */
+  quota: number | null;
   paypalLink: string | null; satispayLink: string | null;
   /** Nell'ordine deciso dal delegato: il primo è quello "di base". */
   menu: GrigliataMenu[];
@@ -370,6 +375,9 @@ export async function getGrigliataStato(): Promise<GrigliataStato> {
     evento: {
       id: data.evento.id, titolo: data.evento.titolo, scadenza: data.evento.scadenza,
       giornoEvento: data.evento.giorno_evento,
+      // Assente (server non ancora migrato) = attivi, come prima.
+      pagamentiAttivi: data.evento.pagamenti_attivi !== false,
+      quota: data.evento.quota == null ? null : Number(data.evento.quota),
       paypalLink: data.evento.paypal_link ?? null, satispayLink: data.evento.satispay_link ?? null,
       menu: Array.isArray(data.evento.menu) ? data.evento.menu : [],
     },

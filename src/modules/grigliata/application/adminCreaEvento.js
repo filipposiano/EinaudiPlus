@@ -7,12 +7,17 @@
 // una sola transazione.
 //
 // v1.3: con l'elenco dei menu fra cui i residenti sceglieranno — li decide
-// il delegato, il primo è quello "di base".
+// il delegato, il primo è quello "di base". v1.4: i pagamenti si possono
+// lasciare spenti (grigliata offerta, contanti sul posto) — solo allora i
+// link non sono obbligatori. Assente = attivi, il comportamento di sempre.
 
 import { ValidationError, fromRpcError } from "../../../shared/errors/AppError.js";
-import { isFutureDateTime, isValidDate, controllaMenu } from "../domain/validazione.js";
+import { isFutureDateTime, isValidDate, controllaMenu, controllaQuota } from "../domain/validazione.js";
 
-export async function adminCreaEvento({ titolo, scadenza, giornoEvento, paypalLink, satispayLink, menu, attore }, { grigliataRepository }) {
+export async function adminCreaEvento(
+  { titolo, scadenza, giornoEvento, paypalLink, satispayLink, menu, pagamentiAttivi, quota, attore },
+  { grigliataRepository },
+) {
   if (!isFutureDateTime(scadenza)) {
     throw new ValidationError("la scadenza deve essere una data futura");
   }
@@ -23,12 +28,17 @@ export async function adminCreaEvento({ titolo, scadenza, giornoEvento, paypalLi
 
   const paypal = String(paypalLink || "").trim();
   const satispay = String(satispayLink || "").trim();
-  if (!paypal && !satispay) {
+  const pagamenti = pagamentiAttivi !== false;
+  if (pagamenti && !paypal && !satispay) {
     throw new ValidationError("inserisci almeno un link per il pagamento (PayPal o Satispay)");
   }
 
   const esito = controllaMenu(menu);
   if (esito.errore) throw new ValidationError(esito.errore);
+
+  // v1.4.1: facoltativa — vuota = nessuna quota indicata.
+  const esitoQuota = controllaQuota(quota);
+  if (esitoQuota.errore) throw new ValidationError(esitoQuota.errore);
 
   try {
     return await grigliataRepository.adminCrea({
@@ -42,6 +52,8 @@ export async function adminCreaEvento({ titolo, scadenza, giornoEvento, paypalLi
       // Un evento nuovo non ha menu (né voci-ticket) esistenti: gli id, se
       // arrivassero, non significano niente — si tengono solo i nomi.
       menu: esito.menu.map(({ nome, ticket }) => ({ nome, ticket: ticket.map(({ nome }) => ({ nome })) })),
+      pagamentiAttivi: pagamenti,
+      quota: esitoQuota.quota,
       attore,
     });
   } catch (err) {

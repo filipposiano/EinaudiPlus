@@ -1,39 +1,34 @@
--- v1.4: due aggiunte alla Grigliata.
+-- v1.5: due aggiunte alla Grigliata, DOPO che le migrazioni 048
+-- (pagamenti attivabili) e 049 (quota a persona) sono già applicate.
 --
 -- 1. `giorno_evento`: finora l'unica data sull'evento era `scadenza` (quando
 --    chiudono le adesioni/i pagamenti) — non il giorno in cui si mangia
---    davvero, che può cadere dopo. Le grigliate già esistenti ricevono come
---    giorno la data della loro scadenza: un punto di partenza plausibile,
---    il delegato lo corregge da adminModificaEvento se serve.
+--    davvero, che può cadere dopo.
 --
 -- 2. Ticket a uso unico, COMPOSTI: ogni menu si scompone in una o più voci
 --    (es. menu "Carne" = ticket "Salsiccia" + "Patatine" + "Bibita"), decise
 --    dal delegato insieme al menu stesso. Un'adesione riceve, alla conferma
 --    del pagamento, UN ticket vero per OGNI voce del suo menu — uno
 --    "snapshot" di quel momento: cambiare poi l'elenco ticket del menu non
---    tocca le adesioni già confermate (grigliata_admin_conferma_pagamento).
---    Un ticket "esiste" solo così — pagamento confermato, non una colonna
---    booleana a parte. Si usa dal lato RESIDENTE (bottone "Usa" sul proprio
---    schermo, non una ricerca-camera lato banco e non un QR): il numero
---    progressivo (per evento+voce-ticket) si assegna SOLO nel momento in
---    cui si preme, mai prima — uno screenshot fatto in anticipo non mostra
---    nessun numero valido.
+--    tocca le adesioni già confermate. Si usa dal lato RESIDENTE (bottone
+--    "Usa" sul proprio schermo, non una ricerca-camera lato banco e non un
+--    QR): il numero progressivo si assegna SOLO nel momento in cui si preme.
 --
---    (Questo file ha sostituito, prima di essere applicato in produzione,
---    una prima versione dove il ticket era uno solo per adesione — vedi lo
---    storico dei commit: nessun dato reale è mai esistito in quella forma.)
+-- Questa migrazione è anche quella che RICONCILIA un incidente di sviluppo:
+-- una versione precedente e più semplice di questo stesso file (un ticket
+-- piatto per adesione, senza voci-ticket, senza consapevolezza di
+-- pagamenti_attivi/quota) è stata applicata per errore a produzione PRIMA
+-- che 048/049 fossero scritte altrove e mergiate — vedi la cronologia nel
+-- repository. I `drop function` qui sotto ripuliscono gli overload lasciati
+-- da quel momento, oltre a quelli attesi da una sequenza pulita 048→049→051.
 --
 -- Consolidato in supabase/grigliata.sql; qui la versione da applicare a un
--- database già in produzione (dopo la 047).
+-- database già in produzione.
 
 alter table grigliata_evento add column if not exists giorno_evento date;
 update grigliata_evento set giorno_evento = scadenza::date where giorno_evento is null;
 alter table grigliata_evento alter column giorno_evento set not null;
 
--- Le voci-ticket di un menu (es. "Salsiccia", "Patatine") — definite dal
--- delegato insieme al menu stesso, stesso principio di grigliata_menu (nome
--- unico per menu, non globale: due menu diversi possono avere entrambi una
--- voce "Bibita").
 create table if not exists grigliata_menu_ticket (
   id        bigserial primary key,
   menu_id   bigint not null references grigliata_menu(id) on delete cascade,
@@ -42,11 +37,6 @@ create table if not exists grigliata_menu_ticket (
 );
 create unique index if not exists grigliata_menu_ticket_nome_unico on grigliata_menu_ticket (menu_id, lower(nome));
 
--- Un ticket VERO, di UN'adesione, per UNA voce del suo menu — creato in
--- blocco alla conferma del pagamento (vedi grigliata_admin_conferma_pagamento
--- più sotto), mai prima. `no action` e non `restrict` sul riferimento al
--- menu_ticket, stesso motivo delle altre cascata in questo file: eliminare
--- un evento porta via menu, voci-ticket e ticket nella stessa istruzione.
 create table if not exists grigliata_ticket (
   id             bigserial primary key,
   adesione_id    bigint not null references grigliata_adesione(id) on delete cascade,
@@ -60,11 +50,19 @@ create table if not exists grigliata_ticket (
 alter table grigliata_menu_ticket enable row level security;
 alter table grigliata_ticket enable row level security;
 
--- Le quattro funzioni che cambiano firma vanno tolte prima di ricrearle
--- (CREATE OR REPLACE richiede la stessa identica lista di parametri).
--- grigliata_usa_ticket in particolare: da un argomento (p_room) a due
--- (p_room, p_ticket_id), perché ora un'adesione ha più ticket, uno a voce.
-drop function if exists grigliata_admin_crea(text, timestamptz, text, text, jsonb, text);
+-- Un ticket piatto (uno per adesione, niente voci) può essere sopravvissuto
+-- all'incidente descritto sopra: non è mai stato un modello rilasciato
+-- davvero, si toglie senza migrare dati.
+alter table grigliata_adesione drop column if exists ticket_usato;
+alter table grigliata_adesione drop column if exists ticket_numero;
+alter table grigliata_adesione drop column if exists ticket_usato_at;
+
+-- Le funzioni che cambiano firma vanno tolte prima di ricrearle (CREATE OR
+-- REPLACE richiede la stessa identica lista di parametri). Elencate sia le
+-- firme attese da una sequenza pulita 048→049, sia quelle lasciate
+-- dall'incidente (il `if exists` rende innocuo ogni drop che non trova nulla).
+drop function if exists grigliata_admin_crea(text, timestamptz, text, text, jsonb, text, boolean, numeric);
+drop function if exists grigliata_admin_crea(text, timestamptz, date, text, text, jsonb, text);
 drop function if exists grigliata_admin_modifica(bigint, text, timestamptz, jsonb);
 drop function if exists grigliata_usa_ticket(text);
 
@@ -167,9 +165,7 @@ end;
 $$;
 
 -- I menu di un evento, CON le loro voci-ticket — la forma che stato_pubblico
--- e admin_overview restituiscono entrambi (il residente ignora `ticket` nel
--- picker iniziale; il pannello admin la usa per precompilare l'editor di
--- modifica).
+-- e admin_overview restituiscono entrambi.
 create or replace function grigliata_menu_di(p_evento_id bigint)
 returns jsonb language sql stable as $$
   select coalesce(jsonb_agg(jsonb_build_object(
@@ -207,6 +203,8 @@ begin
       'titolo', v_evento.titolo,
       'scadenza', v_evento.scadenza,
       'giorno_evento', v_evento.giorno_evento,
+      'pagamenti_attivi', v_evento.pagamenti_attivi,
+      'quota', v_evento.quota,
       'paypal_link', v_evento.paypal_link,
       'satispay_link', v_evento.satispay_link,
       'menu', grigliata_menu_di(v_evento.id)
@@ -231,16 +229,6 @@ begin
 end;
 $$;
 
--- "Usa" UN ticket (una delle voci del proprio menu) — percorso pubblico,
--- camera autodichiarata come grigliata_dichiara_pagamento. Il ticket deve
--- appartenere all'adesione di QUESTA camera: non basta indovinarne l'id. Il
--- numero progressivo (per evento+voce-ticket: quante "Salsiccia" sono già
--- uscite in tutto l'evento) si assegna SOLO in questo momento, mai prima —
--- uno screenshot fatto in anticipo non porta nessun numero valido, e una
--- volta usato il bottone sparisce per sempre nella UI perché lo stato vive
--- qui, non nello screenshot. `pg_advisory_xact_lock` serializza solo i
--- ticket della stessa voce nello stesso evento, così due persone che premono
--- "Usa" sulla stessa voce nello stesso istante non ricevono lo stesso numero.
 create or replace function grigliata_usa_ticket(p_room text, p_ticket_id bigint)
 returns jsonb language plpgsql as $$
 declare
@@ -278,8 +266,6 @@ begin
 
   perform pg_advisory_xact_lock(hashtext(v_evento_id::text || ':' || v_ticket.menu_ticket_id::text));
 
-  -- Si rilegge lo stato DOPO il lock: un'altra sessione potrebbe aver
-  -- marcato questo stesso ticket nel frattempo (due tocchi quasi simultanei).
   select usato into v_ricontrollo from grigliata_ticket where id = v_ticket.id;
   if v_ricontrollo then
     return jsonb_build_object('ok', false, 'error', 'ticket già usato');
@@ -299,7 +285,9 @@ end;
 $$;
 
 create or replace function grigliata_admin_crea(
-  p_titolo text, p_scadenza timestamptz, p_giorno_evento date, p_paypal text, p_satispay text, p_menu jsonb, p_attore text
+  p_titolo text, p_scadenza timestamptz, p_giorno_evento date, p_paypal text, p_satispay text, p_menu jsonb, p_attore text,
+  p_pagamenti_attivi boolean default true,
+  p_quota numeric default null
 ) returns jsonb language plpgsql as $$
 declare
   v_id bigint;
@@ -308,6 +296,7 @@ declare
   v_errore text;
   v_voce record;
   v_menu_id bigint;
+  v_pagamenti boolean := coalesce(p_pagamenti_attivi, true);
 begin
   if p_scadenza is null or p_scadenza <= now() then
     return jsonb_build_object('ok', false, 'error', 'la scadenza deve essere nel futuro');
@@ -320,8 +309,12 @@ begin
   v_paypal := grigliata_normalizza_link(p_paypal);
   v_satispay := grigliata_normalizza_link(p_satispay);
 
-  if v_paypal is null and v_satispay is null then
+  if v_pagamenti and v_paypal is null and v_satispay is null then
     return jsonb_build_object('ok', false, 'error', 'inserisci almeno un link per il pagamento (PayPal o Satispay)');
+  end if;
+
+  if p_quota is not null and (p_quota < 0 or p_quota > 1000) then
+    return jsonb_build_object('ok', false, 'error', 'quota non valida (fra 0 e 1000 €)');
   end if;
 
   v_errore := grigliata_menu_errore(p_menu);
@@ -331,16 +324,13 @@ begin
 
   update grigliata_evento set chiuso = true where not chiuso;
 
-  insert into grigliata_evento (titolo, creato_da, scadenza, giorno_evento, paypal_link, satispay_link)
+  insert into grigliata_evento (titolo, creato_da, scadenza, giorno_evento, paypal_link, satispay_link, pagamenti_attivi, quota)
   values (
     coalesce(nullif(btrim(coalesce(p_titolo, '')), ''), 'Grigliata'),
-    p_attore, p_scadenza, p_giorno_evento, v_paypal, v_satispay
+    p_attore, p_scadenza, p_giorno_evento, v_paypal, v_satispay, v_pagamenti, round(p_quota, 2)
   )
   returning id into v_id;
 
-  -- Un evento nuovo non ha menu (né voci-ticket) esistenti: un ciclo, non
-  -- un'unica INSERT...SELECT, perché ogni menu appena creato deve portare
-  -- subito le proprie voci — serve il suo id, che solo RETURNING dà.
   for v_voce in select e.value, e.ordinality from jsonb_array_elements(p_menu) with ordinality as e(value, ordinality) loop
     insert into grigliata_menu (evento_id, nome, posizione)
     values (v_id, btrim(v_voce.value->>'nome'), v_voce.ordinality - 1)
@@ -381,8 +371,6 @@ begin
     return jsonb_build_object('ok', false, 'error', v_errore);
   end if;
 
-  -- Un id che non appartiene a QUESTO evento non si rinomina: sarebbe un
-  -- menu di un'altra grigliata.
   if exists (
     select 1 from jsonb_array_elements(p_menu) e
     where e.value->>'id' is not null
@@ -391,9 +379,6 @@ begin
     return jsonb_build_object('ok', false, 'error', 'menu non valido');
   end if;
 
-  -- Un menu tolto dall'elenco che qualche camera ha già scelto: si rifiuta
-  -- invece di lasciare adesioni senza menu. Il delegato può rinominarlo, o
-  -- prima spostare quelle camere su un altro menu.
   select m.nome, count(*) into v_nome, v_quante
   from grigliata_menu m
   join grigliata_adesione a on a.menu_id = m.id
@@ -410,10 +395,6 @@ begin
              case when v_quante = 1 then 'camera' else 'camere' end));
   end if;
 
-  -- Una voce-ticket tolta da un menu ESISTENTE che ha già almeno un ticket
-  -- vero assegnato (grigliata_ticket, creato alla conferma di un pagamento)
-  -- si rifiuta allo stesso modo — altrimenti sparirebbe un ticket già in
-  -- mano a chi ha già pagato.
   for v_voce in select e.value from jsonb_array_elements(p_menu) e where e.value->>'id' is not null loop
     select t.nome, count(gt.id) into v_nome, v_quante
     from grigliata_menu_ticket t
@@ -446,9 +427,6 @@ begin
       select (e.value->>'id')::bigint from jsonb_array_elements(p_menu) e where e.value->>'id' is not null
     );
 
-  -- Due passaggi per i nomi: prima un nome provvisorio unico, poi quello
-  -- vero — altrimenti scambiare due nomi fra loro ("A"↔"B") violerebbe
-  -- per un istante il vincolo di unicità a metà dell'aggiornamento.
   update grigliata_menu set nome = '#' || id where evento_id = p_evento_id;
 
   update grigliata_menu m
@@ -461,11 +439,6 @@ begin
   from jsonb_array_elements(p_menu) with ordinality as e(value, ordinality)
   where e.value->>'id' is null;
 
-  -- Ora che ogni menu del payload corrisponde a una riga vera (esistente o
-  -- appena creata, e con il nome finale — il passaggio sopra lo garantisce),
-  -- si sincronizzano le sue voci-ticket: stesso schema a due passaggi per i
-  -- nomi, un livello più in basso. Il nome è univoco per evento (vincolo
-  -- grigliata_menu_nome_unico), quindi il join è affidabile.
   for v_voce in
     select e.value, m.id as menu_id
     from jsonb_array_elements(p_menu) e
@@ -495,10 +468,48 @@ begin
 end;
 $$;
 
--- Conferma il pagamento di UNA adesione, e genera i suoi ticket — uno per
--- ogni voce del menu scelto, nello stato in cui quel menu si trova ADESSO
--- (snapshot, vedi la nota in testa al file). Idempotente: confermare di
--- nuovo un pagamento già confermato non duplica i ticket già creati.
+create or replace function grigliata_admin_overview()
+returns jsonb language plpgsql stable as $$
+declare
+  v_evento grigliata_evento%rowtype;
+begin
+  select * into v_evento from grigliata_evento order by created_at desc limit 1;
+
+  if v_evento.id is null then
+    return jsonb_build_object('ok', true, 'evento', null, 'adesioni', '[]'::jsonb);
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'evento', jsonb_build_object(
+      'id', v_evento.id, 'titolo', v_evento.titolo, 'scadenza', v_evento.scadenza,
+      'giorno_evento', v_evento.giorno_evento,
+      'pagamenti_attivi', v_evento.pagamenti_attivi, 'quota', v_evento.quota,
+      'paypal_link', v_evento.paypal_link, 'satispay_link', v_evento.satispay_link,
+      'chiuso', v_evento.chiuso, 'attiva', (not v_evento.chiuso and now() < v_evento.scadenza),
+      'menu', grigliata_menu_di(v_evento.id)
+    ),
+    'adesioni', coalesce((
+      select jsonb_agg(jsonb_build_object(
+        'id', a.id, 'room', a.room, 'menu_id', a.menu_id, 'dieta', a.dieta,
+        'senza_glutine', a.senza_glutine, 'note', a.note,
+        'pagamento_dichiarato', a.pagamento_dichiarato, 'pagamento_confermato', a.pagamento_confermato,
+        'confermato_da', a.confermato_da, 'confermato_at', a.confermato_at,
+        'ticket', coalesce((
+          select jsonb_agg(jsonb_build_object(
+            'id', gt.id, 'nome', mt.nome, 'usato', gt.usato, 'numero', gt.numero, 'usato_at', gt.usato_at
+          ) order by mt.posizione, mt.id)
+          from grigliata_ticket gt
+          join grigliata_menu_ticket mt on mt.id = gt.menu_ticket_id
+          where gt.adesione_id = a.id
+        ), '[]'::jsonb)
+      ) order by a.room)
+      from grigliata_adesione a where a.evento_id = v_evento.id
+    ), '[]'::jsonb)
+  );
+end;
+$$;
+
 create or replace function grigliata_admin_conferma_pagamento(p_adesione_id bigint, p_attore text)
 returns jsonb language plpgsql as $$
 declare
@@ -526,53 +537,12 @@ begin
 end;
 $$;
 
-create or replace function grigliata_admin_overview()
-returns jsonb language plpgsql stable as $$
-declare
-  v_evento grigliata_evento%rowtype;
-begin
-  select * into v_evento from grigliata_evento order by created_at desc limit 1;
-
-  if v_evento.id is null then
-    return jsonb_build_object('ok', true, 'evento', null, 'adesioni', '[]'::jsonb);
-  end if;
-
-  return jsonb_build_object(
-    'ok', true,
-    'evento', jsonb_build_object(
-      'id', v_evento.id, 'titolo', v_evento.titolo, 'scadenza', v_evento.scadenza,
-      'giorno_evento', v_evento.giorno_evento,
-      'paypal_link', v_evento.paypal_link, 'satispay_link', v_evento.satispay_link,
-      'chiuso', v_evento.chiuso, 'attiva', (not v_evento.chiuso and now() < v_evento.scadenza),
-      'menu', grigliata_menu_di(v_evento.id)
-    ),
-    'adesioni', coalesce((
-      select jsonb_agg(jsonb_build_object(
-        'id', a.id, 'room', a.room, 'menu_id', a.menu_id, 'dieta', a.dieta,
-        'senza_glutine', a.senza_glutine, 'note', a.note,
-        'pagamento_dichiarato', a.pagamento_dichiarato, 'pagamento_confermato', a.pagamento_confermato,
-        'confermato_da', a.confermato_da, 'confermato_at', a.confermato_at,
-        'ticket', coalesce((
-          select jsonb_agg(jsonb_build_object(
-            'id', gt.id, 'nome', mt.nome, 'usato', gt.usato, 'numero', gt.numero, 'usato_at', gt.usato_at
-          ) order by mt.posizione, mt.id)
-          from grigliata_ticket gt
-          join grigliata_menu_ticket mt on mt.id = gt.menu_ticket_id
-          where gt.adesione_id = a.id
-        ), '[]'::jsonb)
-      ) order by a.room)
-      from grigliata_adesione a where a.evento_id = v_evento.id
-    ), '[]'::jsonb)
-  );
-end;
-$$;
-
 revoke all on function grigliata_ticket_errore(jsonb) from public, anon, authenticated;
 revoke all on function grigliata_usa_ticket(text, bigint) from public, anon, authenticated;
-revoke all on function grigliata_admin_crea(text, timestamptz, date, text, text, jsonb, text) from public, anon, authenticated;
+revoke all on function grigliata_admin_crea(text, timestamptz, date, text, text, jsonb, text, boolean, numeric) from public, anon, authenticated;
 revoke all on function grigliata_admin_modifica(bigint, text, timestamptz, date, jsonb) from public, anon, authenticated;
 
 grant execute on function grigliata_ticket_errore(jsonb) to service_role;
 grant execute on function grigliata_usa_ticket(text, bigint) to service_role;
-grant execute on function grigliata_admin_crea(text, timestamptz, date, text, text, jsonb, text) to service_role;
+grant execute on function grigliata_admin_crea(text, timestamptz, date, text, text, jsonb, text, boolean, numeric) to service_role;
 grant execute on function grigliata_admin_modifica(bigint, text, timestamptz, date, jsonb) to service_role;
