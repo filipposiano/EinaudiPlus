@@ -566,9 +566,9 @@ export function GrigliataAdmin() {
     if (await confermaPagamento(adesioneSelezionata.id)) setAdesioneSelezionata(null);
   }
 
-  /** "Torna indietro" su una conferma data per errore — la SQL la rifiuta
-   *  da sola (restando aperto il popup con l'errore) se un ticket di
-   *  quell'adesione è già stato usato. */
+  /** "Torna indietro" su una conferma data per errore — funziona anche se
+   *  un ticket di quell'adesione è già stato usato (la SQL lo tiene come
+   *  traccia e toglie solo i ticket non ancora usati). */
   async function annullaConferma(adesioneId: number): Promise<boolean> {
     if (busy) return false;
     setBusy(true); setMsg(null);
@@ -1201,6 +1201,41 @@ export function GrigliataAdmin() {
         </div>
       )}
 
+      {/* ── Ticket: una sezione a parte, non solo il numero piccolo sotto il
+          riepilogo — un ticket per ogni voce di ogni menu (es. "Carne" →
+          "Salsiccia" + "Bibita"), quanti sono pagati e quanti già ritirati.
+          Ricorda che i ticket di un'adesione sono uno "scatto" preso alla
+          conferma del pagamento: se un menu riceve una voce-ticket in più
+          DOPO che qualche camera era già confermata, quella camera resta
+          con l'elenco di allora finché non si annulla e si riconferma. */}
+      {evento && menuEvento.some((m) => m.ticket.length > 0) && (
+        <div style={{ ...S.card, padding: 14, marginTop: 16 }}>
+          <p style={{ fontSize: 12, ...S.sub, marginBottom: 10 }}>Ticket</p>
+          <div style={{ display: "grid", gap: 12 }}>
+            {menuEvento.map((m) => (
+              <div key={m.id}>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", ...S.sub, marginBottom: 6 }}>
+                  {m.nome}
+                </p>
+                <div style={{ display: "grid", gap: 6 }}>
+                  {m.ticket.map((tk) => {
+                    const nt = perTicket(tk.id);
+                    return (
+                      <div key={tk.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13 }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                          <Ticket size={12} style={{ color: "var(--gray-accessible-text)" }} /> {tk.nome}
+                        </span>
+                        <span style={{ ...S.sub }}>{nt.usati}/{nt.pagati} ritirati</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Esigenze alimentari: tutto quello che serve a chi cucina ────── */}
       {/* Segue gli stessi filtri della griglia: "Con note" + una ricerca
           ("lattosio") dà subito l'elenco da portare a chi fa la spesa. */}
@@ -1284,10 +1319,10 @@ export function GrigliataAdmin() {
               {/* "Torna indietro" su una conferma data per errore — niente a
                   che fare con pagamentiAttivi (si può confermare anche con i
                   pagamenti dell'app spenti, quindi si deve poter annullare
-                  allo stesso modo). La SQL stessa rifiuta se un ticket di
-                  questa adesione è già stato usato, col messaggio che
-                  spiega perché — non lo anticipiamo qui disabilitando il
-                  pulsante, l'errore già mostrato sotto basta. */}
+                  allo stesso modo). Funziona anche se un ticket di questa
+                  adesione è già stato usato: quello resta come traccia di
+                  quel che è stato servito, spariscono solo quelli non
+                  ancora usati. */}
               {adesioneSelezionata.pagamento_confermato && (
                 <button style={S.btn} disabled={busy} onClick={annullaConfermaSelezionata}>
                   {busy ? "In corso…" : "Annulla conferma"}

@@ -467,13 +467,13 @@ section("adminAnnullaConfermaPagamento()");
     adminAnnullaConfermaPagamento({ adesioneId: "non-un-numero" }, { grigliataRepository: fakeRepository() }));
   check("un id non numerico viene respinto prima del repository", errId?.message === "adesione non valida");
 
-  // Il rifiuto della SQL (un ticket già usato) passa inalterato: non è
-  // compito di questo use-case indovinarlo in anticipo, il messaggio della
-  // RPC è già quello giusto da mostrare.
-  const repoRifiuta = { async adminAnnullaConfermaPagamento() { return { ok: false, error: "1 ticket già usato: non si può annullare la conferma" }; } };
+  // Un rifiuto della SQL (oggi: solo "adesione non trovata" — funziona
+  // anche con ticket già usati, vedi grigliata_admin_annulla_conferma_
+  // pagamento) passa comunque inalterato: non è compito di questo use-case
+  // interpretarlo.
+  const repoRifiuta = { async adminAnnullaConfermaPagamento() { return { ok: false, error: "adesione non trovata" }; } };
   const res = await adminAnnullaConfermaPagamento({ adesioneId: "1" }, { grigliataRepository: repoRifiuta });
-  check("il rifiuto della SQL (ticket già usato) passa inalterato",
-    res.ok === false && res.error === "1 ticket già usato: non si può annullare la conferma");
+  check("il rifiuto della SQL passa inalterato", res.ok === false && res.error === "adesione non trovata");
 }
 
 section("adminChiudiEvento()");

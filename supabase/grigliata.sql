@@ -874,27 +874,19 @@ end;
 $$;
 
 -- Annulla una conferma di pagamento data per errore — "torna indietro".
--- Si rifiuta se anche un solo ticket di quell'adesione è già stato usato:
--- il cibo è già uscito sulla base di quella conferma, annullarla adesso
--- lascerebbe una camera servita ma segnata come non pagata. In quel caso il
--- delegato corregge altrimenti (es. ne parla col residente), non da qui.
--- Quando l'annullamento va a buon fine, i ticket non ancora usati spariscono
--- con lei: sono nati dalla conferma (vedi grigliata_admin_conferma_pagamento
--- sopra), e quella conferma non c'è più.
+-- Funziona anche se uno o più ticket di quell'adesione sono già stati
+-- usati: il delegato deve poter correggere un errore di conferma a
+-- prescindere da cos'è già successo al banco, non restarne bloccato. I
+-- ticket NON ancora usati spariscono con la conferma (sono nati da lei,
+-- vedi grigliata_admin_conferma_pagamento sopra, e lei non c'è più); quelli
+-- GIÀ usati restano, come traccia di quel che è stato davvero servito — non
+-- si toglie cibo a chi l'ha già ricevuto cancellando una riga.
 create or replace function grigliata_admin_annulla_conferma_pagamento(p_adesione_id bigint)
 returns jsonb language plpgsql as $$
 declare
-  v_usati int;
   v_room text;
 begin
-  select count(*) into v_usati from grigliata_ticket where adesione_id = p_adesione_id and usato;
-  if v_usati > 0 then
-    return jsonb_build_object('ok', false, 'error',
-      format('%s ticket già %s: non si può annullare la conferma', v_usati,
-             case when v_usati = 1 then 'usato' else 'usati' end));
-  end if;
-
-  delete from grigliata_ticket where adesione_id = p_adesione_id;
+  delete from grigliata_ticket where adesione_id = p_adesione_id and not usato;
 
   update grigliata_adesione
     set pagamento_confermato = false, confermato_da = null, confermato_at = null, updated_at = now()
