@@ -492,6 +492,7 @@ export function GrigliataAdmin() {
   // null = nessuna scelta ancora: vale la scheda "naturale" del momento (vedi
   // schedaAttiva più sotto).
   const [scheda, setScheda] = useState<Scheda | null>(null);
+  const [tuttiUsati, setTuttiUsati] = useState(false);
 
   const carica = () =>
     call<Overview>("grigliataOverview")
@@ -803,6 +804,12 @@ export function GrigliataAdmin() {
   const ticketUsati = tuttiTicket.filter((t) => t.usato).length;
   const ultimoNumero = evento?.ticket_contatore
     ?? tuttiTicket.reduce((m, t) => Math.max(m, t.numero ?? 0), 0);
+  // I ticket usati, dal più recente: numero, camera, voce e ora — chi serve
+  // al banco controlla che numero e camera sullo schermo del residente
+  // siano proprio gli ultimi usciti.
+  const usatiRecenti = partecipanti
+    .flatMap((a) => a.ticket.filter((t) => t.usato).map((t) => ({ ...t, room: a.room })))
+    .sort((x, y) => (y.numero ?? 0) - (x.numero ?? 0));
   // Dal giorno VERO della grigliata in poi: solo da lì si attiva la sezione
   // dei ticket (vedi più sotto), come lo slider lato residente.
   const eGiornoEvento = evento != null && evento.giorno_evento <= oggiISO();
@@ -1266,12 +1273,53 @@ export function GrigliataAdmin() {
             }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p style={{ fontSize: 13, fontWeight: 700 }}>Ultimo numero uscito</p>
+                {usatiRecenti[0] ? (
+                  <p style={{ fontSize: 15, fontWeight: 800, marginTop: 2 }}>
+                    Camera {usatiRecenti[0].room}
+                    <span style={{ fontSize: 12, fontWeight: 600, ...S.sub }}>
+                      {" · "}{usatiRecenti[0].emoji || EMOJI_TICKET_DEFAULT} {usatiRecenti[0].nome}
+                    </span>
+                  </p>
+                ) : null}
                 <p style={{ fontSize: 12, ...S.sub }}>{ticketUsati} ticket usati su {tuttiTicket.length}</p>
               </div>
               <p style={{ fontSize: 48, fontWeight: 900, lineHeight: 1, color: "var(--primary)", fontVariantNumeric: "tabular-nums" }}>
-                {ultimoNumero > 0 ? ultimoNumero : "—"}
+                {usatiRecenti[0]?.numero ?? (ultimoNumero > 0 ? ultimoNumero : "—")}
               </p>
             </div>
+
+            {/* Gli ultimi usciti, numero e camera: il controllo al banco. */}
+            {usatiRecenti.length > 0 && (
+              <div style={{ marginBottom: 16 }}>
+                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", ...S.sub, marginBottom: 6 }}>
+                  Ultimi usati
+                </p>
+                <div style={{ display: "grid", gap: 2 }}>
+                  {(tuttiUsati ? usatiRecenti : usatiRecenti.slice(0, 10)).map((u) => (
+                    <div key={u.id} style={{
+                      display: "grid", gridTemplateColumns: "56px 1fr auto", alignItems: "center", gap: 8,
+                      padding: "6px 8px", borderRadius: 8, fontSize: 13,
+                      background: u === usatiRecenti[0] ? "color-mix(in srgb, var(--primary) 8%, transparent)" : "none",
+                    }}>
+                      <span style={{ fontWeight: 900, fontVariantNumeric: "tabular-nums", color: "var(--primary)" }}>N. {u.numero}</span>
+                      <span style={{ minWidth: 0 }}>
+                        <span style={{ fontWeight: 700 }}>Camera {u.room}</span>
+                        <span style={{ ...S.sub }}> · {u.emoji || EMOJI_TICKET_DEFAULT} {u.nome}</span>
+                      </span>
+                      <span style={{ fontSize: 12, ...S.sub, fontVariantNumeric: "tabular-nums" }}>
+                        {u.usato_at ? new Date(u.usato_at).toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {usatiRecenti.length > 10 && (
+                  <button onClick={() => setTuttiUsati((v) => !v)}
+                    style={{ marginTop: 6, fontSize: 12, fontWeight: 700, color: "var(--gray-accessible-text)", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+                    {tuttiUsati ? "Mostra solo gli ultimi 10" : `Mostra tutti (${usatiRecenti.length})`}
+                  </button>
+                )}
+              </div>
+            )}
 
             <div style={{ display: "grid", gap: 12 }}>
               {menuEvento.map((m) => (
