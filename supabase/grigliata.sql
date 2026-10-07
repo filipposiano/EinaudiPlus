@@ -881,6 +881,7 @@ begin
       'paypal_link', v_evento.paypal_link, 'satispay_link', v_evento.satispay_link,
       'chiuso', v_evento.chiuso, 'attiva', grigliata_visibile(v_evento.chiuso, v_evento.giorno_evento),
       'iscrizioni_aperte', now() < v_evento.scadenza,
+      'ticket_contatore', v_evento.ticket_contatore,
       'menu', grigliata_menu_di(v_evento.id)
     ),
     'adesioni', coalesce((

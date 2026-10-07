@@ -65,7 +65,7 @@ const T = {
     ticketUsaHint: "Scorri solo davanti a chi ti serve: il numero compare in quel momento, non prima.",
     ticketUsato: (n: number) => `Usato · n. ${n}`,
     ticketBloccato: (d: string) => `Si sbloccano il ${d}`,
-    ticketUsatoAlle: (ora: string) => `Usato alle ${ora}`,
+    ticketUsatoIl: "Usato il",
     ticketUsatoChiudi: "Fatto",
     ticketNumero: "Numero",
   },
@@ -112,7 +112,7 @@ const T = {
     ticketUsaHint: "Only slide in front of whoever's serving: the number appears at that moment, not before.",
     ticketUsato: (n: number) => `Used · #${n}`,
     ticketBloccato: (d: string) => `Unlocks on ${d}`,
-    ticketUsatoAlle: (ora: string) => `Used at ${ora}`,
+    ticketUsatoIl: "Used on",
     ticketUsatoChiudi: "Done",
     ticketNumero: "Number",
   },
@@ -159,7 +159,7 @@ const T = {
     ticketUsaHint: "Glisse seulement devant la personne qui te sert : le numéro apparaît à ce moment-là, pas avant.",
     ticketUsato: (n: number) => `Utilisé · n° ${n}`,
     ticketBloccato: (d: string) => `Se débloquent le ${d}`,
-    ticketUsatoAlle: (ora: string) => `Utilisé à ${ora}`,
+    ticketUsatoIl: "Utilisé le",
     ticketUsatoChiudi: "Terminé",
     ticketNumero: "Numéro",
   },
@@ -206,7 +206,7 @@ const T = {
     ticketUsaHint: "Nur vor der servierenden Person wischen: die Nummer erscheint erst in diesem Moment.",
     ticketUsato: (n: number) => `Eingelöst · Nr. ${n}`,
     ticketBloccato: (d: string) => `Freigeschaltet am ${d}`,
-    ticketUsatoAlle: (ora: string) => `Eingelöst um ${ora}`,
+    ticketUsatoIl: "Eingelöst am",
     ticketUsatoChiudi: "Fertig",
     ticketNumero: "Nummer",
   },
@@ -253,7 +253,7 @@ const T = {
     ticketUsaHint: "Desliza solo delante de quien te sirve: el número aparece en ese momento, no antes.",
     ticketUsato: (n: number) => `Usado · n.º ${n}`,
     ticketBloccato: (d: string) => `Se desbloquean el ${d}`,
-    ticketUsatoAlle: (ora: string) => `Usado a las ${ora}`,
+    ticketUsatoIl: "Usado el",
     ticketUsatoChiudi: "Listo",
     ticketNumero: "Número",
   },
@@ -300,7 +300,7 @@ const T = {
     ticketUsaHint: "Scorri sulamente nnanz'a chi te serve: 'o nummero esce sulo tanno, nun primm'.",
     ticketUsato: (n: number) => `Adoperato · n. ${n}`,
     ticketBloccato: (d: string) => `Se sbloccano 'o ${d}`,
-    ticketUsatoAlle: (ora: string) => `Adoperato a ll'${ora}`,
+    ticketUsatoIl: "Adoperato 'o",
     ticketUsatoChiudi: "Fatto",
     ticketNumero: "Nummero",
   },
@@ -322,11 +322,12 @@ function href(link: string): string {
 /** "20 settembre" da un `date` puro ("AAAA-MM-GG", senza orario) — split sui
  *  componenti invece di passare per `new Date(iso)`: letto come UTC e
  *  riformattato in fuso locale potrebbe slittare di un giorno. */
+const LOCALE: Record<Lang, string> = { it: "it-IT", en: "en-GB", fr: "fr-FR", de: "de-DE", es: "es-ES", nap: "it-IT" };
+
 function fmtGiorno(dataIso: string, lang: Lang): string {
   const [y, m, d] = dataIso.split("-").map(Number);
   if (!y || !m || !d) return dataIso;
-  const locale = { it: "it-IT", en: "en-GB", fr: "fr-FR", de: "de-DE", es: "es-ES", nap: "it-IT" }[lang];
-  return new Date(y, m - 1, d).toLocaleDateString(locale, { day: "numeric", month: "long" });
+  return new Date(y, m - 1, d).toLocaleDateString(LOCALE[lang], { day: "numeric", month: "long" });
 }
 
 /** "AAAA-MM-GG" di oggi, nel fuso del dispositivo — stesso formato del
@@ -495,7 +496,7 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   // emoji, nome e numero in grande — la "prova" che il ticket è stato speso
   // proprio ora, non solo una riga in più nella lista (vedi usaTicket()).
   const [ticketAppenaUsato, setTicketAppenaUsato] = useState<{
-    nome: string; emoji: string; numero: number; ora: string;
+    nome: string; emoji: string; numero: number; quando: Date;
   } | null>(null);
 
   // Form di adesione: menu, senza glutine, note. Non c'è più una scelta sì/no
@@ -596,7 +597,7 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
         nome: res.ticket_nome || tk.nome,
         emoji: res.ticket_emoji || tk.emoji || EMOJI_TICKET_DEFAULT,
         numero: res.ticket_numero,
-        ora: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
+        quando: new Date(),
       });
       await load();
       return true;
@@ -931,9 +932,20 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
           <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: RED_FG, opacity: 0.8 }}>{t.ticketNumero}</p>
           <p className="font-extrabold tabular-nums leading-none" style={{ color: RED_FG, fontSize: 88 }}>{ticketAppenaUsato.numero}</p>
         </div>
-        <p className="text-sm font-medium flex items-center gap-1.5" style={{ color: RED_FG, opacity: 0.9 }}>
-          <Check size={16} />{t.ticketUsatoAlle(ticketAppenaUsato.ora)}
-        </p>
+        {/* Giorno e ora (coi secondi) in grande: identificano QUESTO uso del
+            ticket — chi serve li confronta a colpo d'occhio, uno screenshot
+            di un altro momento non torna. */}
+        <div className="flex flex-col items-center" style={{ color: RED_FG }}>
+          <p className="text-sm font-semibold flex items-center gap-1.5 uppercase tracking-widest" style={{ opacity: 0.85 }}>
+            <Check size={16} />{t.ticketUsatoIl}
+          </p>
+          <p className="text-2xl font-bold mt-1">
+            {ticketAppenaUsato.quando.toLocaleDateString(LOCALE[lang], { weekday: "long", day: "numeric", month: "long" })}
+          </p>
+          <p className="text-5xl font-extrabold tabular-nums leading-tight">
+            {ticketAppenaUsato.quando.toLocaleTimeString(LOCALE[lang], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+          </p>
+        </div>
         <button onClick={() => setTicketAppenaUsato(null)}
           className="mt-5 px-10 py-3 rounded-2xl text-sm font-bold"
           style={{ background: RED_FG, color: RED }}>

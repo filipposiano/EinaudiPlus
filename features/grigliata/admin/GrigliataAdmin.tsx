@@ -72,6 +72,10 @@ type Evento = {
   /** v1.6 — assente se il server non ha ancora la migrazione 052: vale aperte
    *  finche' non e' passata `scadenza`. */
   iscrizioni_aperte?: boolean;
+  /** v1.7.2 — l'ultimo numero di ticket assegnato in questo evento (unico per
+   *  tutte le voci). Assente se il server non ha ancora la migrazione 056:
+   *  si ricava allora dai ticket ancora presenti. */
+  ticket_contatore?: number;
   menu: MenuVoce[];
 };
 
@@ -388,6 +392,14 @@ function fmtData(iso: string): string {
   return new Date(iso).toLocaleString("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+/** "AAAA-MM-GG" di oggi nel fuso del dispositivo — stesso formato del
+ *  `date` del giorno della grigliata, per un confronto diretto. */
+function oggiISO(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 /** Il giorno dell'evento (un `date` puro, "AAAA-MM-GG", senza orario) alla
  *  data odierna + 3 giorni — stesso orizzonte del default della scadenza. */
 function giornoEventoDiDefault(): string {
@@ -479,6 +491,20 @@ export function GrigliataAdmin() {
       .catch((e: any) => setMsg(e.message));
 
   useEffect(() => { carica(); }, []);
+
+  // Il giorno della grigliata i ticket si usano dagli schermi dei residenti,
+  // i pagamenti si dichiarano in qualunque momento: senza un ricontrollo
+  // periodico il pannello resterebbe fermo all'ultima apertura. Stesso
+  // intervallo della scheda residenti (Grigliata.tsx) e di NotificheTab;
+  // si ferma quando la scheda non è visibile. Un errore di rete qui non
+  // mostra nessun messaggio: riprova da solo al giro dopo.
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (document.hidden) return;
+      call<Overview>("grigliataOverview").then((r) => setOverview(r)).catch(() => {});
+    }, 10_000);
+    return () => clearInterval(id);
+  }, []);
 
   // Cambiando la data proposta, il titolo suggerito la segue — a meno che
   // non sia già stato scritto a mano: altrimenti bastava toccare la
@@ -719,6 +745,13 @@ export function GrigliataAdmin() {
     if (await rimuoviAdesione(adesioneSelezionata.id)) setAdesioneSelezionata(null);
   }
 
+  // Il popup della camera mostra una copia dell'adesione: a ogni
+  // aggiornamento (anche quello automatico) la si rilegge dall'overview
+  // nuova, così un ticket usato mentre il popup è aperto compare subito.
+  useEffect(() => {
+    setAdesioneSelezionata((sel) => (sel ? overview?.adesioni.find((a) => a.id === sel.id) ?? null : sel));
+  }, [overview]);
+
   const evento = overview?.evento ?? null;
   const pagamentiAttivi = evento?.pagamenti_attivi !== false;
   // Ogni adesione è già una camera che partecipa — non serve più filtrarle.
@@ -738,6 +771,16 @@ export function GrigliataAdmin() {
   const menuCameraEffettivo = menuEvento.some((m) => m.id === nuovoMenuCamera) ? nuovoMenuCamera : idMenuDefault;
 
   const confermati = partecipanti.filter((a) => a.pagamento_confermato).length;
+  // I ticket di tutto l'evento, e a che numero si è arrivati: il contatore
+  // del server se c'è (conta anche i numeri di ticket poi cancellati o
+  // ripristinati, che non si riusano), altrimenti il più alto ancora visibile.
+  const tuttiTicket = partecipanti.flatMap((a) => a.ticket);
+  const ticketUsati = tuttiTicket.filter((t) => t.usato).length;
+  const ultimoNumero = evento?.ticket_contatore
+    ?? tuttiTicket.reduce((m, t) => Math.max(m, t.numero ?? 0), 0);
+  // Dal giorno VERO della grigliata in poi: solo da lì si attiva la sezione
+  // dei ticket (vedi più sotto), come lo slider lato residente.
+  const eGiornoEvento = evento != null && evento.giorno_evento <= oggiISO();
   const perMenu = (id: number) => {
     const del = partecipanti.filter((a) => a.menu_id === id);
     return { totale: del.length, pagati: del.filter((a) => a.pagamento_confermato).length };
@@ -1138,20 +1181,6 @@ export function GrigliataAdmin() {
                     {pagamentiAttivi
                       ? <Statistica valore={`${n.pagati}/${n.totale}`} etichetta={`${m.nome} (pagati/tot.)`} />
                       : <Statistica valore={n.totale} etichetta={m.nome} />}
-                    {/* Quante porzioni di CIASCUNA voce-ticket sono DAVVERO
-                        uscite al banco, non solo pagate — il numero che
-                        conta il giorno della grigliata (i ticket esistono a
-                        pagamento confermato, indipendentemente dal fatto che
-                        i pagamenti in app siano accesi o spenti). */}
-                    {m.ticket.map((tk) => {
-                      const nt = perTicket(tk.id);
-                      if (nt.pagati === 0) return null;
-                      return (
-                        <p key={tk.id} style={{ fontSize: 10, textAlign: "center", ...S.sub, display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
-                          <span>{tk.emoji || EMOJI_TICKET_DEFAULT}</span> {tk.nome}: {nt.usati}/{nt.pagati} ritirati
-                        </p>
-                      );
-                    })}
                   </div>
                 );
               })}
@@ -1181,6 +1210,72 @@ export function GrigliataAdmin() {
         <div style={{ ...S.card, padding: 16, marginBottom: 16, fontSize: 13, ...S.sub, textAlign: "center" }}>
           Non c'è ancora nessuna grigliata. Falla partire dal "+" qui sopra.
         </div>
+      )}
+
+      {/* ── Giorno della grigliata: i ticket ──────────────────────────────
+          Una sezione a sé, che si attiva dal giorno della grigliata (prima
+          i ticket esistono ma non si possono usare, non c'è niente da
+          seguire): in grande l'ultimo numero uscito — chi serve al banco lo
+          confronta con lo schermo del residente, il ticket appena usato deve
+          avere il successivo — e per ogni voce di ogni menu quante ne sono
+          già state ritirate su quante pagate. Si aggiorna da sola (vedi il
+          ricontrollo periodico più sopra). */}
+      {evento && tuttiTicket.length > 0 && (
+        eGiornoEvento ? (
+          <div style={{ ...S.card, padding: 14, marginBottom: 16, border: "1px solid color-mix(in srgb, var(--primary) 35%, var(--border))" }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: "var(--primary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+              <Ticket size={14} /> Ticket · giorno della grigliata
+            </p>
+
+            <div style={{
+              display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 14, marginBottom: 14,
+              background: "color-mix(in srgb, var(--primary) 12%, transparent)",
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p style={{ fontSize: 13, fontWeight: 700 }}>Ultimo numero uscito</p>
+                <p style={{ fontSize: 12, ...S.sub }}>{ticketUsati} ticket usati su {tuttiTicket.length}</p>
+              </div>
+              <p style={{ fontSize: 48, fontWeight: 900, lineHeight: 1, color: "var(--primary)", fontVariantNumeric: "tabular-nums" }}>
+                {ultimoNumero > 0 ? ultimoNumero : "—"}
+              </p>
+            </div>
+
+            <div style={{ display: "grid", gap: 12 }}>
+              {menuEvento.map((m) => (
+                <div key={m.id}>
+                  {menuEvento.length > 1 && (
+                    <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", ...S.sub, marginBottom: 6 }}>
+                      {m.nome}
+                    </p>
+                  )}
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {m.ticket.map((tk) => {
+                      const nt = perTicket(tk.id);
+                      const quota = nt.pagati > 0 ? nt.usati / nt.pagati : 0;
+                      return (
+                        <div key={tk.id}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, marginBottom: 4 }}>
+                            <span style={{ fontSize: 18, lineHeight: 1, width: 24, textAlign: "center" }}>{tk.emoji || EMOJI_TICKET_DEFAULT}</span>
+                            <span style={{ flex: 1, minWidth: 0, fontWeight: 600 }}>{tk.nome}</span>
+                            <span style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{nt.usati}/{nt.pagati}</span>
+                            <span style={{ fontSize: 11, ...S.sub }}>ritirati</span>
+                          </div>
+                          <div style={{ height: 6, borderRadius: 99, background: "var(--secondary)", overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${Math.round(quota * 100)}%`, borderRadius: 99, background: "var(--primary)", transition: "width .3s ease" }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={{ ...S.card, padding: "10px 14px", marginBottom: 16, fontSize: 12, ...S.sub, display: "flex", alignItems: "center", gap: 6 }}>
+            <Ticket size={13} /> La sezione dei ticket si attiva il giorno della grigliata ({fmtGiorno(evento.giorno_evento)}).
+          </div>
+        )
       )}
 
       {/* ── Chi ha risposto, per piano ───────────────────────────────────── */}
@@ -1320,38 +1415,6 @@ export function GrigliataAdmin() {
               <Gruppo key={m.id} titolo={m.nome} righe={filtrati.filter((a) => a.menu_id === m.id)} />
             ))
           )}
-        </div>
-      )}
-
-      {/* ── Ticket: una sezione a parte, non solo il numero piccolo sotto il
-          riepilogo — un ticket per ogni voce di ogni menu (es. "Carne" →
-          "Salsiccia" + "Bibita"), quanti sono pagati e quanti già ritirati.
-          Una voce aggiunta dopo arriva subito anche a chi era già
-          confermato (grigliata_allinea_ticket in SQL). */}
-      {evento && menuEvento.some((m) => m.ticket.length > 0) && (
-        <div style={{ ...S.card, padding: 14, marginTop: 16 }}>
-          <p style={{ fontSize: 12, ...S.sub, marginBottom: 10 }}>Ticket</p>
-          <div style={{ display: "grid", gap: 12 }}>
-            {menuEvento.map((m) => (
-              <div key={m.id}>
-                <p style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.04em", textTransform: "uppercase", ...S.sub, marginBottom: 6 }}>
-                  {m.nome}
-                </p>
-                <div style={{ display: "grid", gap: 6 }}>
-                  {m.ticket.map((tk) => {
-                    const nt = perTicket(tk.id);
-                    return (
-                      <div key={tk.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
-                        <span style={{ fontSize: 18, lineHeight: 1, width: 24, textAlign: "center" }}>{tk.emoji || EMOJI_TICKET_DEFAULT}</span>
-                        <span style={{ flex: 1, minWidth: 0, fontWeight: 600 }}>{tk.nome}</span>
-                        <span style={{ ...S.sub, fontVariantNumeric: "tabular-nums" }}>{nt.usati}/{nt.pagati} ritirati</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
         </div>
       )}
 
