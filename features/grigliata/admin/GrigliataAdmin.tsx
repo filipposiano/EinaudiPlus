@@ -78,11 +78,23 @@ type Evento = {
 // ─── Filtri e raggruppamento delle camere ──────────────────────────────────────
 //
 // v1.4: con decine di camere la griglia per piano non basta più a rispondere
-// a "quante vegane?", "chi ha scritto di un'allergia?". Due filtri che si
-// sommano (menu E esigenza) più una ricerca libera nelle note, e la scelta
+// a "quante vegane?", "chi ha scritto di un'allergia?". Filtri che si
+// sommano (menu E esigenza E pagamento) più una ricerca libera nelle note, e la scelta
 // di raggruppare per piano (dove sono) o per menu (cosa preparare).
 type FiltroEsigenza = "tutte" | "vegetariano" | "vegano" | "senza_glutine" | "note" | "nessuna";
 type Raggruppa = "piano" | "menu";
+// v1.7.1: a che punto è il pagamento — "da confermare" (ha dichiarato di aver
+// pagato, il delegato non ha ancora confermato) è la lista su cui lavorare.
+type FiltroPagamento = "tutti" | "da_confermare" | "non_dichiarato" | "confermato";
+
+function haPagamento(a: Adesione, f: FiltroPagamento): boolean {
+  switch (f) {
+    case "tutti": return true;
+    case "da_confermare": return a.pagamento_dichiarato && !a.pagamento_confermato;
+    case "non_dichiarato": return !a.pagamento_dichiarato && !a.pagamento_confermato;
+    case "confermato": return a.pagamento_confermato;
+  }
+}
 
 function haEsigenza(a: Adesione, f: FiltroEsigenza): boolean {
   switch (f) {
@@ -457,6 +469,7 @@ export function GrigliataAdmin() {
 
   const [filtroMenu, setFiltroMenu] = useState<number | null>(null);
   const [filtroEsigenza, setFiltroEsigenza] = useState<FiltroEsigenza>("tutte");
+  const [filtroPagamento, setFiltroPagamento] = useState<FiltroPagamento>("tutti");
   const [cerca, setCerca] = useState("");
   const [raggruppa, setRaggruppa] = useState<Raggruppa>("piano");
 
@@ -488,7 +501,7 @@ export function GrigliataAdmin() {
       setPaypal(""); setSatispay(""); setTitoloModificato(false);
       setMenuNuovi(vociDiDefault()); setPagamentiNuovi(true); setQuotaNuova("");
       setGiornoEvento(giornoEventoDiDefault());
-      setFiltroMenu(null); setFiltroEsigenza("tutte"); setCerca("");
+      setFiltroMenu(null); setFiltroEsigenza("tutte"); setFiltroPagamento("tutti"); setCerca("");
       await carica();
       setMsg("Grigliata avviata.");
     } catch (e: any) {
@@ -759,13 +772,21 @@ export function GrigliataAdmin() {
   // Menu filtrato che non esiste più (rimosso nel frattempo): come nessun filtro.
   const menuFiltrato = menuEvento.some((m) => m.id === filtroMenu) ? filtroMenu : null;
   const testoCercato = cerca.trim().toLowerCase();
-  const passaFiltri = (a: Adesione, esigenza: FiltroEsigenza = filtroEsigenza, menu: number | null = menuFiltrato) =>
-    (menu == null || a.menu_id === menu)
-    && haEsigenza(a, esigenza)
-    && (!testoCercato || a.room.toLowerCase().includes(testoCercato) || (a.note ?? "").toLowerCase().includes(testoCercato));
+  // Con i pagamenti spenti la riga del filtro sparisce: un filtro rimasto
+  // acceso da prima non deve nascondere camere senza che si veda perché.
+  const pagamentoFiltrato: FiltroPagamento = pagamentiAttivi ? filtroPagamento : "tutti";
+  /** Tutti i filtri attivi; `o` ne sostituisce uno solo, per contare quante
+   *  camere darebbe ciascuna pastiglia di quella riga (vedi quantiCon*). */
+  const passaFiltri = (a: Adesione, o: { esigenza?: FiltroEsigenza; menu?: number | null; pagamento?: FiltroPagamento } = {}) => {
+    const menu = o.menu !== undefined ? o.menu : menuFiltrato;
+    return (menu == null || a.menu_id === menu)
+      && haEsigenza(a, o.esigenza ?? filtroEsigenza)
+      && haPagamento(a, o.pagamento ?? pagamentoFiltrato)
+      && (!testoCercato || a.room.toLowerCase().includes(testoCercato) || (a.note ?? "").toLowerCase().includes(testoCercato));
+  };
   const filtrati = partecipanti.filter((a) => passaFiltri(a));
-  const filtriAttivi = menuFiltrato != null || filtroEsigenza !== "tutte" || testoCercato !== "";
-  const azzeraFiltri = () => { setFiltroMenu(null); setFiltroEsigenza("tutte"); setCerca(""); };
+  const filtriAttivi = menuFiltrato != null || filtroEsigenza !== "tutte" || pagamentoFiltrato !== "tutti" || testoCercato !== "";
+  const azzeraFiltri = () => { setFiltroMenu(null); setFiltroEsigenza("tutte"); setFiltroPagamento("tutti"); setCerca(""); };
   const esigenzeFiltrate = conEsigenze.filter((a) => passaFiltri(a));
 
   const Statistica = ({ valore, etichetta }: { valore: string | number; etichetta: string }) => (
@@ -897,8 +918,9 @@ export function GrigliataAdmin() {
       {n !== undefined && <span style={{ fontSize: 11, opacity: 0.7 }}>{n}</span>}
     </button>
   );
-  const quantiConEsigenza = (f: FiltroEsigenza) => partecipanti.filter((a) => passaFiltri(a, f)).length;
-  const quantiConMenu = (id: number | null) => partecipanti.filter((a) => passaFiltri(a, filtroEsigenza, id)).length;
+  const quantiConEsigenza = (f: FiltroEsigenza) => partecipanti.filter((a) => passaFiltri(a, { esigenza: f })).length;
+  const quantiConMenu = (id: number | null) => partecipanti.filter((a) => passaFiltri(a, { menu: id })).length;
+  const quantiConPagamento = (f: FiltroPagamento) => partecipanti.filter((a) => passaFiltri(a, { pagamento: f })).length;
 
   return (
     <>
@@ -1246,6 +1268,24 @@ export function GrigliataAdmin() {
                   </Filtro>
                 ))}
               </div>
+
+              {pagamentiAttivi && (
+                <div style={{ display: "flex", gap: 6, overflowX: "auto", alignItems: "center" }}>
+                  <span style={{ fontSize: 11, ...S.sub, flexShrink: 0, width: 58 }}>Pagamento</span>
+                  {([
+                    ["tutti", "Tutti"],
+                    ["da_confermare", "Ha dichiarato, da confermare"],
+                    ["non_dichiarato", "Non ha dichiarato"],
+                    ["confermato", "Confermato"],
+                  ] as [FiltroPagamento, string][]).map(([f, label]) => (
+                    <Filtro key={f} attivo={pagamentoFiltrato === f} n={quantiConPagamento(f)}
+                      onClick={() => setFiltroPagamento(pagamentoFiltrato === f && f !== "tutti" ? "tutti" : f)}>
+                      {f === "confermato" && <Check size={12} />}
+                      {label}
+                    </Filtro>
+                  ))}
+                </div>
+              )}
 
               <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                 <span style={{ fontSize: 11, ...S.sub, flexShrink: 0, width: 58 }}>Raggruppa</span>
