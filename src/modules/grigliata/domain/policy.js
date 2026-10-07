@@ -20,6 +20,7 @@ const AZIONI_GRIGLIATA = new Set([
   "grigliataCrea", "grigliataOverview", "grigliataConfermaPagamento", "grigliataAnnullaConfermaPagamento",
   "grigliataChiudi", "grigliataModifica", "grigliataAggiungiAdesione", "grigliataRimuoviAdesione",
   "grigliataRiapri", "grigliataElimina", "grigliataPagamenti", "grigliataQuota",
+  "grigliataRipristinaTicket",
 ]);
 
 /**

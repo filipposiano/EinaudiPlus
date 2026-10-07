@@ -11,6 +11,7 @@ import { adminCreaEvento } from "../../src/modules/grigliata/application/adminCr
 import { adminOverview } from "../../src/modules/grigliata/application/adminOverview.js";
 import { adminConfermaPagamento } from "../../src/modules/grigliata/application/adminConfermaPagamento.js";
 import { adminAnnullaConfermaPagamento } from "../../src/modules/grigliata/application/adminAnnullaConfermaPagamento.js";
+import { adminRipristinaTicket } from "../../src/modules/grigliata/application/adminRipristinaTicket.js";
 import { adminChiudiEvento } from "../../src/modules/grigliata/application/adminChiudiEvento.js";
 import { adminModificaEvento } from "../../src/modules/grigliata/application/adminModificaEvento.js";
 import { adminAggiungiAdesione } from "../../src/modules/grigliata/application/adminAggiungiAdesione.js";
@@ -52,6 +53,7 @@ function fakeRepository() {
       calls.push({ name: "adminAnnullaConfermaPagamento", id });
       return { ok: true, room: "214" };
     },
+    async adminRipristinaTicket(id) { calls.push({ name: "adminRipristinaTicket", id }); return { ok: true }; },
     async adminChiudi(id) { calls.push({ name: "adminChiudi", id }); return { ok: true }; },
     async adminModifica(args) { calls.push({ name: "adminModifica", args }); return { ok: true }; },
     async adminAggiungiAdesione(args) { calls.push({ name: "adminAggiungiAdesione", args }); return { ok: true }; },
@@ -79,6 +81,7 @@ function repositoryCheRompe(messaggio = "Could not find the function") {
     async adminOverview() { throw err; },
     async adminConfermaPagamento() { throw err; },
     async adminAnnullaConfermaPagamento() { throw err; },
+    async adminRipristinaTicket() { throw err; },
     async adminChiudi() { throw err; },
     async adminModifica() { throw err; },
     async adminAggiungiAdesione() { throw err; },
@@ -150,6 +153,15 @@ section("controllaMenu() / controllaTicket() / idValido() / isValidDate()");
     /stesso nome/.test(controllaTicket([{ nome: "Bibita" }, { nome: " BIBITA" }]).errore || ""));
   check("controllaTicket: lo stesso id elencato due volte -> errore",
     controllaTicket([{ id: 2, nome: "A" }, { id: 2, nome: "B" }]).errore === "ticket non valido");
+
+  // v1.8: emoji facoltativa per voce-ticket.
+  const conEmoji = controllaTicket([{ nome: "Salsiccia", emoji: " 🌭 " }, { nome: "Bibita", emoji: "  " }]);
+  check("controllaTicket: emoji ripulita; vuota -> il campo non c'è",
+    JSON.stringify(conEmoji.ticket) === JSON.stringify([{ nome: "Salsiccia", emoji: "🌭" }, { nome: "Bibita" }]), JSON.stringify(conEmoji));
+  check("controllaTicket: un'emoji composta (famiglia, 7 code point) passa",
+    !controllaTicket([{ nome: "Famiglia", emoji: "👨‍👩‍👧" }]).errore);
+  check("controllaTicket: un'emoji oltre 16 code point -> errore",
+    /emoji del ticket "X"/.test(controllaTicket([{ nome: "X", emoji: "🌭".repeat(17) }]).errore || ""));
 
   // v1.3.1: "vegetariano"/"vegano" non sono un menu, sono un campo a sé —
   // un valore mancante o non riconosciuto ricade su "classico", senza errore.
@@ -468,12 +480,27 @@ section("adminAnnullaConfermaPagamento()");
   check("un id non numerico viene respinto prima del repository", errId?.message === "adesione non valida");
 
   // Un rifiuto della SQL (oggi: solo "adesione non trovata" — funziona
-  // anche con ticket già usati, vedi grigliata_admin_annulla_conferma_
-  // pagamento) passa comunque inalterato: non è compito di questo use-case
+  // anche con ticket già usati, e li cancella tutti: vedi grigliata_admin_
+  // annulla_conferma_pagamento) passa comunque inalterato: non è compito di questo use-case
   // interpretarlo.
   const repoRifiuta = { async adminAnnullaConfermaPagamento() { return { ok: false, error: "adesione non trovata" }; } };
   const res = await adminAnnullaConfermaPagamento({ adesioneId: "1" }, { grigliataRepository: repoRifiuta });
   check("il rifiuto della SQL passa inalterato", res.ok === false && res.error === "adesione non trovata");
+}
+
+section("adminRipristinaTicket()");
+{
+  const repo = fakeRepository();
+  await adminRipristinaTicket({ ticketId: "17" }, { grigliataRepository: repo });
+  check("l'id del ticket arriva convertito in numero", repo.calls[0].name === "adminRipristinaTicket" && repo.calls[0].id === 17);
+
+  const errId = await throws(() =>
+    adminRipristinaTicket({ ticketId: "0" }, { grigliataRepository: fakeRepository() }));
+  check("un id non valido viene respinto prima del repository", errId?.message === "ticket non valido");
+
+  const repoRifiuta = { async adminRipristinaTicket() { return { ok: false, error: "ticket non trovato" }; } };
+  const res = await adminRipristinaTicket({ ticketId: "1" }, { grigliataRepository: repoRifiuta });
+  check("il rifiuto della SQL passa inalterato", res.ok === false && res.error === "ticket non trovato");
 }
 
 section("adminChiudiEvento()");
@@ -640,6 +667,10 @@ section("un errore della RPC è esponibile all'admin, non generico");
     adminAnnullaConfermaPagamento({ adesioneId: "1" }, { grigliataRepository: repoRotto }));
   check("adminAnnullaConfermaPagamento: stesso comportamento dopo la validazione", errAnnulla?.expose === true);
 
+  const errRipristina = await throws(() =>
+    adminRipristinaTicket({ ticketId: "1" }, { grigliataRepository: repoRotto }));
+  check("adminRipristinaTicket: stesso comportamento dopo la validazione", errRipristina?.expose === true);
+
   const errChiudi = await throws(() => adminChiudiEvento({ eventoId: "1" }, { grigliataRepository: repoRotto }));
   check("adminChiudiEvento: stesso comportamento dopo la validazione", errChiudi?.expose === true);
 
@@ -678,6 +709,7 @@ section("authorize() — policy del modulo Grigliata");
     "grigliataCrea", "grigliataOverview", "grigliataConfermaPagamento", "grigliataAnnullaConfermaPagamento",
     "grigliataChiudi", "grigliataModifica", "grigliataAggiungiAdesione", "grigliataRimuoviAdesione",
     "grigliataRiapri", "grigliataElimina", "grigliataPagamenti", "grigliataQuota",
+    "grigliataRipristinaTicket",
   ]) {
     check(`il delegato può '${azione}'`, authorize(delegato, azione) === true);
     check(`il sistemista può '${azione}'`, authorize(sistemista, azione) === true);

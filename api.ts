@@ -336,8 +336,8 @@ export type GrigliataDieta = "classico" | "vegetariano" | "vegano";
 
 /** Una voce-ticket del menu scelto (es. "Salsiccia") — esiste solo se
  *  pagamentoConfermato è vero (vedi GrigliataView); `numero` resta null
- *  finché non si preme "Usa" su quella voce. */
-export interface GrigliataTicket { id: number; nome: string; usato: boolean; numero: number | null }
+ *  finché non si usa quel ticket. `emoji` la sceglie il delegato (facoltativa). */
+export interface GrigliataTicket { id: number; nome: string; emoji: string | null; usato: boolean; numero: number | null }
 
 export interface GrigliataMiaAdesione {
   menuId: number;
@@ -398,7 +398,7 @@ export async function getGrigliataStato(): Promise<GrigliataStato> {
       pagamentoConfermato: Boolean(data.mia_adesione.pagamento_confermato),
       ticket: Array.isArray(data.mia_adesione.ticket)
         ? data.mia_adesione.ticket.map((t: any) => ({
-            id: t.id, nome: t.nome, usato: Boolean(t.usato), numero: t.numero ?? null,
+            id: t.id, nome: t.nome, emoji: t.emoji || null, usato: Boolean(t.usato), numero: t.numero ?? null,
           }))
         : [],
     } : null,
@@ -414,9 +414,11 @@ export async function grigliataDichiaraPagamento() {
   return postGrigliataAction("dichiaraPagamento", {});
 }
 
-/** "Usa" UNA voce-ticket (es. "Salsiccia") — va premuto davanti a chi serve
- *  il cibo, non prima: il numero progressivo esiste solo a partire da
- *  questo momento (vedi grigliata_usa_ticket in SQL). */
-export async function grigliataUsaTicket(ticketId: number): Promise<{ ticket_numero: number; ticket_nome: string | null }> {
+/** "Usa" UNA voce-ticket (es. "Salsiccia") — va fatto davanti a chi serve
+ *  il cibo, non prima: il numero progressivo (unico per tutta la grigliata)
+ *  esiste solo a partire da questo momento (vedi grigliata_usa_ticket in SQL). */
+export async function grigliataUsaTicket(ticketId: number): Promise<{
+  ticket_numero: number; ticket_nome: string | null; ticket_emoji?: string | null;
+}> {
   return postGrigliataAction("usaTicket", { ticket_id: ticketId });
 }

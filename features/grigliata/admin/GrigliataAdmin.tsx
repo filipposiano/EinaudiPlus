@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Pencil, Plus, Check, UserPlus, WheatOff, StickyNote, X, Ticket, Search } from "lucide-react";
+import { Pencil, Plus, Check, UserPlus, WheatOff, StickyNote, X, Ticket, Search, RotateCcw } from "lucide-react";
+import { EMOJI_TICKET, EMOJI_TICKET_DEFAULT, suggerisciEmoji } from "../emojiTicket";
 import { call } from "../../admin-shared/adminApi";
 import { S } from "../../admin-shared/adminStyles";
 import { PIANI, pianoDi, nomePiano, colorePiano } from "../../../piani";
@@ -25,7 +26,8 @@ import { PIANI, pianoDi, nomePiano, colorePiano } from "../../../piani";
 // delegato prepara un piatto a parte.
 // v1.5: ogni menu si scompone in una o più voci-ticket (es. menu "Carne" =
 // "Salsiccia" + "Patatine" + "Bibita") — decise dal delegato insieme al menu.
-type MenuTicketVoce = { id: number; nome: string };
+// v1.8: con un'emoji facoltativa (es. 🌭), mostrata al residente accanto al nome.
+type MenuTicketVoce = { id: number; nome: string; emoji?: string | null };
 type MenuVoce = { id: number; nome: string; ticket: MenuTicketVoce[] };
 type Dieta = "classico" | "vegetariano" | "vegano";
 const NOME_DIETA: Record<Dieta, string> = { classico: "Mangia di tutto", vegetariano: "Vegetariano", vegano: "Vegano" };
@@ -36,13 +38,17 @@ const NOME_DIETA: Record<Dieta, string> = { classico: "Mangia di tutto", vegetar
 // più opzionale. v1.3: "senza glutine" e una nota libera, scritti dal
 // residente — qui si leggono soltanto. v1.3.1: "dieta" torna un campo a sé
 // (nel pannello non si segna 'classico', si segnano solo gli altri due).
-// v1.5: i ticket di questa adesione — uno per voce del menu scelto, creati
-// tutti insieme alla conferma del pagamento (lo decide la UI che il pagamento
-// sia confermato, non una colonna in più); `numero` resta null finché il
-// residente non preme "Usa" su quella voce dal proprio schermo (vedi
-// Grigliata.tsx lato residente — qui si legge soltanto, il tocco non è
-// dell'admin).
-type AdesioneTicket = { id: number; nome: string; usato: boolean; numero: number | null; usato_at: string | null };
+// v1.5: i ticket di questa adesione — uno per voce del menu scelto, esistono
+// solo a pagamento confermato (v1.8: tenuti allineati al menu, vedi
+// grigliata_allinea_ticket in SQL); `numero` resta null finché il residente
+// non usa quel ticket dal proprio schermo (Grigliata.tsx). `id` è il ticket
+// di QUESTA adesione, `menu_ticket_id` la voce del menu a cui corrisponde —
+// è quello da confrontare con MenuTicketVoce.id. Il delegato può solo
+// rimettere "da usare" un ticket consumato (Ripristina), non usarlo.
+type AdesioneTicket = {
+  id: number; menu_ticket_id: number; nome: string; emoji?: string | null;
+  usato: boolean; numero: number | null; usato_at: string | null;
+};
 
 type Adesione = {
   id: number; room: string; menu_id: number; dieta: Dieta;
@@ -130,7 +136,10 @@ function Interruttore({ acceso, onClick, titolo, sottotitolo, disabilitato }: {
 // altro viene ricreato a ogni render, e un <input> ricreato perde il fuoco
 // a ogni lettera digitata.
 
-type VoceTicketEditor = { chiave: number; id?: number; nome: string };
+// `emojiScelta`: il delegato l'ha scelta lui (o arriva dal server) — da lì
+// in poi rinominare il ticket non la cambia più. Finché è false, segue il
+// nome ("Salsiccia" → 🌭, vedi suggerisciEmoji).
+type VoceTicketEditor = { chiave: number; id?: number; nome: string; emoji: string | null; emojiScelta: boolean };
 type VoceEditor = { chiave: number; id?: number; nome: string; ticket: VoceTicketEditor[] };
 
 const MENU_MAX = 10;
@@ -138,7 +147,10 @@ const TICKET_MAX = 10;
 const MENU_DI_DEFAULT = ["Carne", "Pesce"];
 let prossimaChiave = 1;
 
-const voceTicketNuova = (nome: string, id?: number): VoceTicketEditor => ({ chiave: prossimaChiave++, id, nome });
+const voceTicketNuova = (nome: string, id?: number, emoji?: string | null): VoceTicketEditor =>
+  id
+    ? { chiave: prossimaChiave++, id, nome, emoji: emoji ?? null, emojiScelta: true }
+    : { chiave: prossimaChiave++, nome, emoji: suggerisciEmoji(nome), emojiScelta: false };
 // Senza un elenco esplicito di ticket, una voce nuova parte con UN ticket
 // già pronto (stesso nome del menu): un menu richiede sempre almeno un
 // ticket, niente form che parte già in uno stato non valido.
@@ -150,7 +162,7 @@ const vociDaInviare = (voci: VoceEditor[]) =>
   voci.map((v) => ({
     ...(v.id ? { id: v.id } : {}),
     nome: v.nome,
-    ticket: v.ticket.map((t) => (t.id ? { id: t.id, nome: t.nome } : { nome: t.nome })),
+    ticket: v.ticket.map((t) => ({ ...(t.id ? { id: t.id } : {}), nome: t.nome, emoji: t.emoji ?? "" })),
   }));
 
 function EditorMenu({ voci, onChange, scelte, ticketScelte }: {
@@ -158,16 +170,22 @@ function EditorMenu({ voci, onChange, scelte, ticketScelte }: {
   onChange: (voci: VoceEditor[]) => void;
   /** Quante camere hanno già scelto ciascun menu (per id), solo in modifica. */
   scelte?: Record<number, number>;
-  /** Quante adesioni hanno già un ticket di ciascuna voce (per id), solo in modifica. */
+  /** Quante volte ciascuna voce (per id) è già stata ritirata, solo in modifica. */
   ticketScelte?: Record<number, number>;
 }) {
+  // La voce-ticket di cui è aperta la tavolozza delle emoji (una alla volta).
+  const [emojiAperta, setEmojiAperta] = useState<number | null>(null);
   const rinomina = (chiave: number, nome: string) =>
     onChange(voci.map((v) => (v.chiave === chiave ? { ...v, nome } : v)));
   const togli = (chiave: number) => onChange(voci.filter((v) => v.chiave !== chiave));
-  const rinominaTicket = (chiaveMenu: number, chiaveTicket: number, nome: string) =>
+  const cambiaTicket = (chiaveMenu: number, chiaveTicket: number, f: (t: VoceTicketEditor) => VoceTicketEditor) =>
     onChange(voci.map((v) => (v.chiave === chiaveMenu
-      ? { ...v, ticket: v.ticket.map((t) => (t.chiave === chiaveTicket ? { ...t, nome } : t)) }
+      ? { ...v, ticket: v.ticket.map((t) => (t.chiave === chiaveTicket ? f(t) : t)) }
       : v)));
+  const rinominaTicket = (chiaveMenu: number, chiaveTicket: number, nome: string) =>
+    cambiaTicket(chiaveMenu, chiaveTicket, (t) => (t.emojiScelta ? { ...t, nome } : { ...t, nome, emoji: suggerisciEmoji(nome) }));
+  const scegliEmoji = (chiaveMenu: number, chiaveTicket: number, emoji: string | null) =>
+    cambiaTicket(chiaveMenu, chiaveTicket, (t) => ({ ...t, emoji, emojiScelta: true }));
   const toglieTicket = (chiaveMenu: number, chiaveTicket: number) =>
     onChange(voci.map((v) => (v.chiave === chiaveMenu
       ? { ...v, ticket: v.ticket.filter((t) => t.chiave !== chiaveTicket) }
@@ -210,16 +228,29 @@ function EditorMenu({ voci, onChange, scelte, ticketScelte }: {
               <div style={{ paddingLeft: 14, display: "grid", gap: 4 }}>
                 <label style={{ fontSize: 11, ...S.sub }}>Ticket di questo menu</label>
                 {v.ticket.map((t) => {
+                  // Bloccata solo se qualcuno l'ha già RITIRATA al banco: i
+                  // ticket assegnati ma non usati spariscono con la voce.
                   const usatoTicket = (t.id && ticketScelte?.[t.id]) || 0;
                   const bloccatoTicket = usatoTicket > 0 || v.ticket.length === 1;
+                  const aperta = emojiAperta === t.chiave;
                   return (
-                    <div key={t.chiave} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                      <Ticket size={12} style={{ flexShrink: 0, color: "var(--muted-foreground)" }} />
+                    <div key={t.chiave} style={{ display: "grid", gap: 4 }}>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <button onClick={() => setEmojiAperta(aperta ? null : t.chiave)}
+                        title="Scegli l'emoji di questo ticket" aria-label={`Emoji di ${t.nome || "questo ticket"}`} aria-expanded={aperta}
+                        style={{
+                          width: 34, height: 34, flexShrink: 0, borderRadius: 8, fontSize: 18, lineHeight: 1,
+                          display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+                          background: "var(--card)", border: `1px solid ${aperta ? "var(--primary)" : "var(--border)"}`,
+                          opacity: t.emoji ? 1 : 0.45,
+                        }}>
+                        {t.emoji || EMOJI_TICKET_DEFAULT}
+                      </button>
                       <input style={{ ...S.input, flex: 1, minWidth: 0, background: "var(--card)" }} value={t.nome} maxLength={40}
                         onChange={(e) => rinominaTicket(v.chiave, t.chiave, e.target.value)}
                         placeholder="Es. Salsiccia" />
                       <button onClick={() => toglieTicket(v.chiave, t.chiave)} disabled={bloccatoTicket}
-                        title={usatoTicket > 0 ? `Già assegnato a ${usatoTicket} ${usatoTicket === 1 ? "adesione" : "adesioni"}: non si può togliere` : "Togli questo ticket"}
+                        title={usatoTicket > 0 ? `Già ritirato ${usatoTicket} ${usatoTicket === 1 ? "volta" : "volte"}: non si può togliere` : "Togli questo ticket"}
                         aria-label={`Togli ${t.nome || "ticket"}`}
                         style={{
                           width: 26, height: 26, flexShrink: 0, borderRadius: 7, border: "1px solid var(--border)",
@@ -229,6 +260,33 @@ function EditorMenu({ voci, onChange, scelte, ticketScelte }: {
                         }}>
                         <X size={12} />
                       </button>
+                    </div>
+                    {aperta && (
+                      <div style={{
+                        display: "flex", flexWrap: "wrap", gap: 2, padding: 6, borderRadius: 10,
+                        background: "var(--card)", border: "1px solid var(--border)",
+                      }}>
+                        {EMOJI_TICKET.map((e) => (
+                          <button key={e} onClick={() => { scegliEmoji(v.chiave, t.chiave, e); setEmojiAperta(null); }}
+                            aria-label={e} aria-pressed={t.emoji === e}
+                            style={{
+                              width: 32, height: 32, fontSize: 18, lineHeight: 1, borderRadius: 7, cursor: "pointer",
+                              border: "none", background: t.emoji === e ? "color-mix(in srgb, var(--primary) 18%, transparent)" : "none",
+                            }}>
+                            {e}
+                          </button>
+                        ))}
+                        {/* Una qualsiasi, dalla tastiera del telefono. */}
+                        <input aria-label="Un'altra emoji" placeholder="altra…" maxLength={16}
+                          onChange={(e) => { const val = e.target.value.trim(); if (val) scegliEmoji(v.chiave, t.chiave, val); }}
+                          style={{ ...S.input, width: 64, height: 32, padding: "0 6px", fontSize: 13 }} />
+                        <button onClick={() => { scegliEmoji(v.chiave, t.chiave, null); setEmojiAperta(null); }}
+                          style={{ fontSize: 11, fontWeight: 700, padding: "0 8px", height: 32, borderRadius: 7, cursor: "pointer",
+                            border: "none", background: "none", color: "var(--gray-accessible-text)" }}>
+                          Nessuna
+                        </button>
+                      </div>
+                    )}
                     </div>
                   );
                 })}
@@ -516,7 +574,7 @@ export function GrigliataAdmin() {
     setNuovaScadenza(isoInDatetimeLocal(overview.evento.scadenza));
     setNuovoGiornoEvento(overview.evento.giorno_evento);
     setMenuModifica(overview.evento.menu.map((m) =>
-      voceNuova(m.nome, m.id, m.ticket.map((t) => voceTicketNuova(t.nome, t.id)))));
+      voceNuova(m.nome, m.id, m.ticket.map((t) => voceTicketNuova(t.nome, t.id, t.emoji)))));
     setNuovaQuota(quotaInCampo(overview.evento.quota));
     setModificaEvento(true);
   }
@@ -567,8 +625,8 @@ export function GrigliataAdmin() {
   }
 
   /** "Torna indietro" su una conferma data per errore — funziona anche se
-   *  un ticket di quell'adesione è già stato usato (la SQL lo tiene come
-   *  traccia e toglie solo i ticket non ancora usati). */
+   *  un ticket di quell'adesione è già stato usato, e li cancella tutti,
+   *  usati compresi (senza conferma, niente ticket). */
   async function annullaConferma(adesioneId: number): Promise<boolean> {
     if (busy) return false;
     setBusy(true); setMsg(null);
@@ -587,6 +645,25 @@ export function GrigliataAdmin() {
   async function annullaConfermaSelezionata() {
     if (!adesioneSelezionata) return;
     if (await annullaConferma(adesioneSelezionata.id)) setAdesioneSelezionata(null);
+  }
+
+  /** Rimette "da usare" un ticket consumato (slider trascinato per errore).
+   *  Il popup della camera resta aperto, aggiornato: si vede subito il
+   *  ticket tornare "non ancora ritirato". */
+  async function ripristinaTicket(ticketId: number) {
+    if (busy || !adesioneSelezionata) return;
+    const adesioneId = adesioneSelezionata.id;
+    setBusy(true); setMsg(null);
+    try {
+      await call("grigliataRipristinaTicket", { ticket_id: ticketId });
+      const r = await call<Overview>("grigliataOverview");
+      setOverview(r);
+      setAdesioneSelezionata(r.adesioni.find((a) => a.id === adesioneId) ?? null);
+    } catch (e: any) {
+      setMsg("Non è riuscito: " + e.message);
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function aggiungiAdesione() {
@@ -652,21 +729,26 @@ export function GrigliataAdmin() {
     const del = partecipanti.filter((a) => a.menu_id === id);
     return { totale: del.length, pagati: del.filter((a) => a.pagamento_confermato).length };
   };
-  /** Quante adesioni hanno un ticket di QUESTA voce (= pagate, i ticket
-   *  esistono solo a pagamento confermato) e quante l'hanno già ritirato —
-   *  il numero che conta il giorno della grigliata, distinto da "pagati". */
-  const perTicket = (ticketId: number) => {
+  /** Quante adesioni hanno un ticket di QUESTA voce del menu (= pagate, i
+   *  ticket esistono solo a pagamento confermato) e quante l'hanno già
+   *  ritirato — il numero che conta il giorno della grigliata. Il confronto
+   *  è con menu_ticket_id (la voce), non con l'id del ticket dell'adesione. */
+  const perTicket = (voceId: number) => {
     let pagati = 0, usati = 0;
     for (const a of partecipanti) {
-      const tk = a.ticket.find((t) => t.id === ticketId);
+      const tk = a.ticket.find((t) => t.menu_ticket_id === voceId);
       if (tk) { pagati++; if (tk.usato) usati++; }
     }
     return { pagati, usati };
   };
   const scelteDi: Record<number, number> = {};
   for (const a of partecipanti) scelteDi[a.menu_id] = (scelteDi[a.menu_id] ?? 0) + 1;
+  // Quante volte ciascuna voce è già stata RITIRATA: è solo quello che
+  // impedisce di toglierla dal menu (grigliata_admin_modifica in SQL).
   const ticketScelteDi: Record<number, number> = {};
-  for (const a of partecipanti) for (const tk of a.ticket) ticketScelteDi[tk.id] = (ticketScelteDi[tk.id] ?? 0) + 1;
+  for (const a of partecipanti) for (const tk of a.ticket) {
+    if (tk.usato) ticketScelteDi[tk.menu_ticket_id] = (ticketScelteDi[tk.menu_ticket_id] ?? 0) + 1;
+  }
   const senzaGlutine = partecipanti.filter((a) => a.senza_glutine).length;
   // Chi ha qualcosa di cui chi cucina deve tenere conto: una dieta diversa
   // da "classico", senza glutine, o una nota. È la lista da leggere prima
@@ -1044,7 +1126,7 @@ export function GrigliataAdmin() {
                       if (nt.pagati === 0) return null;
                       return (
                         <p key={tk.id} style={{ fontSize: 10, textAlign: "center", ...S.sub, display: "flex", alignItems: "center", justifyContent: "center", gap: 3 }}>
-                          <Ticket size={10} /> {tk.nome}: {nt.usati}/{nt.pagati} ritirati
+                          <span>{tk.emoji || EMOJI_TICKET_DEFAULT}</span> {tk.nome}: {nt.usati}/{nt.pagati} ritirati
                         </p>
                       );
                     })}
@@ -1204,10 +1286,8 @@ export function GrigliataAdmin() {
       {/* ── Ticket: una sezione a parte, non solo il numero piccolo sotto il
           riepilogo — un ticket per ogni voce di ogni menu (es. "Carne" →
           "Salsiccia" + "Bibita"), quanti sono pagati e quanti già ritirati.
-          Ricorda che i ticket di un'adesione sono uno "scatto" preso alla
-          conferma del pagamento: se un menu riceve una voce-ticket in più
-          DOPO che qualche camera era già confermata, quella camera resta
-          con l'elenco di allora finché non si annulla e si riconferma. */}
+          Una voce aggiunta dopo arriva subito anche a chi era già
+          confermato (grigliata_allinea_ticket in SQL). */}
       {evento && menuEvento.some((m) => m.ticket.length > 0) && (
         <div style={{ ...S.card, padding: 14, marginTop: 16 }}>
           <p style={{ fontSize: 12, ...S.sub, marginBottom: 10 }}>Ticket</p>
@@ -1221,11 +1301,10 @@ export function GrigliataAdmin() {
                   {m.ticket.map((tk) => {
                     const nt = perTicket(tk.id);
                     return (
-                      <div key={tk.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: 13 }}>
-                        <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                          <Ticket size={12} style={{ color: "var(--gray-accessible-text)" }} /> {tk.nome}
-                        </span>
-                        <span style={{ ...S.sub }}>{nt.usati}/{nt.pagati} ritirati</span>
+                      <div key={tk.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                        <span style={{ fontSize: 18, lineHeight: 1, width: 24, textAlign: "center" }}>{tk.emoji || EMOJI_TICKET_DEFAULT}</span>
+                        <span style={{ flex: 1, minWidth: 0, fontWeight: 600 }}>{tk.nome}</span>
+                        <span style={{ ...S.sub, fontVariantNumeric: "tabular-nums" }}>{nt.usati}/{nt.pagati} ritirati</span>
                       </div>
                     );
                   })}
@@ -1293,20 +1372,36 @@ export function GrigliataAdmin() {
               </p>
             )}
             {/* I ticket si usano dallo schermo del residente, non da qui —
-                questo elenco è solo informativo (vedi Grigliata.tsx lato
-                residente), uno per voce del menu scelto. Mostrato a
+                uno per voce del menu scelto. Il delegato può solo rimettere
+                "da usare" un ticket consumato (uno slider trascinato per
+                errore): il numero che aveva preso non si riusa. Mostrato a
                 prescindere da pagamentiAttivi: un ticket esiste se il
                 pagamento è confermato, anche con i pagamenti dell'app
                 spenti (es. confermato a mano per un incasso in contanti). */}
-            {adesioneSelezionata.pagamento_confermato && (
-              <div style={{ marginBottom: 16, display: "grid", gap: 3 }}>
+            {adesioneSelezionata.pagamento_confermato && adesioneSelezionata.ticket.length > 0 && (
+              <div style={{ margin: "8px 0 16px", display: "grid", gap: 6 }}>
                 {adesioneSelezionata.ticket.map((tk) => (
-                  <p key={tk.id} style={{ fontSize: 13, ...S.sub, display: "flex", alignItems: "center", gap: 5 }}>
-                    <Ticket size={13} />
-                    {tk.usato
-                      ? `${tk.nome}: ticket n. ${tk.numero} ritirato il ${tk.usato_at ? fmtData(tk.usato_at) : "—"}.`
-                      : `${tk.nome}: non ancora ritirato.`}
-                  </p>
+                  <div key={tk.id} style={{
+                    display: "flex", alignItems: "center", gap: 8, padding: "6px 8px", borderRadius: 10,
+                    background: tk.usato ? "color-mix(in srgb, #22c55e 10%, transparent)" : "var(--secondary)",
+                  }}>
+                    <span style={{ fontSize: 18, lineHeight: 1 }}>{tk.emoji || EMOJI_TICKET_DEFAULT}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ fontSize: 13, fontWeight: 700 }}>{tk.nome}</p>
+                      <p style={{ fontSize: 11, ...S.sub }}>
+                        {tk.usato
+                          ? `N. ${tk.numero} · ritirato il ${tk.usato_at ? fmtData(tk.usato_at) : "—"}`
+                          : "Non ancora ritirato"}
+                      </p>
+                    </div>
+                    {tk.usato && (
+                      <button onClick={() => ripristinaTicket(tk.id)} disabled={busy}
+                        title="Rimettilo da usare (es. slider trascinato per errore)"
+                        style={{ ...S.btn, display: "flex", alignItems: "center", gap: 4, fontSize: 11, padding: "5px 8px", opacity: busy ? 0.5 : 1 }}>
+                        <RotateCcw size={12} /> Ripristina
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
@@ -1320,9 +1415,8 @@ export function GrigliataAdmin() {
                   che fare con pagamentiAttivi (si può confermare anche con i
                   pagamenti dell'app spenti, quindi si deve poter annullare
                   allo stesso modo). Funziona anche se un ticket di questa
-                  adesione è già stato usato: quello resta come traccia di
-                  quel che è stato servito, spariscono solo quelli non
-                  ancora usati. */}
+                  adesione è già stato usato: li cancella tutti, usati
+                  compresi. */}
               {adesioneSelezionata.pagamento_confermato && (
                 <button style={S.btn} disabled={busy} onClick={annullaConfermaSelezionata}>
                   {busy ? "In corso…" : "Annulla conferma"}

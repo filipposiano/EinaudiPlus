@@ -10,10 +10,11 @@
 // Stesso modello di fiducia di Bici.tsx: la camera è autodichiarata, non
 // verificata — chi dice di essere la 214 aderisce per la 214.
 
-import { useState, useEffect, useCallback } from "react";
-import { Flame, Loader2, AlertTriangle, Check, ExternalLink, Ticket } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Flame, Loader2, AlertTriangle, Check, ExternalLink, Ticket, ChevronsRight, Lock } from "lucide-react";
 import * as api from "../../api";
 import type { Lang } from "../../i18n";
+import { EMOJI_TICKET_DEFAULT } from "./emojiTicket";
 
 const RED = "var(--primary)", RED_FG = "var(--primary-foreground)";
 const GREEN = "#22c55e";
@@ -60,11 +61,13 @@ const T = {
     pagamentoConfermato: "Pagamento confermato",
     erroreAzione: "Non è riuscito, riprova.",
     ticketTitolo: "I tuoi ticket",
-    ticketUsaBtn: "Usa",
-    ticketUsaHint: "Tocca solo davanti a chi ti serve, non prima: senza questo tocco il ticket non vale niente.",
-    ticketUsato: (n: number) => `Ticket n. ${n} — usato`,
-    ticketScorri: "Scorri per scegliere quale usare",
+    ticketScorriUsa: "Scorri per usare",
+    ticketUsaHint: "Scorri solo davanti a chi ti serve: il numero compare in quel momento, non prima.",
+    ticketUsato: (n: number) => `Usato · n. ${n}`,
+    ticketBloccato: (d: string) => `Si sbloccano il ${d}`,
+    ticketUsatoAlle: (ora: string) => `Usato alle ${ora}`,
     ticketUsatoChiudi: "Fatto",
+    ticketNumero: "Numero",
   },
   en: {
     titolo: "Barbecue",
@@ -105,11 +108,13 @@ const T = {
     pagamentoConfermato: "Payment confirmed",
     erroreAzione: "That didn't work, try again.",
     ticketTitolo: "Your tickets",
-    ticketUsaBtn: "Use",
-    ticketUsaHint: "Only tap this in front of whoever's serving, not before: without that tap the ticket is worthless.",
-    ticketUsato: (n: number) => `Ticket #${n} — used`,
-    ticketScorri: "Swipe to choose which one to use",
+    ticketScorriUsa: "Slide to use",
+    ticketUsaHint: "Only slide in front of whoever's serving: the number appears at that moment, not before.",
+    ticketUsato: (n: number) => `Used · #${n}`,
+    ticketBloccato: (d: string) => `Unlocks on ${d}`,
+    ticketUsatoAlle: (ora: string) => `Used at ${ora}`,
     ticketUsatoChiudi: "Done",
+    ticketNumero: "Number",
   },
   fr: {
     titolo: "Barbecue",
@@ -150,11 +155,13 @@ const T = {
     pagamentoConfermato: "Paiement confirmé",
     erroreAzione: "Ça n'a pas marché, réessaie.",
     ticketTitolo: "Tes tickets",
-    ticketUsaBtn: "Utiliser",
-    ticketUsaHint: "Touche ça seulement devant la personne qui te sert, pas avant : sans ce geste le ticket ne vaut rien.",
-    ticketUsato: (n: number) => `Ticket n° ${n} — utilisé`,
-    ticketScorri: "Fais glisser pour choisir lequel utiliser",
+    ticketScorriUsa: "Glisse pour utiliser",
+    ticketUsaHint: "Glisse seulement devant la personne qui te sert : le numéro apparaît à ce moment-là, pas avant.",
+    ticketUsato: (n: number) => `Utilisé · n° ${n}`,
+    ticketBloccato: (d: string) => `Se débloquent le ${d}`,
+    ticketUsatoAlle: (ora: string) => `Utilisé à ${ora}`,
     ticketUsatoChiudi: "Terminé",
+    ticketNumero: "Numéro",
   },
   de: {
     titolo: "Grillfest",
@@ -195,11 +202,13 @@ const T = {
     pagamentoConfermato: "Zahlung bestätigt",
     erroreAzione: "Hat nicht geklappt, versuch's nochmal.",
     ticketTitolo: "Deine Tickets",
-    ticketUsaBtn: "Einlösen",
-    ticketUsaHint: "Nur vor den Augen der servierenden Person antippen, nicht vorher: ohne diesen Tipp ist das Ticket wertlos.",
-    ticketUsato: (n: number) => `Ticket Nr. ${n} — eingelöst`,
-    ticketScorri: "Wische, um auszuwählen, welches du einlösen willst",
+    ticketScorriUsa: "Zum Einlösen wischen",
+    ticketUsaHint: "Nur vor der servierenden Person wischen: die Nummer erscheint erst in diesem Moment.",
+    ticketUsato: (n: number) => `Eingelöst · Nr. ${n}`,
+    ticketBloccato: (d: string) => `Freigeschaltet am ${d}`,
+    ticketUsatoAlle: (ora: string) => `Eingelöst um ${ora}`,
     ticketUsatoChiudi: "Fertig",
+    ticketNumero: "Nummer",
   },
   es: {
     titolo: "Barbacoa",
@@ -240,11 +249,13 @@ const T = {
     pagamentoConfermato: "Pago confirmado",
     erroreAzione: "No ha funcionado, inténtalo de nuevo.",
     ticketTitolo: "Tus tickets",
-    ticketUsaBtn: "Usar",
-    ticketUsaHint: "Tócalo solo delante de quien te sirve, no antes: sin ese toque el ticket no vale nada.",
-    ticketUsato: (n: number) => `Ticket n.º ${n} — usado`,
-    ticketScorri: "Desliza para elegir cuál usar",
+    ticketScorriUsa: "Desliza para usar",
+    ticketUsaHint: "Desliza solo delante de quien te sirve: el número aparece en ese momento, no antes.",
+    ticketUsato: (n: number) => `Usado · n.º ${n}`,
+    ticketBloccato: (d: string) => `Se desbloquean el ${d}`,
+    ticketUsatoAlle: (ora: string) => `Usado a las ${ora}`,
     ticketUsatoChiudi: "Listo",
+    ticketNumero: "Número",
   },
   nap: {
     titolo: "Grigliata",
@@ -285,11 +296,13 @@ const T = {
     pagamentoConfermato: "Pagamento confermato",
     erroreAzione: "Nun ha' fatto, prova n'ata vota.",
     ticketTitolo: "'E ticket tuoje",
-    ticketUsaBtn: "Adopera",
-    ticketUsaHint: "Tocca sulamente nnanz'a chi te serve, nun primm': senza chistu tocco 'o ticket nun vale niente.",
-    ticketUsato: (n: number) => `Ticket n. ${n} — adoperato`,
-    ticketScorri: "Scorri pe' scegliere qua' adoperà",
+    ticketScorriUsa: "Scorri pe' l'adoperà",
+    ticketUsaHint: "Scorri sulamente nnanz'a chi te serve: 'o nummero esce sulo tanno, nun primm'.",
+    ticketUsato: (n: number) => `Adoperato · n. ${n}`,
+    ticketBloccato: (d: string) => `Se sbloccano 'o ${d}`,
+    ticketUsatoAlle: (ora: string) => `Adoperato a ll'${ora}`,
     ticketUsatoChiudi: "Fatto",
+    ticketNumero: "Nummero",
   },
 } as const;
 
@@ -325,6 +338,149 @@ function oggiISO(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+// ─── Ticket ─────────────────────────────────────────────────────────────────
+//
+// Uno slider "scorri per usare" invece di un bottone: un ticket si spende
+// con un gesto deliberato, da sinistra a destra fino in fondo — un tocco
+// distratto mentre si scorre la pagina non lo brucia. Lasciato prima
+// dell'85% della corsa torna indietro da solo.
+
+const KNOB = 48, PAD = 4, SOGLIA = 0.85;
+
+function SlideToUse({ label, disabled, onComplete }: {
+  label: string; disabled: boolean; onComplete: () => Promise<boolean>;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const start = useRef<{ px: number; x: number } | null>(null);
+  const xRef = useRef(0);
+  const [x, setXState] = useState(0);
+  const [trascina, setTrascina] = useState(false);
+  const [inCorso, setInCorso] = useState(false);
+
+  const setX = (v: number) => { xRef.current = v; setXState(v); };
+  const corsa = () => Math.max(1, (trackRef.current?.clientWidth ?? 0) - KNOB - PAD * 2);
+  const bloccato = disabled || inCorso;
+
+  async function completa() {
+    setX(corsa());
+    setInCorso(true);
+    const ok = await onComplete();
+    setInCorso(false);
+    // Riuscito: il ticket diventa "usato" e questo slider sparisce col
+    // prossimo load(). Fallito: torna all'inizio, si può riprovare.
+    if (!ok) setX(0);
+  }
+
+  function giu(e: React.PointerEvent<HTMLDivElement>) {
+    if (bloccato) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    start.current = { px: e.clientX, x: xRef.current };
+    setTrascina(true);
+  }
+  function muovi(e: React.PointerEvent<HTMLDivElement>) {
+    if (!start.current) return;
+    setX(Math.min(corsa(), Math.max(0, start.current.x + e.clientX - start.current.px)));
+  }
+  function su() {
+    if (!start.current) return;
+    start.current = null;
+    setTrascina(false);
+    if (xRef.current >= corsa() * SOGLIA) completa();
+    else setX(0);
+  }
+
+  const progresso = Math.min(1, x / corsa());
+
+  return (
+    <div ref={trackRef} className="relative w-full rounded-full overflow-hidden select-none"
+      style={{
+        height: KNOB + PAD * 2,
+        background: `color-mix(in srgb, ${RED} 12%, var(--secondary))`,
+        opacity: disabled ? 0.55 : 1,
+      }}>
+      {/* La scia dietro la manopola: si riempie mentre si trascina. */}
+      <div className="absolute inset-y-0 left-0 rounded-full"
+        style={{
+          width: x + KNOB + PAD * 2,
+          background: `color-mix(in srgb, ${RED} 30%, transparent)`,
+          transition: trascina ? "none" : "width .25s ease",
+        }} />
+      <p className="absolute inset-0 flex items-center justify-center text-sm font-semibold pointer-events-none"
+        style={{ color: fg, opacity: 1 - progresso * 1.4, paddingLeft: KNOB }}>
+        {inCorso ? <Loader2 size={18} className="animate-spin-slow" /> : label}
+      </p>
+      <div role="button" tabIndex={bloccato ? -1 : 0} aria-label={label} aria-disabled={bloccato}
+        onPointerDown={giu} onPointerMove={muovi} onPointerUp={su} onPointerCancel={su}
+        onKeyDown={(e) => { if (!bloccato && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); completa(); } }}
+        className="absolute rounded-full flex items-center justify-center"
+        style={{
+          top: PAD, left: PAD, width: KNOB, height: KNOB,
+          transform: `translateX(${x}px)`,
+          transition: trascina ? "none" : "transform .25s ease",
+          background: RED, color: RED_FG,
+          boxShadow: "0 2px 8px rgba(0,0,0,.25)",
+          touchAction: "none", cursor: bloccato ? "default" : "grab",
+        }}>
+        {disabled ? <Lock size={18} /> : <ChevronsRight size={22} />}
+      </div>
+    </div>
+  );
+}
+
+/** Una carta-ticket: emoji e nome sopra, una linea tratteggiata con le due
+ *  tacche laterali come un biglietto vero, sotto lo slider (o lo stato
+ *  "usato" col suo numero). */
+function TicketCard({ tk, t, bloccatoFino, onUsa }: {
+  tk: api.GrigliataTicket;
+  t: (typeof T)[Lang];
+  bloccatoFino: string | null;
+  onUsa: () => Promise<boolean>;
+}) {
+  const tacca = (lato: "left" | "right") => (
+    <span className="absolute rounded-full"
+      style={{ width: 18, height: 18, top: -9, [lato]: -9, background: "var(--background)", border: `1px solid ${div}` }} />
+  );
+  return (
+    <div className="rounded-2xl border overflow-hidden"
+      style={{
+        background: tk.usato ? `color-mix(in srgb, ${GREEN} 8%, ${surf})` : surf,
+        borderColor: tk.usato ? `color-mix(in srgb, ${GREEN} 35%, ${div})` : div,
+      }}>
+      <div className="flex items-center gap-3 px-4 py-3.5">
+        <div className="shrink-0 flex items-center justify-center rounded-2xl"
+          style={{
+            width: 52, height: 52, fontSize: 30, lineHeight: 1,
+            background: tk.usato ? `color-mix(in srgb, ${GREEN} 15%, transparent)` : `color-mix(in srgb, ${RED} 12%, transparent)`,
+            filter: tk.usato ? "grayscale(0.6)" : "none",
+          }}>
+          {tk.emoji || EMOJI_TICKET_DEFAULT}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-base font-bold leading-tight" style={{ color: fg, overflowWrap: "anywhere" }}>{tk.nome}</p>
+          {tk.usato && (
+            <p className="text-xs font-semibold mt-0.5 flex items-center gap-1" style={{ color: GREEN }}>
+              <Check size={13} />{t.ticketUsato(tk.numero ?? 0)}
+            </p>
+          )}
+        </div>
+        {tk.usato && tk.numero != null && (
+          <span className="shrink-0 text-2xl font-extrabold tabular-nums" style={{ color: GREEN }}>#{tk.numero}</span>
+        )}
+      </div>
+
+      {!tk.usato && (
+        <div className="relative px-4 pt-3.5 pb-4" style={{ borderTop: `2px dashed ${div}` }}>
+          {tacca("left")}{tacca("right")}
+          <SlideToUse
+            label={bloccatoFino ? t.ticketBloccato(bloccatoFino) : t.ticketScorriUsa}
+            disabled={bloccatoFino != null}
+            onComplete={onUsa} />
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNumber: string | null }) {
   const t = T[lang];
   // Come Bici: e' una scelta di camera, non della Direzione.
@@ -335,10 +491,12 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   const [error, setError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  // Il tocco di "Usa" apre una schermata a tutto schermo con nome e numero
-  // in grande — la "prova" che il ticket è stato speso proprio ora, non
-  // solo una riga in più nella lista (vedi usaTicket() più sotto).
-  const [ticketAppenaUsato, setTicketAppenaUsato] = useState<{ nome: string; numero: number } | null>(null);
+  // Lo slider portato in fondo apre una schermata a tutto schermo con
+  // emoji, nome e numero in grande — la "prova" che il ticket è stato speso
+  // proprio ora, non solo una riga in più nella lista (vedi usaTicket()).
+  const [ticketAppenaUsato, setTicketAppenaUsato] = useState<{
+    nome: string; emoji: string; numero: number; ora: string;
+  } | null>(null);
 
   // Form di adesione: menu, senza glutine, note. Non c'è più una scelta sì/no
   // da ricordare: aderire è l'unica azione, dichiarare un interesse attivo —
@@ -424,18 +582,27 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
     }
   }
 
-  // Va premuto DAVANTI a chi serve il cibo, non prima: il numero progressivo
-  // (vedi grigliata_usa_ticket in SQL) esiste solo a partire da questo
-  // tocco, mai prima — uno screenshot fatto in anticipo non mostra niente.
-  async function usaTicket(ticketId: number) {
-    if (busy) return;
+  // Va fatto DAVANTI a chi serve il cibo, non prima: il numero progressivo
+  // (unico per tutta la grigliata, vedi grigliata_usa_ticket in SQL) esiste
+  // solo a partire da questo gesto — uno screenshot fatto in anticipo non
+  // mostra niente. Torna true se è andato, così lo slider sa se tornare
+  // indietro.
+  async function usaTicket(tk: api.GrigliataTicket): Promise<boolean> {
+    if (busy) return false;
     setBusy(true); setMsg(null);
     try {
-      const res = await api.grigliataUsaTicket(ticketId);
-      setTicketAppenaUsato({ nome: res.ticket_nome || "", numero: res.ticket_numero });
+      const res = await api.grigliataUsaTicket(tk.id);
+      setTicketAppenaUsato({
+        nome: res.ticket_nome || tk.nome,
+        emoji: res.ticket_emoji || tk.emoji || EMOJI_TICKET_DEFAULT,
+        numero: res.ticket_numero,
+        ora: new Date().toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" }),
+      });
       await load();
+      return true;
     } catch {
       setMsg(t.erroreAzione);
+      return false;
     } finally {
       setBusy(false);
     }
@@ -501,12 +668,13 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   const mostraForm = iscrizioniAperte && (!miaAdesione || modificaScelta);
 
   // Dal giorno VERO dell'evento in poi (non dalla scadenza delle adesioni):
-  // solo da qui la conferma del pagamento lascia il posto al ticket (vedi
-  // più sotto). "In poi" e non "esattamente quel giorno" perche' la scheda
+  // solo da qui gli slider dei ticket si sbloccano (prima si vedono, ma col
+  // lucchetto). "In poi" e non "esattamente quel giorno" perche' la scheda
   // resta visibile anche il giorno dopo, e il server accetta l'uso dei
   // ticket fino ad allora — confronto per data di calendario del
   // dispositivo, stesso formato "AAAA-MM-GG" che il server salva.
   const eGiornoEvento = evento.giornoEvento <= oggiISO();
+  const ticket = miaAdesione?.pagamentoConfermato ? miaAdesione.ticket : [];
 
   return (
     <>
@@ -676,66 +844,10 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
               {t.pagamentiDisattivati}
             </p>
           ) : miaAdesione.pagamentoConfermato ? (
-            eGiornoEvento ? (
-              // Il giorno VERO della grigliata: la conferma lascia il posto
-              // ai ticket — uno per voce del menu scelto (es. "Carne" =
-              // "Salsiccia" + "Patatine"). Ciascuno va premuto DAVANTI a chi
-              // serve il cibo, non prima — il numero progressivo esiste solo
-              // da quel tocco in poi, uno screenshot fatto prima non mostra
-              // niente di valido (vedi la nota gemella in usaTicket() e in
-              // grigliata_usa_ticket, in SQL).
-              <div className="rounded-xl px-4 py-3 flex flex-col gap-3"
-                style={{ background: `color-mix(in srgb, ${RED} 10%, transparent)` }}>
-                <div className="flex items-center gap-2">
-                  <Ticket size={16} style={{ color: RED }} />
-                  <p className="text-sm font-bold" style={{ color: fg }}>{t.ticketTitolo}</p>
-                </div>
-                <p className="text-xs" style={{ color: sub }}>{t.menuScelto(nomeMenu(miaAdesione.menuId))}</p>
-
-                {/* Uno scorrimento orizzontale invece di un elenco impilato:
-                    con più di un ticket (es. "Salsiccia" + "Bibita") il
-                    residente scorre da destra a sinistra fra le carte e
-                    sceglie quale usare — ciascuna è a sé, non tutte visibili
-                    e premibili insieme. */}
-                <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1"
-                  style={{ scrollSnapType: "x mandatory" }}>
-                  {miaAdesione.ticket.map((tk) => (
-                    <div key={tk.id}
-                      className="shrink-0 rounded-xl p-3 flex flex-col items-center justify-center gap-2 text-center"
-                      style={{
-                        scrollSnapAlign: "center", width: "72%", minHeight: 112,
-                        background: tk.usato ? `color-mix(in srgb, ${GREEN} 12%, var(--card))` : "var(--card)",
-                        border: `1px solid ${tk.usato ? `color-mix(in srgb, ${GREEN} 35%, var(--border))` : div}`,
-                      }}>
-                      <p className="text-sm font-bold" style={{ color: fg }}>{tk.nome}</p>
-                      {tk.usato ? (
-                        <div className="flex items-center gap-1.5" style={{ color: GREEN }}>
-                          <Check size={16} />
-                          <p className="text-sm font-semibold">{t.ticketUsato(tk.numero ?? 0)}</p>
-                        </div>
-                      ) : (
-                        <button onClick={() => usaTicket(tk.id)} disabled={busy}
-                          className="w-full py-2.5 rounded-xl text-sm font-semibold transition-all active:scale-[0.98]"
-                          style={{ background: RED, color: RED_FG, opacity: busy ? 0.6 : 1 }}>
-                          {t.ticketUsaBtn}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {miaAdesione.ticket.length > 1 && (
-                  <p className="text-[11px] text-center" style={{ color: sub }}>{t.ticketScorri}</p>
-                )}
-                {miaAdesione.ticket.some((tk) => !tk.usato) && (
-                  <p className="text-xs leading-relaxed" style={{ color: sub }}>{t.ticketUsaHint}</p>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 rounded-xl px-4 py-3" style={{ background: `color-mix(in srgb, ${GREEN} 15%, transparent)`, color: GREEN }}>
-                <Check size={16} />
-                <p className="text-sm font-semibold">{t.pagamentoConfermato}</p>
-              </div>
-            )
+            <div className="flex items-center gap-2 rounded-xl px-4 py-3" style={{ background: `color-mix(in srgb, ${GREEN} 15%, transparent)`, color: GREEN }}>
+              <Check size={16} />
+              <p className="text-sm font-semibold">{t.pagamentoConfermato}</p>
+            </div>
           ) : (
             <>
               <p className="text-xs leading-relaxed" style={{ color: sub }}>{t.pagamentoDesc}</p>
@@ -775,22 +887,55 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
           )}
         </div>
       )}
+
+      {/* I ticket: una sezione a sé, uno per ogni voce del menu scelto (es.
+          "Carne" = 🌭 Salsiccia + 🥤 Bibita). Compaiono appena il pagamento
+          è confermato — prima del giorno della grigliata si vedono ma con
+          lo slider bloccato. */}
+      {ticket.length > 0 && !modificaScelta && (
+        <div className="mt-6 flex flex-col gap-3">
+          <div className="flex items-end justify-between gap-3 px-1">
+            <div className="flex items-center gap-2">
+              <Ticket size={18} style={{ color: RED }} />
+              <p className="text-base font-bold" style={{ color: fg }}>{t.ticketTitolo}</p>
+            </div>
+            <p className="text-xs truncate" style={{ color: sub }}>{t.menuScelto(nomeMenu(miaAdesione!.menuId))}</p>
+          </div>
+
+          {ticket.map((tk) => (
+            <TicketCard key={tk.id} tk={tk} t={t}
+              bloccatoFino={eGiornoEvento ? null : fmtGiorno(evento.giornoEvento, lang)}
+              onUsa={() => usaTicket(tk)} />
+          ))}
+
+          {eGiornoEvento && ticket.some((tk) => !tk.usato) && (
+            <p className="text-xs leading-relaxed px-1" style={{ color: sub }}>{t.ticketUsaHint}</p>
+          )}
+        </div>
+      )}
     </div>
 
-    {/* Schermata a tutto schermo subito dopo "Usa": nome e numero in grande,
-        la prova che il ticket è stato speso proprio ora — non una riga in
-        più da cercare nella lista. Si chiude toccando ovunque. */}
+    {/* Schermata a tutto schermo subito dopo lo slider: emoji, nome e numero
+        in grande, la prova che il ticket è stato speso proprio ora — da
+        mostrare a chi serve, non una riga da cercare nella lista. */}
     {ticketAppenaUsato && (
-      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-5 px-8 text-center"
-        style={{ background: RED }}
+      <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 px-8 text-center"
+        style={{ background: `radial-gradient(circle at 50% 35%, color-mix(in srgb, ${RED} 70%, #fff) 0%, ${RED} 65%)` }}
         onClick={() => setTicketAppenaUsato(null)}>
-        <div className="rounded-full p-4" style={{ background: "rgba(255,255,255,0.18)" }}>
-          <Check size={40} style={{ color: RED_FG }} />
+        <div className="flex items-center justify-center rounded-full"
+          style={{ width: 132, height: 132, fontSize: 76, lineHeight: 1, background: "rgba(255,255,255,0.2)" }}>
+          {ticketAppenaUsato.emoji}
         </div>
-        <p className="text-2xl font-bold" style={{ color: RED_FG }}>{ticketAppenaUsato.nome}</p>
-        <p className="text-7xl font-extrabold tabular-nums" style={{ color: RED_FG }}>#{ticketAppenaUsato.numero}</p>
+        <p className="text-3xl font-extrabold mt-2" style={{ color: RED_FG, overflowWrap: "anywhere" }}>{ticketAppenaUsato.nome}</p>
+        <div className="mt-2 rounded-3xl px-8 py-4" style={{ background: "rgba(0,0,0,0.18)" }}>
+          <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: RED_FG, opacity: 0.8 }}>{t.ticketNumero}</p>
+          <p className="font-extrabold tabular-nums leading-none" style={{ color: RED_FG, fontSize: 88 }}>{ticketAppenaUsato.numero}</p>
+        </div>
+        <p className="text-sm font-medium flex items-center gap-1.5" style={{ color: RED_FG, opacity: 0.9 }}>
+          <Check size={16} />{t.ticketUsatoAlle(ticketAppenaUsato.ora)}
+        </p>
         <button onClick={() => setTicketAppenaUsato(null)}
-          className="mt-4 px-8 py-3 rounded-2xl text-sm font-bold"
+          className="mt-5 px-10 py-3 rounded-2xl text-sm font-bold"
           style={{ background: RED_FG, color: RED }}>
           {t.ticketUsatoChiudi}
         </button>

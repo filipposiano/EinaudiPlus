@@ -63,6 +63,11 @@ export const grigliataRepository = {
     return rpc("grigliata_admin_annulla_conferma_pagamento", { p_adesione_id: id });
   },
 
+  /** Admin: rimette "da usare" un ticket segnato come usato. */
+  async adminRipristinaTicket(id) {
+    return rpc("grigliata_admin_ripristina_ticket", { p_ticket_id: id });
+  },
+
   /** Admin: chiude un evento a mano, prima della scadenza naturale. */
   async adminChiudi(id) {
     return rpc("grigliata_admin_chiudi", { p_evento_id: id });

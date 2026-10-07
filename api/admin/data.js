@@ -69,7 +69,7 @@ import {
 import {
   authorize as grigliataAuthorize,
   adminCreaEvento, adminOverview as grigliataAdminOverview,
-  adminConfermaPagamento, adminAnnullaConfermaPagamento, adminChiudiEvento, adminModificaEvento,
+  adminConfermaPagamento, adminAnnullaConfermaPagamento, adminRipristinaTicket, adminChiudiEvento, adminModificaEvento,
   adminAggiungiAdesione, adminRimuoviAdesione,
   adminRiapriEvento, adminEliminaEvento, adminImpostaPagamenti, adminImpostaQuota,
 } from "../../src/modules/grigliata/index.js";
@@ -90,7 +90,7 @@ const MUTATIONS = new Set([
   "cambioBiancheriaSet", "cambioBiancheriaSkip",
   "grigliataCrea", "grigliataConfermaPagamento", "grigliataAnnullaConfermaPagamento", "grigliataChiudi", "grigliataModifica",
   "grigliataAggiungiAdesione", "grigliataRimuoviAdesione", "grigliataRiapri", "grigliataElimina",
-  "grigliataPagamenti", "grigliataQuota",
+  "grigliataPagamenti", "grigliataQuota", "grigliataRipristinaTicket",
 ]);
 
 /**
@@ -469,6 +469,10 @@ export default wrapHandler("admin/data", async (req, res) => {
 
     case "grigliataAnnullaConfermaPagamento":
       result = await adminAnnullaConfermaPagamento(body.adesione_id);
+      break;
+
+    case "grigliataRipristinaTicket":
+      result = await adminRipristinaTicket(body.ticket_id);
       break;
 
     case "grigliataChiudi":

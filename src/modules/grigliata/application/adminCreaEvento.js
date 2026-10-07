@@ -53,7 +53,7 @@ export async function adminCreaEvento(
       satispay: satispay || null,
       // Un evento nuovo non ha menu (né voci-ticket) esistenti: gli id, se
       // arrivassero, non significano niente — si tengono solo i nomi.
-      menu: esito.menu.map(({ nome, ticket }) => ({ nome, ticket: ticket.map(({ nome }) => ({ nome })) })),
+      menu: esito.menu.map(({ nome, ticket }) => ({ nome, ticket: ticket.map(({ nome, emoji }) => ({ nome, emoji })) })),
       pagamentiAttivi: pagamenti,
       quota: esitoQuota.quota,
       attore,

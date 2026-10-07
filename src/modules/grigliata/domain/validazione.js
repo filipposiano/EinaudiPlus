@@ -20,10 +20,14 @@ export const MENU_NOME_MAX = 40;
 // tetti del menu, un livello più in basso.
 export const TICKET_MAX = 10;
 export const TICKET_NOME_MAX = 40;
+// v1.8: l'emoji facoltativa di una voce-ticket (es. 🌭). Stesso tetto del
+// vincolo `check` in SQL (char_length conta i code point, come Array.from):
+// 16 bastano anche per le emoji composte (famiglie, bandiere, toni di pelle).
+export const TICKET_EMOJI_MAX = 16;
 
 /**
  * Ripulisce e controlla l'elenco delle voci-ticket di UN menu: un array di
- * `{ id?, nome }`, stesse regole di controllaMenu() un livello più in
+ * `{ id?, nome, emoji? }`, stesse regole di controllaMenu() un livello più in
  * basso — stesse regole di grigliata_ticket_errore().
  */
 export function controllaTicket(lista) {
@@ -42,13 +46,19 @@ export function controllaTicket(lista) {
     if (visti.has(chiave)) return { errore: `due ticket con lo stesso nome: ${nome}` };
     visti.add(chiave);
 
+    const emoji = String(voce?.emoji ?? "").trim() || null;
+    if (emoji && Array.from(emoji).length > TICKET_EMOJI_MAX) return { errore: `emoji del ticket "${nome}" non valida` };
+
+    // L'emoji compare nel risultato solo se c'è: assente o vuota, la SQL
+    // la salva comunque come null (nullif in grigliata_admin_crea/_modifica).
+    const conEmoji = emoji ? { emoji } : {};
     const id = idValido(voce?.id);
     if (id) {
       if (ids.has(id)) return { errore: "ticket non valido" };
       ids.add(id);
-      ticket.push({ id, nome });
+      ticket.push({ id, nome, ...conEmoji });
     } else {
-      ticket.push({ nome });
+      ticket.push({ nome, ...conEmoji });
     }
   }
   return { ticket };
