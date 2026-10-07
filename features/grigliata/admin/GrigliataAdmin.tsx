@@ -508,7 +508,7 @@ export function GrigliataAdmin() {
   const ricaricaSilenziosa = () => {
     call<Overview>("grigliataOverview").then((r) => setOverview(r)).catch(() => {});
   };
-  const inTempoReale = useAvvisiInTempoReale([{ topic: "grigliata:admin", jitterMs: 300 }], ricaricaSilenziosa);
+  const inTempoReale = useAvvisiInTempoReale([{ topic: "grigliata:admin", jitterMs: 300, minimoMs: 1500 }], ricaricaSilenziosa);
 
   // Rete di sicurezza: ogni 30 secondi con gli avvisi attivi, ogni 10
   // (come prima) senza. Si ferma quando la scheda non è visibile.

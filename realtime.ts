@@ -34,6 +34,11 @@ export type Canale = {
    *  ascoltato da tutti (es. ~90 telefoni) sparpaglia le richieste invece di
    *  farle arrivare tutte nello stesso istante. */
   jitterMs?: number;
+  /** Tempo minimo fra due ricariche dovute a questo canale. I canali sono
+   *  pubblici: chiunque abbia l'app potrebbe mandarci finti avvisi a
+   *  raffica — il messaggio è vuoto, non si legge niente, ma senza un tetto
+   *  farebbe ricaricare tutti di continuo. */
+  minimoMs?: number;
 };
 
 /**
@@ -48,23 +53,25 @@ export function useAvvisiInTempoReale(canali: Canale[], onCambio: () => void, at
   const [connesso, setConnesso] = useState(false);
   const onCambioRef = useRef(onCambio);
   onCambioRef.current = onCambio;
-  const chiave = canali.map((c) => `${c.topic}|${c.jitterMs ?? 0}`).join(",");
+  const chiave = canali.map((c) => `${c.topic}|${c.jitterMs ?? 0}|${c.minimoMs ?? 0}`).join(",");
 
   useEffect(() => {
     const rt = getClient();
     if (!attivo || !rt || canali.length === 0) { setConnesso(false); return; }
 
     let timer: ReturnType<typeof setTimeout> | null = null;
-    const ricarica = (jitterMs: number) => {
+    let ultima = 0;
+    const ricarica = (jitterMs: number, minimoMs = 0) => {
       if (timer) return; // una ricarica è già in arrivo: questa la copre
-      timer = setTimeout(() => { timer = null; onCambioRef.current(); }, Math.random() * jitterMs);
+      const attesa = Math.max(Math.random() * jitterMs, ultima + minimoMs - Date.now());
+      timer = setTimeout(() => { timer = null; ultima = Date.now(); onCambioRef.current(); }, attesa);
     };
 
     const iscritti = new Set<string>();
     let giaConnesso = false;
-    const canaliRt = canali.map(({ topic, jitterMs = 0 }) =>
+    const canaliRt = canali.map(({ topic, jitterMs = 0, minimoMs = 0 }) =>
       rt.channel(topic)
-        .on("broadcast", { event: "cambio" }, () => ricarica(jitterMs))
+        .on("broadcast", { event: "cambio" }, () => ricarica(jitterMs, minimoMs))
         .subscribe((stato) => {
           if (stato === "SUBSCRIBED") {
             iscritti.add(topic);

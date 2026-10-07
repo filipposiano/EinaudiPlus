@@ -554,7 +554,9 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   // ricaricare tutti. Il canale di tutti aspetta un po' a caso prima di
   // ricaricare, così 90 telefoni non chiedono nello stesso istante.
   const inTempoReale = useAvvisiInTempoReale(
-    camera ? [{ topic: "grigliata:tutti", jitterMs: 4000 }, { topic: `grigliata:camera:${camera}`, jitterMs: 300 }] : [],
+    camera
+      ? [{ topic: "grigliata:tutti", jitterMs: 4000, minimoMs: 15_000 }, { topic: `grigliata:camera:${camera}`, jitterMs: 300, minimoMs: 2000 }]
+      : [],
     load,
     Boolean(camera),
   );

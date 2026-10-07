@@ -150,7 +150,7 @@ qualcosa cambia, tramite Supabase Realtime (migrazione 057 + `realtime.ts`).
 | Nome | Valore |
 |---|---|
 | `VITE_SUPABASE_URL` | `https://drdowugqpjgdptnrvenw.supabase.co` |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API Keys → **Publishable key** (`sb_publishable_…`) — **non** la secret |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API Keys → **Publishable key** (`sb_publishable_…`), oppure, se il progetto ha ancora le chiavi legacy, la **`anon` `public`** (`eyJ…`) — **mai** la secret / `service_role` |
 
 > La publishable key finisce nel bundle pubblico, ed è fatta per questo:
 > ogni tabella ha la RLS attiva senza policy e ogni funzione è chiusa ad
@@ -159,6 +159,12 @@ qualcosa cambia, tramite Supabase Realtime (migrazione 057 + `realtime.ts`).
 >
 > Come `VITE_TELEGRAM_BOT`, servono un nuovo deploy dopo averle aggiunte.
 > Senza, l'app funziona come prima (ricontrollo ogni 10 secondi).
+>
+> In Supabase → Realtime → Settings, **"Allow public access to channels"
+> deve restare acceso**: gli avvisi viaggiano su canali pubblici (nessuna
+> policy su `realtime.messages` da creare). Il messaggio è vuoto; contro
+> chi provasse a mandare finti avvisi a raffica, l'app ricarica al massimo
+> ogni 2 s per la propria camera e ogni 15 s per gli avvisi di tutti.
 >
 > La CSP in `vercel.json` permette già `wss://drdowugqpjgdptnrvenw.supabase.co`:
 > cambiando progetto Supabase va aggiornata anche lì.
