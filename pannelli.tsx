@@ -93,8 +93,12 @@ export function SettingsSheet({ lang, room, adminRole, onLang, temaPref, onTema,
   // on/off e un orario, letti/scritti subito come lingua e tema: nessun
   // tasto "Salva" a parte, coerente col resto di questo pannello.
   const [linenAperto, setLinenAperto] = useState(false);
-  const [linenPref, setLinenPref] = useState<api.LinenNotifyPref | null>(null);
+  // Parte dal default del server (attiva, alle 8:00) e si aggiorna appena
+  // arriva la preferenza vera: la riga c'è SEMPRE, anche se la lettura non
+  // riesce — prima spariva in silenzio, e non si poteva più cambiare niente.
+  const [linenPref, setLinenPref] = useState<api.LinenNotifyPref>({ enabled: true, notifyTime: "08:00" });
   const [linenBusy, setLinenBusy] = useState(false);
+  const [linenErr, setLinenErr] = useState(false);
   const [busy, setBusy] = useState(false);
   // Il motivo per cui l'attivazione non e' andata a buon fine, quando a dirlo e'
   // stato il server (oggi: troppi dispositivi sulla stessa camera). Arriva gia'
@@ -109,18 +113,21 @@ export function SettingsSheet({ lang, room, adminRole, onLang, temaPref, onTema,
 
   useEffect(() => {
     if (!room) return;
-    api.getLinenNotifyPref(room).then(setLinenPref).catch(() => { /* resta null: la riga mostra solo l'icona */ });
+    api.getLinenNotifyPref(room).then(setLinenPref).catch(() => { /* resta il default: si può comunque cambiare */ });
   }, [room]);
 
   async function cambiaLinenPref(parziale: Partial<api.LinenNotifyPref>) {
-    if (!room || !linenPref || linenBusy) return;
+    if (!room || linenBusy) return;
     const nuovo = { ...linenPref, ...parziale };
+    if (!nuovo.notifyTime) return; // campo orario svuotato a metà: si aspetta un orario intero
     setLinenPref(nuovo);
     setLinenBusy(true);
+    setLinenErr(false);
     try {
       await api.setLinenNotifyPref(room, nuovo.enabled, nuovo.notifyTime);
     } catch {
       setLinenPref(linenPref); // com'era prima, il tentativo non è riuscito
+      setLinenErr(true);
     } finally {
       setLinenBusy(false);
     }
@@ -225,7 +232,7 @@ export function SettingsSheet({ lang, room, adminRole, onLang, temaPref, onTema,
                 onClick={() => setRemindersOpen(true)}/>
             </div>
           )}
-          {room && linenPref && (
+          {room && (
             <div style={{ borderBottom:`1px solid ${div}` }}>
               <Row icon={<Bed size={18}/>} label={T[lang].notificheCambioBiancheria}
                 sub={linenPref.enabled ? T[lang].attive : T[lang].nonAttive}
@@ -249,6 +256,9 @@ export function SettingsSheet({ lang, room, adminRole, onLang, temaPref, onTema,
                         className="text-sm rounded-lg px-2 py-1 border"
                         style={{ background:"var(--card)", borderColor:div, color:fg }}/>
                     </label>
+                  )}
+                  {linenErr && (
+                    <p className="text-xs font-semibold" style={{ color:"var(--destructive-text)" }}>{T[lang].genericError}</p>
                   )}
                 </div>
               )}
