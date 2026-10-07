@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Pencil, Plus, Check, UserPlus, WheatOff, StickyNote, X, Ticket, Search, RotateCcw } from "lucide-react";
+import { Pencil, Plus, Check, UserPlus, WheatOff, StickyNote, X, Ticket, Search, RotateCcw, Settings, Users } from "lucide-react";
 import { EMOJI_TICKET, EMOJI_TICKET_DEFAULT, suggerisciEmoji } from "../emojiTicket";
 import { call } from "../../admin-shared/adminApi";
 import { S } from "../../admin-shared/adminStyles";
@@ -87,6 +87,9 @@ type Evento = {
 // di raggruppare per piano (dove sono) o per menu (cosa preparare).
 type FiltroEsigenza = "tutte" | "vegetariano" | "vegano" | "senza_glutine" | "note" | "nessuna";
 type Raggruppa = "piano" | "menu";
+// v1.8: il pannello è diviso in tre schede — come si configura l'evento,
+// chi partecipa (e chi ha pagato), e il giorno vero coi ticket.
+type Scheda = "impostazioni" | "partecipanti" | "giorno";
 // v1.7.1: a che punto è il pagamento — "da confermare" (ha dichiarato di aver
 // pagato, il delegato non ha ancora confermato) è la lista su cui lavorare.
 type FiltroPagamento = "tutti" | "da_confermare" | "non_dichiarato" | "confermato";
@@ -484,6 +487,9 @@ export function GrigliataAdmin() {
   const [filtroPagamento, setFiltroPagamento] = useState<FiltroPagamento>("tutti");
   const [cerca, setCerca] = useState("");
   const [raggruppa, setRaggruppa] = useState<Raggruppa>("piano");
+  // null = nessuna scelta ancora: vale la scheda "naturale" del momento (vedi
+  // schedaAttiva più sotto).
+  const [scheda, setScheda] = useState<Scheda | null>(null);
 
   const carica = () =>
     call<Overview>("grigliataOverview")
@@ -781,6 +787,10 @@ export function GrigliataAdmin() {
   // Dal giorno VERO della grigliata in poi: solo da lì si attiva la sezione
   // dei ticket (vedi più sotto), come lo slider lato residente.
   const eGiornoEvento = evento != null && evento.giorno_evento <= oggiISO();
+  // Il giorno della grigliata si apre direttamente sui ticket, gli altri
+  // giorni su chi partecipa — finché il delegato non sceglie lui.
+  const schedaAttiva: Scheda = scheda ?? (eGiornoEvento ? "giorno" : "partecipanti");
+  const daConfermare = partecipanti.filter((a) => a.pagamento_dichiarato && !a.pagamento_confermato).length;
   const perMenu = (id: number) => {
     const del = partecipanti.filter((a) => a.menu_id === id);
     return { totale: del.length, pagati: del.filter((a) => a.pagamento_confermato).length };
@@ -974,7 +984,7 @@ export function GrigliataAdmin() {
           la larghezza della pagina. */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 4 }}>
         <h2 style={{ fontSize: 18, fontWeight: 800 }}>Grigliata</h2>
-        <button onClick={() => setMostraForm(true)} title="Fai partire una nuova grigliata"
+        <button onClick={() => { setMostraForm(true); setScheda("impostazioni"); }} title="Fai partire una nuova grigliata"
           style={{
             width: 34, height: 34, borderRadius: 99, flexShrink: 0,
             display: "flex", alignItems: "center", justifyContent: "center",
@@ -987,15 +997,50 @@ export function GrigliataAdmin() {
 
       <p style={{ fontSize: 13, ...S.sub, marginBottom: 16, maxWidth: "70ch" }}>
         Finché è attiva, i residenti trovano la scheda "Grigliata" nel menu, dove
-        aderiscono, scelgono il menu e dichiarano di aver pagato. Qui vedi il
-        riepilogo, chi ha risposto, e confermi i pagamenti — la conferma avvisa
-        subito la camera.
+        aderiscono, scelgono il menu e dichiarano di aver pagato. Qui imposti
+        l'evento, vedi chi ha risposto e confermi i pagamenti (la conferma
+        avvisa subito la camera), e il giorno stesso segui i ticket.
       </p>
 
       {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
 
+      {/* ── Le tre schede ──────────────────────────────────────────────── */}
+      {evento && (
+        <div role="tablist" style={{ display: "flex", gap: 4, padding: 4, borderRadius: 14, background: "var(--secondary)", marginBottom: 16 }}>
+          {([
+            ["impostazioni", "Impostazioni", Settings, 0],
+            ["partecipanti", "Partecipanti", Users, pagamentiAttivi ? daConfermare : 0],
+            ["giorno", "Giorno della grigliata", Ticket, 0],
+          ] as [Scheda, string, typeof Settings, number][]).map(([id, label, Icona, badge]) => {
+            const attiva = schedaAttiva === id;
+            return (
+              <button key={id} role="tab" aria-selected={attiva} onClick={() => setScheda(id)}
+                title={badge > 0 ? `${badge} ${badge === 1 ? "pagamento" : "pagamenti"} da confermare` : undefined}
+                style={{
+                  flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
+                  padding: "8px 6px", borderRadius: 10, border: "none", cursor: "pointer",
+                  fontSize: 12, fontWeight: 700, lineHeight: 1.2, textAlign: "center",
+                  background: attiva ? "var(--card)" : "none",
+                  color: attiva ? "var(--foreground)" : "var(--muted-foreground)",
+                  boxShadow: attiva ? "0 1px 3px rgba(0,0,0,.12)" : "none",
+                }}>
+                <Icona size={14} style={{ flexShrink: 0, color: attiva ? "var(--primary)" : undefined }} />
+                <span>{label}</span>
+                {badge > 0 && (
+                  <span style={{
+                    flexShrink: 0, minWidth: 18, height: 18, padding: "0 5px", borderRadius: 99, fontSize: 11,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "var(--primary)", color: "var(--primary-foreground)",
+                  }}>{badge}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* ── Fai partire una nuova grigliata (dal "+" qui sopra) ──────────── */}
-      {mostraForm && (
+      {mostraForm && (!evento || schedaAttiva === "impostazioni") && (
         <div style={{ ...S.card, padding: 14, marginBottom: 16, display: "grid", gap: 12 }}>
           {evento && !evento.chiuso && (
             <p style={{ fontSize: 12, color: "var(--destructive-text)" }}>
@@ -1073,8 +1118,8 @@ export function GrigliataAdmin() {
         </div>
       )}
 
-      {/* ── Riepilogo ────────────────────────────────────────────────────── */}
-      {evento ? (
+      {/* ── Impostazioni: titolo, stato, date, quota, menu, pagamenti ────── */}
+      {evento ? (schedaAttiva === "impostazioni" && (
         <div style={{ ...S.card, padding: 16, marginBottom: 16 }}>
           {modificaEvento ? (
             <div style={{ display: "grid", gap: 8, marginBottom: 14 }}>
@@ -1133,7 +1178,7 @@ export function GrigliataAdmin() {
           {/* v1.4: i pagamenti si accendono e spengono qui, in qualunque
               momento. Spegnerli nasconde soltanto lo stato dei pagamenti,
               non lo cancella. */}
-          <div style={{ paddingTop: 12, marginBottom: 12, borderTop: "1px solid var(--border)" }}>
+          <div style={{ paddingTop: 12, borderTop: "1px solid var(--border)" }}>
             <Interruttore acceso={pagamentiAttivi} onClick={toccaPagamenti} disabilitato={busy}
               titolo="Pagamenti nell'app"
               sottotitolo={pagamentiAttivi
@@ -1156,47 +1201,27 @@ export function GrigliataAdmin() {
             )}
           </div>
 
-          {/* Quanti numeri dipende da quanti menu ha deciso il delegato: uno
-              per menu (pagati/tot.), auto-fit invece di colonne fisse così
-              vanno a capo invece di schiacciarsi. Senza glutine sta a lato,
-              a parte: non è un menu ma si somma a qualunque menu (si può
-              essere vegani E celiaci), ed è il numero che decide cosa
-              comprare a parte — vegetariani/vegani invece non hanno un loro
-              conteggio qui: si vedono sulla camera (pastiglie) e nella lista
-              "Esigenze alimentari" più sotto. */}
-          <div style={{ display: "flex", gap: 10, alignItems: "stretch", paddingTop: 12, borderTop: "1px solid var(--border)" }}>
-            <div style={{ flex: 1, minWidth: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))", gap: 8 }}>
-              <Statistica valore={partecipanti.length} etichetta="Partecipano" />
-              {pagamentiAttivi && <Statistica valore={confermati} etichetta="Pagamenti confermati" />}
-              {/* Con una quota indicata: quanto è già entrato su quanto
-                  dovrebbe entrare, il numero che serve per la spesa. */}
-              {pagamentiAttivi && fmtQuota(evento.quota) && (
-                <Statistica valore={fmtQuota(confermati * Number(evento.quota))!}
-                  etichetta={`Incassati su ${fmtQuota(partecipanti.length * Number(evento.quota))}`} />
-              )}
-              {menuEvento.map((m) => {
-                const n = perMenu(m.id);
-                return (
-                  <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                    {pagamentiAttivi
-                      ? <Statistica valore={`${n.pagati}/${n.totale}`} etichetta={`${m.nome} (pagati/tot.)`} />
-                      : <Statistica valore={n.totale} etichetta={m.nome} />}
+          {!modificaEvento && (
+            <div style={{ paddingTop: 12, marginTop: 12, borderTop: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <p style={{ fontSize: 13, fontWeight: 700 }}>Menu e ticket</p>
+                <button onClick={apriModificaEvento}
+                  style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, fontWeight: 700, color: "var(--gray-accessible-text)", background: "none", border: "none", cursor: "pointer", padding: 0 }}>
+                  <Pencil size={12} /> Modifica
+                </button>
+              </div>
+              <div style={{ display: "grid", gap: 8 }}>
+                {menuEvento.map((m) => (
+                  <div key={m.id}>
+                    <p style={{ fontSize: 13, fontWeight: 600 }}>{m.nome}</p>
+                    <p style={{ fontSize: 12, ...S.sub }}>
+                      {m.ticket.map((tk) => `${tk.emoji || EMOJI_TICKET_DEFAULT} ${tk.nome}`).join("  ·  ")}
+                    </p>
                   </div>
-                );
-              })}
+                ))}
+              </div>
             </div>
-            <div title="Camere che non mangiano glutine, qualunque menu abbiano scelto"
-              style={{
-                flexShrink: 0, width: 88, borderRadius: 12, padding: "8px 6px",
-                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
-                background: senzaGlutine > 0 ? "color-mix(in srgb, var(--primary) 12%, transparent)" : "var(--secondary)",
-                color: senzaGlutine > 0 ? "var(--primary)" : "var(--muted-foreground)",
-              }}>
-              <WheatOff size={16} />
-              <p style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.1 }}>{senzaGlutine}</p>
-              <p style={{ fontSize: 11, textAlign: "center", lineHeight: 1.2 }}>Senza glutine</p>
-            </div>
-          </div>
+          )}
 
           {evento.chiuso && (
             <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
@@ -1206,7 +1231,7 @@ export function GrigliataAdmin() {
             </div>
           )}
         </div>
-      ) : (
+      )) : (
         <div style={{ ...S.card, padding: 16, marginBottom: 16, fontSize: 13, ...S.sub, textAlign: "center" }}>
           Non c'è ancora nessuna grigliata. Falla partire dal "+" qui sopra.
         </div>
@@ -1220,8 +1245,18 @@ export function GrigliataAdmin() {
           avere il successivo — e per ogni voce di ogni menu quante ne sono
           già state ritirate su quante pagate. Si aggiorna da sola (vedi il
           ricontrollo periodico più sopra). */}
-      {evento && tuttiTicket.length > 0 && (
-        eGiornoEvento ? (
+      {evento && schedaAttiva === "giorno" && (
+        !eGiornoEvento ? (
+          <div style={{ ...S.card, padding: 16, marginBottom: 16, fontSize: 13, ...S.sub, textAlign: "center" }}>
+            <Ticket size={22} style={{ display: "block", margin: "0 auto 8px", color: "var(--muted-foreground)" }} />
+            Questa scheda si attiva il giorno della grigliata ({fmtGiorno(evento.giorno_evento)}): da lì segui qui i ticket
+            ritirati e il numero a cui si è arrivati.
+          </div>
+        ) : tuttiTicket.length === 0 ? (
+          <div style={{ ...S.card, padding: 16, marginBottom: 16, fontSize: 13, ...S.sub, textAlign: "center" }}>
+            Ancora nessun ticket: compaiono per ogni camera appena ne confermi il pagamento.
+          </div>
+        ) : (
           <div style={{ ...S.card, padding: 14, marginBottom: 16, border: "1px solid color-mix(in srgb, var(--primary) 35%, var(--border))" }}>
             <p style={{ fontSize: 12, fontWeight: 700, color: "var(--primary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
               <Ticket size={14} /> Ticket · giorno della grigliata
@@ -1271,15 +1306,59 @@ export function GrigliataAdmin() {
               ))}
             </div>
           </div>
-        ) : (
-          <div style={{ ...S.card, padding: "10px 14px", marginBottom: 16, fontSize: 12, ...S.sub, display: "flex", alignItems: "center", gap: 6 }}>
-            <Ticket size={13} /> La sezione dei ticket si attiva il giorno della grigliata ({fmtGiorno(evento.giorno_evento)}).
-          </div>
         )
       )}
 
+      {/* ── Partecipanti: i numeri, poi chi ha risposto ───────────────────── */}
+      {evento && schedaAttiva === "partecipanti" && (
+        <div style={{ ...S.card, padding: 14, marginBottom: 16 }}>
+          {/* Quanti numeri dipende da quanti menu ha deciso il delegato: uno
+              per menu (pagati/tot.), auto-fit invece di colonne fisse così
+              vanno a capo invece di schiacciarsi. Senza glutine sta a lato,
+              a parte: non è un menu ma si somma a qualunque menu (si può
+              essere vegani E celiaci), ed è il numero che decide cosa
+              comprare a parte — vegetariani/vegani invece non hanno un loro
+              conteggio qui: si vedono sulla camera (pastiglie) e nella lista
+              "Esigenze alimentari" più sotto. */}
+          <div style={{ display: "flex", gap: 10, alignItems: "stretch" }}>
+            <div style={{ flex: 1, minWidth: 0, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))", gap: 8 }}>
+              <Statistica valore={partecipanti.length} etichetta="Partecipano" />
+              {pagamentiAttivi && <Statistica valore={confermati} etichetta="Pagamenti confermati" />}
+              {/* Con una quota indicata: quanto è già entrato su quanto
+                  dovrebbe entrare, il numero che serve per la spesa. */}
+              {pagamentiAttivi && fmtQuota(evento.quota) && (
+                <Statistica valore={fmtQuota(confermati * Number(evento.quota))!}
+                  etichetta={`Incassati su ${fmtQuota(partecipanti.length * Number(evento.quota))}`} />
+              )}
+              {menuEvento.map((m) => {
+                const n = perMenu(m.id);
+                return (
+                  <div key={m.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                    {pagamentiAttivi
+                      ? <Statistica valore={`${n.pagati}/${n.totale}`} etichetta={`${m.nome} (pagati/tot.)`} />
+                      : <Statistica valore={n.totale} etichetta={m.nome} />}
+                  </div>
+                );
+              })}
+            </div>
+            <div title="Camere che non mangiano glutine, qualunque menu abbiano scelto"
+              style={{
+                flexShrink: 0, width: 88, borderRadius: 12, padding: "8px 6px",
+                display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 2,
+                background: senzaGlutine > 0 ? "color-mix(in srgb, var(--primary) 12%, transparent)" : "var(--secondary)",
+                color: senzaGlutine > 0 ? "var(--primary)" : "var(--muted-foreground)",
+              }}>
+              <WheatOff size={16} />
+              <p style={{ fontSize: 22, fontWeight: 800, lineHeight: 1.1 }}>{senzaGlutine}</p>
+              <p style={{ fontSize: 11, textAlign: "center", lineHeight: 1.2 }}>Senza glutine</p>
+            </div>
+          </div>
+
+        </div>
+      )}
+
       {/* ── Chi ha risposto, per piano ───────────────────────────────────── */}
-      {evento && (
+      {evento && schedaAttiva === "partecipanti" && (
         <div style={{ ...S.card, padding: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
             <p style={{ fontSize: 12, ...S.sub }}>Chi ha risposto:</p>
@@ -1421,7 +1500,7 @@ export function GrigliataAdmin() {
       {/* ── Esigenze alimentari: tutto quello che serve a chi cucina ────── */}
       {/* Segue gli stessi filtri della griglia: "Con note" + una ricerca
           ("lattosio") dà subito l'elenco da portare a chi fa la spesa. */}
-      {evento && esigenzeFiltrate.length > 0 && (
+      {evento && schedaAttiva === "partecipanti" && esigenzeFiltrate.length > 0 && (
         <div style={{ ...S.card, padding: 14, marginTop: 16 }}>
           <p style={{ fontSize: 12, ...S.sub, marginBottom: 10 }}>
             Esigenze alimentari · {esigenzeFiltrate.length}{filtriAttivi && ` (filtrate, su ${conEsigenze.length})`}
