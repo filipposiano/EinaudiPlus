@@ -234,13 +234,20 @@ $$;
 -- Il tick (ogni minuto, agganciato allo stesso cron dei promemoria
 -- lavanderia — vedi api/cron.js): quali camere avvisare ADESSO, e le segna
 -- avvisate nella stessa transazione (claim, stesso principio di
--- claim_due_reminders in reminders.sql). Solo di martedì. Se il cambio non è
--- ancora stato configurato da nessun amministratore (linen_change_type_for
--- torna null) non manda nulla; se invece è 'nessuno' (un martedì saltato
--- apposta) avvisa comunque, per dire che oggi non c'è cambio.
+-- claim_due_reminders in reminders.sql). Solo di martedì, e (v1.9) solo
+-- quando il cambio c'è davvero: 'grande' o 'piccolo'. Non configurato (null)
+-- o saltato apposta ('nessuno'): nessun avviso.
 -- `notify_time <= ora_corrente` e non `=`: tollera un tick in ritardo senza
 -- perdere l'invio, `last_notified_tuesday` ferma da sola i reinvii nello
 -- stesso martedì.
+--
+-- v1.9: la notifica è attiva di default (linen_change_get_notify_pref dice
+-- "attiva, alle 8:00" anche a chi non ha mai salvato una preferenza), ma
+-- prima il claim guardava solo chi una riga l'aveva già: chi non aveva mai
+-- aperto l'impostazione non riceveva niente. Ora ogni camera con un canale
+-- di notifica attivo (push o Telegram verificato) e senza preferenza riceve
+-- la riga di default prima del claim. Una camera senza canali non riceve
+-- comunque nulla (notifyRoom non avrebbe dove mandarla).
 create or replace function linen_change_claim_due_notifications(p_tz text default 'Europe/Rome')
 returns jsonb language plpgsql as $$
 declare
@@ -254,9 +261,16 @@ begin
   end if;
 
   v_tipo := linen_change_type_for(v_oggi);
-  if v_tipo is null then
-    return jsonb_build_object('ok', true, 'tipo', null, 'righe', '[]'::jsonb);
+  if v_tipo is null or v_tipo not in ('grande', 'piccolo') then
+    return jsonb_build_object('ok', true, 'tipo', v_tipo, 'righe', '[]'::jsonb);
   end if;
+
+  insert into linen_change_notify_pref (room)
+  select distinct btrim(room) from push_sub where btrim(room) <> ''
+  union
+  select distinct btrim(room) from telegram_sub
+    where room is not null and btrim(room) <> '' and verified_at is not null
+  on conflict (room) do nothing;
 
   with dovute as (
     update linen_change_notify_pref

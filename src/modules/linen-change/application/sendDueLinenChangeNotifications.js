@@ -4,7 +4,9 @@
 //
 // Nessuna logica di scheduling qui dentro: "quali camere avvisare adesso"
 // lo decide linen_change_claim_due_notifications() in SQL (solo di
-// martedì, una volta sola a settimana per camera). Questo use-case compone
+// martedì, solo se il cambio c'è, una volta sola a settimana per camera —
+// "nessuno" qui resta solo per difesa, la SQL non lo restituisce più dalla
+// v1.9). Questo use-case compone
 // il messaggio e lo spedisce, nient'altro — stesso principio di
 // sendDueReminders.js.
 

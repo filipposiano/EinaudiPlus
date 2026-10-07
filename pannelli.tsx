@@ -232,6 +232,7 @@ export function SettingsSheet({ lang, room, adminRole, onLang, temaPref, onTema,
                 onClick={() => setLinenAperto((v) => !v)}/>
               {linenAperto && (
                 <div className="p-3 flex flex-col gap-3" style={{ background:"var(--secondary)" }}>
+                  <p className="text-xs" style={{ color:"var(--muted-foreground)" }}>{T[lang].notificheCambioBiancheriaHint}</p>
                   <button onClick={() => cambiaLinenPref({ enabled: !linenPref.enabled })} disabled={linenBusy}
                     className="w-full flex items-center justify-between gap-3 text-left">
                     <span className="text-xs font-semibold" style={{ color:fg }}>{T[lang].notificheCambioBiancheriaAttiva}</span>

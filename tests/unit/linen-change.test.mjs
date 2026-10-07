@@ -233,8 +233,8 @@ section("sendDueLinenChangeNotifications()");
   const resVuoto = await sendDueLinenChangeNotifications({}, { linenChangeRepository: repoVuoto, notifyRoom: notifyNonChiamato });
   check("nessuna camera dovuta -> nessuna notifica", notifyNonChiamato.calls.length === 0 && resVuoto.inviati === 0);
 
-  // 'nessuno' (un martedì saltato apposta) avvisa comunque, con un testo
-  // diverso — non è silenzio, è un'informazione a sé.
+  // 'nessuno': dalla v1.9 la SQL non lo restituisce più (si avvisa solo
+  // quando il cambio c'è). Se mai arrivasse, il testo resta comunque giusto.
   const repoNessuno = { async claimDueNotifications() { return { ok: true, tipo: "nessuno", righe: ["112"] }; } };
   const notifyNessuno = (() => {
     const calls = [];
