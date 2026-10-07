@@ -26,8 +26,10 @@ import {
 // Senza, bastava aprire Impostazioni o far comparire un pannello per
 // ridisegnare da capo anche la griglia settimanale, che sono 7x19 celle: lavoro
 // buttato, e su un telefono lento si sente.
-export const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, favs, onToggleFav, onBook, onClear, onGoDay, cambioBiancheria }: {
+export const Dashboard = memo(function Dashboard({ lang, week, status, roomNumber, isAdmin = false, favs, onToggleFav, onBook, onClear, onGoDay, cambioBiancheria }: {
   theme: Theme; lang: Lang; week: WeekData; status: StatusData; roomNumber: string;
+  /** Con una sessione admin, la prenotazione rapida offre anche "per la Direzione". */
+  isAdmin?: boolean;
   favs: Fav[]; onToggleFav: (day:number, slot:number)=>void;
   onBook: (day:number, slot:number, machine:string, room:string)=>Promise<void>;
   onClear: (day:number, slot:number, machine:string)=>Promise<void>;
@@ -110,9 +112,9 @@ export const Dashboard = memo(function Dashboard({ lang, week, status, roomNumbe
 
   // Prenota una lavatrice scelta a mano (dal modale dei preferiti).
   // Rilancia l'errore così il modale resta aperto e lo mostra.
-  async function quickBook(day: number, s: number, mid: string) {
+  async function quickBook(day: number, s: number, mid: string, perDirezione = false) {
     if (!roomNumber) return;
-    await onBook(day, s, mid, roomNumber);
+    await onBook(day, s, mid, perDirezione ? api.DIREZIONE : roomNumber);
     setToast(t.slotConfirmed);
     setToastUndo(() => () => { onClear(day, s, mid).catch((e) => setToast(errMsg(e, lang))); });
   }
@@ -172,7 +174,7 @@ export const Dashboard = memo(function Dashboard({ lang, week, status, roomNumbe
       )}
       {quickTarget && (
         <QuickBookModal lang={lang} day={quickTarget.day} slot={quickTarget.slot}
-          week={week} status={status} roomNumber={roomNumber} onBook={quickBook}
+          week={week} status={status} roomNumber={roomNumber} isAdmin={isAdmin} onBook={quickBook}
           onClose={()=>setQuickTarget(null)}/>
       )}
 

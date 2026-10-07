@@ -4,12 +4,18 @@ import { WashingMachine } from "../../icons";
 import { TIME_SLOTS, machinesFor, bookingAt, type WeekData, type StatusData } from "../../modello";
 import { T, errMsg, type Lang } from "../../i18n";
 import { RED, RED_FG, GREEN, YELLOW, OOS_C, OOS_T, GREEN_T } from "../../tema";
+import * as api from "../../api";
 
 // ─── Modale scelta lavatrice (da un turno preferito) ────────────────────────────
-export function QuickBookModal({ lang, day, slot, week, status, roomNumber, onBook, onClose }: {
+export function QuickBookModal({ lang, day, slot, week, status, roomNumber, isAdmin = false, onBook, onClose }: {
   lang: Lang; day: number; slot: number; week: WeekData; status: StatusData; roomNumber: string | null;
-  onBook: (day:number, slot:number, mid:string)=>Promise<void>; onClose: ()=>void;
+  isAdmin?: boolean;
+  onBook: (day:number, slot:number, mid:string, perDirezione?: boolean)=>Promise<void>; onClose: ()=>void;
 }) {
+  // Chi amministra e usa la sua camera può prenotare anche per la Direzione
+  // (stessa scelta di BookModal). Il server rifiuta comunque senza sessione.
+  const puoDirezione = isAdmin && !!roomNumber && roomNumber !== api.DIREZIONE;
+  const [perDirezione, setPerDirezione] = useState(false);
   const t = T[lang];
   const fg="var(--foreground)", sub="var(--gray-accessible-text)", div="var(--border)", surf="var(--card)";
   const [busy, setBusy] = useState<string | null>(null);
@@ -30,7 +36,7 @@ export function QuickBookModal({ lang, day, slot, week, status, roomNumber, onBo
   async function book(wid: string) {
     if (busy) return;
     setBusy(wid); setErr(null);
-    try { await onBook(day, slot, wid); onClose(); }
+    try { await onBook(day, slot, wid, puoDirezione && perDirezione); onClose(); }
     catch (e) { setErr(errMsg(e, lang)); setBusy(null); }
   }
 
@@ -43,6 +49,18 @@ export function QuickBookModal({ lang, day, slot, week, status, roomNumber, onBo
           <button onClick={onClose} className="p-2 rounded-xl" style={{ background:"var(--secondary)", color:sub }}><X size={16}/></button>
         </div>
         <p className="text-sm font-mono mb-4" style={{ color:sub }}>{t.days[day]} · {sl.start}–{sl.end}</p>
+
+        {puoDirezione && (
+          <div className="grid grid-cols-2 gap-1 p-1 rounded-2xl mb-3" style={{ background:"var(--secondary)" }}>
+            {([[false, t.forMe(roomNumber!)], [true, t.forDirezione]] as [boolean, string][]).map(([v, label]) => (
+              <button key={String(v)} onClick={() => setPerDirezione(v)} aria-pressed={perDirezione === v}
+                className="rounded-xl px-2 py-2 text-xs font-semibold"
+                style={perDirezione === v ? { background:"var(--card)", color:RED, boxShadow:"0 1px 3px rgba(0,0,0,.12)" } : { color:sub }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="rounded-2xl overflow-hidden border mb-3" style={{ background:surf, borderColor:div }}>
           {washers.map((w, i) => {

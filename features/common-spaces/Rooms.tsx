@@ -606,7 +606,11 @@ export default function RoomView({ room, lang, roomNumber, adminRole }: {
 
   // Chi amministra prenota come DIREZIONE, che non è una camera: qui il campo
   // diventa testo libero e chiede il nome dell'iniziativa invece del numero.
-  const direzione = myRoom === "DIREZIONE";
+  // v1.10: chi amministra usando la propria camera sceglie al momento se
+  // prenotare per sé o per la Direzione (vedi la scelta sopra al campo).
+  const puoDirezione = !!adminRole && !!myRoom && myRoom !== "DIREZIONE";
+  const [perDirezione, setPerDirezione] = useState(false);
+  const direzione = myRoom === "DIREZIONE" || (puoDirezione && perDirezione);
 
   // Chiudere la sala (es. per il deposito dei pacchi) resta allo stesso
   // livello dello stato guasto/funzionante delle macchine: FDO e
@@ -707,7 +711,7 @@ export default function RoomView({ room, lang, roomNumber, adminRole }: {
   const iStart = Math.max(0, startOpts.indexOf(start));
 
   async function submit() {
-    const who = myRoom ? (bookingRoom.trim() || myRoom) : name.trim();
+    const who = direzione ? (bookingRoom.trim() || "DIREZIONE") : myRoom ? (bookingRoom.trim() || myRoom) : name.trim();
     if (!who) { setToast(t.needName); return; }
 
     // Il formato camera si controlla solo a chi UNA camera ce l'ha.
@@ -938,6 +942,19 @@ export default function RoomView({ room, lang, roomNumber, adminRole }: {
           <p className="text-[11px] mb-3 h-4" style={{ color: sub }}>
             {end > 24 * 60 ? `${t.end}: ${fmtEnd(end, lang)}` : ""}
           </p>
+
+          {puoDirezione && (
+            <div className="grid grid-cols-2 gap-1 p-1 rounded-xl mb-3" style={{ background: chip }}>
+              {([[false, gt.forMe(myRoom)], [true, gt.forDirezione]] as [boolean, string][]).map(([v, label]) => (
+                <button key={String(v)} aria-pressed={perDirezione === v}
+                  onClick={() => { setPerDirezione(v); setBookingRoom(v ? "" : myRoom); }}
+                  className="rounded-lg px-2 py-2 text-xs font-semibold"
+                  style={perDirezione === v ? { background: "var(--card)", color: "var(--primary)", boxShadow: "0 1px 3px rgba(0,0,0,.12)" } : { color: sub }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
 
           {direzione ? (
             /* Testo libero, non maiuscolo e non monospaziato: qui non si scrive
