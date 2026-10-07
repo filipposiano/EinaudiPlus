@@ -45,6 +45,7 @@ export function isDelegato(claims) {
 // Azioni di gestione account riservate al sistemista.
 const SOLO_SISTEMISTA = new Set([
   "accountList", "accountCreate", "accountSetPassword", "accountSetActive", "accountDelete",
+  "accountSetCamera",
 ]);
 
 /**

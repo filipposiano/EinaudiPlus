@@ -20,6 +20,7 @@ import {
   createAccount as _createAccount,
   resetAccountPassword as _resetAccountPassword,
   setAccountActive as _setAccountActive,
+  setAccountCamera as _setAccountCamera,
   deleteAccount as _deleteAccount,
   listAccounts as _listAccounts,
 } from "./application/manageAccounts.js";
@@ -76,6 +77,10 @@ export async function resetAccountPassword(id, password) {
 
 export async function setAccountActive(id, attivo) {
   return _setAccountActive({ id, attivo }, deps);
+}
+
+export async function setAccountCamera(id, camera) {
+  return _setAccountCamera({ id, camera }, deps);
 }
 
 export async function deleteAccount(id) {

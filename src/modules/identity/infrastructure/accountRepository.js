@@ -35,6 +35,10 @@ export const accountRepository = {
     return rpc("account_set_active", { p_id: id, p_attivo: attivo });
   },
 
+  async setCamera({ id, camera }) {
+    return rpc("account_set_camera", { p_id: id, p_camera: camera });
+  },
+
   async delete({ id }) {
     return rpc("account_delete", { p_id: id });
   },

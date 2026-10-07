@@ -31,6 +31,9 @@ export default wrapHandler("admin/auth", async (req, res) => {
     // perché una schermata si aggira parlando all'API direttamente.
     let deveCambiare = false;
     let revocato = false;
+    // v1.10: la camera associata (delegato/sistemista), per passare fra
+    // "la mia camera" e "Direzione" restando connessi.
+    let camera = null;
     if (me) {
       try {
         const row = await accountByUsername(me.u);
@@ -40,14 +43,17 @@ export default wrapHandler("admin/auth", async (req, res) => {
         // divieto vero resta su data.js, che rifiuta ogni azione: questa è
         // la cortesia che evita di mostrare un pannello che poi dà 401.
         if (!sessioneAncoraValida(row)) revocato = true;
-        else deveCambiare = Boolean(row.deve_cambiare_password);
+        else {
+          deveCambiare = Boolean(row.deve_cambiare_password);
+          camera = row.camera || null;
+        }
       } catch { /* se il database non risponde non si blocca comunque l'accesso */ }
     }
     if (revocato) clearSessionCookie(res);
     const attivo = Boolean(me) && !revocato;
     return json(res, 200, {
       ok: true, logged: attivo, user: attivo ? me.u : null, role: attivo ? me.r : null,
-      deve_cambiare_password: deveCambiare,
+      deve_cambiare_password: deveCambiare, camera: attivo ? camera : null,
     });
   }
 

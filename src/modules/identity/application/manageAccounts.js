@@ -8,6 +8,7 @@
 
 import { ValidationError } from "../../../shared/errors/AppError.js";
 import { parseIntInRange } from "../../../shared/validation/number.js";
+import { parseRoomNumber } from "../../../shared/validation/room.js";
 
 const MIN_LEN = 8;
 const ID_MIN = 1, ID_MAX = Number.MAX_SAFE_INTEGER;
@@ -36,6 +37,17 @@ export async function resetAccountPassword({ id, password }, { accountRepository
 
 export async function setAccountActive({ id, attivo }, { accountRepository }) {
   return accountRepository.setActive({ id: requireId(id), attivo });
+}
+
+/** v1.10: la camera di un delegato/sistemista — vuota la toglie. Che il
+ *  ruolo possa averne una lo decide la SQL (account_set_camera). */
+export async function setAccountCamera({ id, camera }, { accountRepository }) {
+  const parsedId = requireId(id);
+  const testo = String(camera ?? "").trim();
+  if (!testo) return accountRepository.setCamera({ id: parsedId, camera: null });
+  const parsed = parseRoomNumber(testo);
+  if (!parsed) throw new ValidationError("numero di camera non valido");
+  return accountRepository.setCamera({ id: parsedId, camera: parsed });
 }
 
 export async function deleteAccount({ id }, { accountRepository }) {

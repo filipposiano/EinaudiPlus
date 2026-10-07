@@ -24,7 +24,7 @@ import { wrapHandler } from "../../src/shared/errors/wrapHandler.js";
 import {
   currentAdmin, accountByUsername, clearSessionCookie, sessioneAncoraValida,
   authorize as identityAuthorize,
-  listAccounts, createAccount, resetAccountPassword, setAccountActive, deleteAccount,
+  listAccounts, createAccount, resetAccountPassword, setAccountActive, setAccountCamera, deleteAccount,
   changeOwnPassword,
 } from "../../src/modules/identity/index.js";
 import {
@@ -85,7 +85,7 @@ const MUTATIONS = new Set([
   "bookDirezione", "bookSpaceDirezione", "clearDirezione",
   "conferenzaAdd", "conferenzaUpdate", "conferenzaDelete",
   "conferenzaSkip", "conferenzaMove", "conferenzaResetOccorrenza",
-  "accountCreate", "accountSetPassword", "accountSetActive", "accountDelete",
+  "accountCreate", "accountSetPassword", "accountSetActive", "accountDelete", "accountSetCamera",
   "accountChangeOwnPassword", "biciPurge", "biciDeleteRoom", "biciAddRoom", "temaSet",
   "cambioBiancheriaSet", "cambioBiancheriaSkip",
   "grigliataCrea", "grigliataConfermaPagamento", "grigliataAnnullaConfermaPagamento", "grigliataChiudi", "grigliataModifica",
@@ -329,6 +329,10 @@ export default wrapHandler("admin/data", async (req, res) => {
 
     case "accountSetActive":
       result = await setAccountActive(Number(body.id), body.attivo !== false);
+      break;
+
+    case "accountSetCamera":
+      result = await setAccountCamera(Number(body.id), body.camera);
       break;
 
     case "accountDelete":

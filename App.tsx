@@ -4,7 +4,7 @@ import {
   Delete, X, Wrench, Loader2,
   Film, Music, Menu,
   MessageSquare, LogOut,
-  Settings, Repeat, Eraser, Presentation, UserCog, Bike, Sparkles, Bell, Bed, Flame,
+  Settings, Repeat, Eraser, Presentation, UserCog, Bike, Sparkles, Bell, Bed, Flame, Check,
 } from "lucide-react";
 import * as api from "./api";
 import * as push from "./push";
@@ -699,6 +699,12 @@ export default function App() {
   // cambiarla, e deve trovarsela davanti SUBITO — non scoprirlo più tardi,
   // provando a fare qualcosa che il server rifiuta. Vedi il gate più sotto.
   const [deveCambiarePassword, setDeveCambiarePassword] = useState(false);
+  // v1.10: la camera associata all'account (solo delegato/sistemista, la
+  // imposta il sistemista dalla scheda Account). Con una camera, chi
+  // amministra passa fra "la mia camera" e "Direzione" restando connesso —
+  // vedi la scelta che si apre dal pulsante della camera, più sotto.
+  const [adminCamera, setAdminCamera] = useState<string | null>(null);
+  const [sceltaIdentita, setSceltaIdentita] = useState(false);
   const isAdmin = adminRole !== null;
 
   // Un solo punto in cui la sessione amministrativa cambia, da qualunque parte
@@ -717,8 +723,12 @@ export default function App() {
   // invece di un logout, che lasciava prenotare come DIREZIONE finché quella
   // richiesta non falliva a sua volta lato server (vedi SESSIONE_SCADUTA
   // sotto, e adminAction() in api.ts).
-  const handleAdminSession = useCallback((r: AdminRole | null, deveCambiare = false) => {
+  const handleAdminSession = useCallback((r: AdminRole | null, deveCambiare = false, camera?: string | null) => {
     setAdminRole(r);
+    // `camera` assente = chi chiama non la conosce (es. una sezione che
+    // segnala solo il ruolo): si tiene quella che c'era.
+    if (r === null) setAdminCamera(null);
+    else if (camera !== undefined) setAdminCamera(camera);
     // Chi non ha (più) una sessione non ha nemmeno una password provvisoria
     // da cambiare: il gate si spegne insieme al ruolo.
     setDeveCambiarePassword(r !== null && deveCambiare);
@@ -732,8 +742,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    api.adminSession().then(({ role, deveCambiarePassword: deve }) =>
-      handleAdminSession((role as AdminRole) ?? null, deve));
+    api.adminSession().then(({ role, deveCambiarePassword: deve, camera }) =>
+      handleAdminSession((role as AdminRole) ?? null, deve, camera));
   }, [handleAdminSession]);
 
   // Chi esce (o la cui sessione scade) mentre sta guardando una sezione
@@ -812,6 +822,14 @@ export default function App() {
   // quello giusto in teoria — e un dispositivo condiviso restava con i poteri
   // di chi c'era prima. La sessione vive nel cookie, non nella camera: va
   // chiusa sul server, non basta dimenticare il numero.
+  // Il pulsante della camera in alto: per chi amministra e ha una camera sua
+  // apre la scelta camera/Direzione (si resta connessi); per tutti gli altri
+  // è il "cambia camera" di sempre, che chiude anche la sessione.
+  function onPulsanteCamera() {
+    if (adminRole !== null && adminCamera) setSceltaIdentita(true);
+    else changeRoom();
+  }
+
   async function changeRoom() {
     if (adminRole !== null) {
       try {
@@ -997,9 +1015,12 @@ export default function App() {
     <Suspense fallback={null}>
       <AdminLoginSheet
         onClose={() => setAdminLoginOpen(false)}
-        onSession={(r, deveCambiare) => {
-          handleAdminSession(r, deveCambiare);
-          if (r && roomNumber !== api.DIREZIONE) chooseRoom(api.DIREZIONE);
+        onSession={(r, deveCambiare, camera) => {
+          handleAdminSession(r, deveCambiare, camera);
+          // Chi ha una camera sua e la stava già usando su questo dispositivo
+          // resta lì; altrimenti si entra come Direzione, come sempre (poi
+          // si passa alla propria camera dal pulsante in alto).
+          if (r && roomNumber !== api.DIREZIONE && !(camera && roomNumber === camera)) chooseRoom(api.DIREZIONE);
         }} />
     </Suspense>
   );
@@ -1024,11 +1045,47 @@ export default function App() {
           onFatto={() => {
             // Rilegge dal server invece di fidarsi: è il server ad avere
             // l'ultima parola su quando l'obbligo è soddisfatto.
-            api.adminSession().then(({ role, deveCambiarePassword: deve }) =>
-              handleAdminSession((role as AdminRole) ?? null, deve));
+            api.adminSession().then(({ role, deveCambiarePassword: deve, camera }) =>
+              handleAdminSession((role as AdminRole) ?? null, deve, camera));
           }}
         />
       </Suspense>
+    </div>
+  );
+
+  // Camera o Direzione, per chi amministra ed è anche residente. Cambiare
+  // identità qui NON chiude la sessione: solo "Esci dall'account" lo fa.
+  const sceltaIdentitaSheet = sceltaIdentita && adminCamera && (
+    <div className="absolute inset-0 z-50 flex items-end md:items-center md:justify-center"
+      style={{ background:"rgba(0,0,0,0.55)" }} onClick={() => setSceltaIdentita(false)}>
+      <div className="w-full md:max-w-sm rounded-t-3xl md:rounded-3xl p-5 pb-8 md:pb-5 flex flex-col gap-2"
+        style={{ background:"var(--background)", color:"var(--foreground)" }} onClick={(e) => e.stopPropagation()}>
+        <p className="text-base font-bold">{T[lang].identitaTitolo}</p>
+        <p className="text-xs mb-2" style={{ color:"var(--muted-foreground)" }}>{T[lang].identitaHint}</p>
+        {([
+          [adminCamera, T[lang].identitaCamera(adminCamera)],
+          [api.DIREZIONE, T[lang].identitaDirezione],
+        ] as [string, string][]).map(([id, label]) => {
+          const attiva = roomNumber === id;
+          return (
+            <button key={id} onClick={() => { setSceltaIdentita(false); if (!attiva) chooseRoom(id); }}
+              className="w-full flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-semibold"
+              style={{
+                background: attiva ? `color-mix(in srgb, ${RED} 14%, transparent)` : "var(--secondary)",
+                color: attiva ? RED : "var(--foreground)",
+                border: attiva ? `1px solid color-mix(in srgb, ${RED} 40%, transparent)` : "1px solid transparent",
+              }}>
+              {label}
+              {attiva && <Check size={16}/>}
+            </button>
+          );
+        })}
+        <button onClick={() => { setSceltaIdentita(false); changeRoom(); }}
+          className="w-full flex items-center justify-center gap-2 rounded-2xl px-4 py-3 mt-2 text-sm font-semibold"
+          style={{ color:"var(--destructive-text)" }}>
+          <LogOut size={15}/>{T[lang].identitaEsci}
+        </button>
+      </div>
     </div>
   );
 
@@ -1047,12 +1104,13 @@ export default function App() {
         {adminLoginSheet}
         {cambioPasswordGate}
         {reminderPromptSheet}
+        {sceltaIdentitaSheet}
         <DesktopSidebar
           lang={lang}
           roomNumber={roomNumber} showNav={showChrome}
           facility={facility} onFacility={setFacility}
           adminRole={adminRole}
-          onChangeRoom={changeRoom}
+          onChangeRoom={onPulsanteCamera}
           grigliataAttiva={grigliataAttiva}
         />
         <main className="flex-1 h-dvh min-h-0 flex flex-col overflow-y-auto overscroll-contain">
@@ -1091,6 +1149,7 @@ export default function App() {
         {adminLoginSheet}
         {cambioPasswordGate}
         {reminderPromptSheet}
+        {sceltaIdentitaSheet}
 
         <div className="flex items-center justify-between px-7 pt-3 pb-0 shrink-0 mt-2 md:mt-0">
           {/* Prima di scegliere una camera qui c'era un orologio finto (9:41,
@@ -1138,7 +1197,7 @@ export default function App() {
                 educazione. Prima erano la stessa riga grigia, stesso peso —
                 qui la camera ha il suo badge rosso e si legge per prima. */}
             {roomNumber !== null && (
-              <button onClick={changeRoom}
+              <button onClick={onPulsanteCamera}
                 className="flex items-center gap-1.5 pl-2 pr-1.5 py-1 rounded-lg transition-colors"
                 style={{ background:"var(--secondary)" }}>
                 <span className="text-[11px] font-mono" style={{ color:"var(--gray-accessible-text)" }}>

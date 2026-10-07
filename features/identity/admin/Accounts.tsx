@@ -9,7 +9,12 @@ import type { Role } from "../../admin-shared/types";
 type Account = {
   id: number; username: string; ruolo: Role; attivo: boolean;
   created_at: string; password_at: string; deve_cambiare_password: boolean;
+  /** v1.10 — solo delegato/sistemista; assente se il server non ha la migrazione 060. */
+  camera?: string | null;
 };
+
+// Chi può avere una camera sua (è anche un residente): vedi account_set_camera.
+const RUOLI_CON_CAMERA: Role[] = ["delegato", "sistemista"];
 
 // ─── Account amministrativi ─────────────────────────────────────────────────
 //
@@ -47,6 +52,8 @@ export function Accounts({ me }: { me: string | null }) {
 
   // L'account per cui si sta scrivendo una nuova password, se ce n'e' uno.
   const [reset, setReset] = useState<{ id: number; password: string } | null>(null);
+  // L'account di cui si sta scrivendo la camera, se ce n'è uno.
+  const [cameraEdit, setCameraEdit] = useState<{ id: number; valore: string } | null>(null);
 
   const load = useCallback(async () => {
     setBusy(true);
@@ -78,6 +85,18 @@ export function Accounts({ me }: { me: string | null }) {
       await call("accountSetPassword", { id: reset.id, password: reset.password });
       setMsg("Password reimpostata.");
       setReset(null);
+      load();
+    } catch (e: any) { setMsg(e.message); }
+    finally { setBusy(false); }
+  }
+
+  async function salvaCamera() {
+    if (!cameraEdit) return;
+    setBusy(true); setMsg(null);
+    try {
+      await call("accountSetCamera", { id: cameraEdit.id, camera: cameraEdit.valore });
+      setMsg(cameraEdit.valore.trim() ? `Camera ${cameraEdit.valore.trim()} associata.` : "Camera tolta.");
+      setCameraEdit(null);
       load();
     } catch (e: any) { setMsg(e.message); }
     finally { setBusy(false); }
@@ -158,6 +177,20 @@ export function Accounts({ me }: { me: string | null }) {
                   <span style={{ display: "block", fontSize: 12, ...S.sub }}>
                     creato il {etichettaData(a.created_at)} · password aggiornata il {etichettaData(a.password_at)}
                   </span>
+                  {/* Delegato e sistemista spesso sono anche residenti: con la
+                      camera associata, dall'app passano fra la propria camera
+                      e la Direzione senza uscire dall'account. */}
+                  {RUOLI_CON_CAMERA.includes(a.ruolo) && (
+                    <span style={{ display: "block", fontSize: 12, marginTop: 2 }}>
+                      {a.camera ? <>Camera <strong>{a.camera}</strong></> : <span style={{ ...S.sub }}>Nessuna camera</span>}
+                      {" · "}
+                      <button disabled={busy}
+                        onClick={() => setCameraEdit(cameraEdit?.id === a.id ? null : { id: a.id, valore: a.camera ?? "" })}
+                        style={{ fontSize: 12, fontWeight: 700, color: "var(--gray-accessible-text)", background: "none", border: "none", cursor: "pointer", padding: 0, textDecoration: "underline" }}>
+                        {a.camera ? "cambia" : "associa"}
+                      </button>
+                    </span>
+                  )}
                 </span>
                 <span className="adm-rule__act">
                   <button style={S.btn} disabled={busy}
@@ -173,6 +206,16 @@ export function Accounts({ me }: { me: string | null }) {
                   <button style={S.danger} disabled={busy || a.username === me} onClick={() => elimina(a)}>Elimina</button>
                 </span>
               </div>
+              {cameraEdit?.id === a.id && (
+                <div className="adm-form" style={{ marginTop: 6 }}>
+                  <input style={S.input} placeholder="Numero di camera (vuoto = nessuna)" inputMode="numeric"
+                         value={cameraEdit.valore} maxLength={6}
+                         onChange={(e) => setCameraEdit({ id: a.id, valore: e.target.value })} />
+                  <button style={{ ...S.btn, background: "var(--primary)", color: "var(--primary-foreground)", borderColor: "transparent" }}
+                          disabled={busy} onClick={salvaCamera}>Salva</button>
+                  <button style={S.btn} disabled={busy} onClick={() => setCameraEdit(null)}>Annulla</button>
+                </div>
+              )}
               {reset?.id === a.id && (
                 <div className="adm-form" style={{ marginTop: 6 }}>
                   <input style={S.input} type="text" placeholder="Nuova password (min. 8 caratteri)"

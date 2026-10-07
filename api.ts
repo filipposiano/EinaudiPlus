@@ -223,8 +223,8 @@ export function markAdminSeen(seen: boolean) {
  * provvisoria deve trovarsi davanti il cambio password subito, non scoprirlo
  * quando prova a fare qualcosa (vedi il gate in App.tsx).
  */
-export async function adminSession(): Promise<{ role: string | null; deveCambiarePassword: boolean }> {
-  const nessuna = { role: null, deveCambiarePassword: false };
+export async function adminSession(): Promise<{ role: string | null; deveCambiarePassword: boolean; camera: string | null }> {
+  const nessuna = { role: null, deveCambiarePassword: false, camera: null };
 
   // Chi non ha mai fatto accesso qui non ha una sessione da verificare. Se la
   // traccia si perde (cache pulita, altro browser) non si rompe niente: si
@@ -242,7 +242,8 @@ export async function adminSession(): Promise<{ role: string | null; deveCambiar
       markAdminSeen(false);   // sessione scaduta o revocata: non richiederla a ogni avvio
       return nessuna;
     }
-    return { role, deveCambiarePassword: Boolean(data.deve_cambiare_password) };
+    // v1.10: la camera associata all'account (delegato/sistemista), se c'è.
+    return { role, deveCambiarePassword: Boolean(data.deve_cambiare_password), camera: data.camera || null };
   } catch {
     return nessuna;
   }

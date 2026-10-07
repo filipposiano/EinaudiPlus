@@ -12,7 +12,7 @@
 
 import { authenticate } from "../../src/modules/identity/application/authenticate.js";
 import { changeOwnPassword } from "../../src/modules/identity/application/changeOwnPassword.js";
-import { createAccount, resetAccountPassword } from "../../src/modules/identity/application/manageAccounts.js";
+import { createAccount, resetAccountPassword, setAccountCamera } from "../../src/modules/identity/application/manageAccounts.js";
 import { authorize, isSysadmin, isStaff, isDelegato, isValidRole } from "../../src/modules/identity/domain/roles.js";
 import { sessioneAncoraValida } from "../../src/modules/identity/domain/sessionState.js";
 import { issueToken, readToken } from "../../src/modules/identity/infrastructure/sessionToken.js";
@@ -134,6 +134,24 @@ section("createAccount() / resetAccountPassword()");
   check("reset con password corta -> rifiutato", /almeno 8 caratteri/.test(errore?.message || ""));
 }
 
+section("setAccountCamera()");
+{
+  const chiamate = [];
+  const repo = { async setCamera(args) { chiamate.push(args); return { ok: true }; } };
+  await setAccountCamera({ id: "3", camera: " 214 " }, { accountRepository: repo });
+  check("camera ripulita e id numerico", chiamate[0]?.id === 3 && chiamate[0]?.camera === "214", JSON.stringify(chiamate[0]));
+  await setAccountCamera({ id: 3, camera: "  " }, { accountRepository: repo });
+  check("camera vuota -> null (la toglie)", chiamate[1]?.camera === null);
+
+  let errore = null;
+  try { await setAccountCamera({ id: 3, camera: "DIREZIONE" }, { accountRepository: repo }); } catch (e) { errore = e; }
+  check("camera non valida -> rifiutata prima del repository", errore?.message === "numero di camera non valido" && chiamate.length === 2);
+
+  errore = null;
+  try { await setAccountCamera({ id: "x", camera: "214" }, { accountRepository: repo }); } catch (e) { errore = e; }
+  check("id non valido -> rifiutato", /id/.test(errore?.message || ""));
+}
+
 // ─── Policy di autorizzazione ────────────────────────────────────────────────
 
 section("authorize() — policy del modulo Identity");
@@ -148,6 +166,8 @@ section("authorize() — policy del modulo Identity");
   check("delegato non può creare account", authorize(delegato, "accountCreate") === false);
   check("sistemista può creare account", authorize(sistemista, "accountCreate") === true);
   check("sistemista può elencare account", authorize(sistemista, "accountList") === true);
+  check("sistemista può impostare la camera di un account", authorize(sistemista, "accountSetCamera") === true);
+  check("delegato NON può impostare camere (nemmeno la propria)", authorize(delegato, "accountSetCamera") === false);
 
   check("chiunque autenticato può cambiare la propria password", authorize(fdo, "accountChangeOwnPassword") === true);
   check("anche il delegato può cambiare la propria password", authorize(delegato, "accountChangeOwnPassword") === true);
