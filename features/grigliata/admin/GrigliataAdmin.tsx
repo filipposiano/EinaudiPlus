@@ -789,9 +789,7 @@ export function GrigliataAdmin() {
   const eGiornoEvento = evento != null && evento.giorno_evento <= oggiISO();
   // Il giorno della grigliata si apre direttamente sui ticket, gli altri
   // giorni su chi partecipa — finché il delegato non sceglie lui.
-  const schedaAttiva: Scheda = scheda ?? (eGiornoEvento ? "giorno" : "partecipanti");
-  const daConfermare = partecipanti.filter((a) => a.pagamento_dichiarato && !a.pagamento_confermato).length;
-  const perMenu = (id: number) => {
+  const schedaAttiva: Scheda = scheda ?? (eGiornoEvento ? "giorno" : "partecipanti");  const perMenu = (id: number) => {
     const del = partecipanti.filter((a) => a.menu_id === id);
     return { totale: del.length, pagati: del.filter((a) => a.pagamento_confermato).length };
   };
@@ -1008,14 +1006,13 @@ export function GrigliataAdmin() {
       {evento && (
         <div role="tablist" style={{ display: "flex", gap: 4, padding: 4, borderRadius: 14, background: "var(--secondary)", marginBottom: 16 }}>
           {([
-            ["impostazioni", "Impostazioni", Settings, 0],
-            ["partecipanti", "Partecipanti", Users, pagamentiAttivi ? daConfermare : 0],
-            ["giorno", "Giorno della grigliata", Ticket, 0],
-          ] as [Scheda, string, typeof Settings, number][]).map(([id, label, Icona, badge]) => {
+            ["giorno", "Giorno della grigliata", Ticket],
+            ["partecipanti", "Partecipanti", Users],
+            ["impostazioni", "Impostazioni", Settings],
+          ] as [Scheda, string, typeof Settings][]).map(([id, label, Icona]) => {
             const attiva = schedaAttiva === id;
             return (
               <button key={id} role="tab" aria-selected={attiva} onClick={() => setScheda(id)}
-                title={badge > 0 ? `${badge} ${badge === 1 ? "pagamento" : "pagamenti"} da confermare` : undefined}
                 style={{
                   flex: 1, minWidth: 0, display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
                   padding: "8px 6px", borderRadius: 10, border: "none", cursor: "pointer",
@@ -1026,13 +1023,6 @@ export function GrigliataAdmin() {
                 }}>
                 <Icona size={14} style={{ flexShrink: 0, color: attiva ? "var(--primary)" : undefined }} />
                 <span>{label}</span>
-                {badge > 0 && (
-                  <span style={{
-                    flexShrink: 0, minWidth: 18, height: 18, padding: "0 5px", borderRadius: 99, fontSize: 11,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "var(--primary)", color: "var(--primary-foreground)",
-                  }}>{badge}</span>
-                )}
               </button>
             );
           })}
