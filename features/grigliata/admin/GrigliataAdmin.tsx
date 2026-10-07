@@ -980,7 +980,7 @@ export function GrigliataAdmin() {
           nome della sezione lo mostra già lì) — un pulsante da solo,
           allineato tutto a destra, lasciava uno spazio vuoto grande quanto
           la larghezza della pagina. */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 4 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 16 }}>
         <h2 style={{ fontSize: 18, fontWeight: 800 }}>Grigliata</h2>
         <button onClick={() => { setMostraForm(true); setScheda("impostazioni"); }} title="Fai partire una nuova grigliata"
           style={{
@@ -993,20 +993,13 @@ export function GrigliataAdmin() {
         </button>
       </div>
 
-      <p style={{ fontSize: 13, ...S.sub, marginBottom: 16, maxWidth: "70ch" }}>
-        Finché è attiva, i residenti trovano la scheda "Grigliata" nel menu, dove
-        aderiscono, scelgono il menu e dichiarano di aver pagato. Qui imposti
-        l'evento, vedi chi ha risposto e confermi i pagamenti (la conferma
-        avvisa subito la camera), e il giorno stesso segui i ticket.
-      </p>
-
       {msg && <div style={{ ...S.card, padding: 12, marginBottom: 16, fontSize: 13 }}>{msg}</div>}
 
       {/* ── Le tre schede ──────────────────────────────────────────────── */}
       {evento && (
         <div role="tablist" style={{ display: "flex", gap: 4, padding: 4, borderRadius: 14, background: "var(--secondary)", marginBottom: 16 }}>
           {([
-            ["giorno", "Giorno della grigliata", Ticket],
+            ["giorno", "Ticket", Ticket],
             ["partecipanti", "Partecipanti", Users],
             ["impostazioni", "Impostazioni", Settings],
           ] as [Scheda, string, typeof Settings][]).map(([id, label, Icona]) => {
@@ -1248,10 +1241,6 @@ export function GrigliataAdmin() {
           </div>
         ) : (
           <div style={{ ...S.card, padding: 14, marginBottom: 16, border: "1px solid color-mix(in srgb, var(--primary) 35%, var(--border))" }}>
-            <p style={{ fontSize: 12, fontWeight: 700, color: "var(--primary)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
-              <Ticket size={14} /> Ticket · giorno della grigliata
-            </p>
-
             <div style={{
               display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderRadius: 14, marginBottom: 14,
               background: "color-mix(in srgb, var(--primary) 12%, transparent)",
