@@ -484,7 +484,7 @@ export default wrapHandler("admin/data", async (req, res) => {
       break;
 
     case "grigliataAggiungiAdesione":
-      result = await adminAggiungiAdesione(body.evento_id, body.room, body.menu_id, body.dieta);
+      result = await adminAggiungiAdesione(body.evento_id, body.room, body.menu_id, body.dieta, body.senza_glutine);
       break;
 
     case "grigliataRimuoviAdesione":

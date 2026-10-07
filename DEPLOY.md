@@ -142,6 +142,27 @@ i due segnaposto ed esegui:
 Il segreto finisce nel **Vault**: il corpo dei job in `cron.job` è leggibile in
 chiaro da chiunque possa interrogare quella tabella.
 
+### Aggiornamenti in tempo reale (opzionale, consigliato)
+
+La grigliata (scheda residenti e pannello admin) si aggiorna subito quando
+qualcosa cambia, tramite Supabase Realtime (migrazione 057 + `realtime.ts`).
+
+| Nome | Valore |
+|---|---|
+| `VITE_SUPABASE_URL` | `https://drdowugqpjgdptnrvenw.supabase.co` |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API Keys → **Publishable key** (`sb_publishable_…`) — **non** la secret |
+
+> La publishable key finisce nel bundle pubblico, ed è fatta per questo:
+> ogni tabella ha la RLS attiva senza policy e ogni funzione è chiusa ad
+> `anon`, quindi da sola non legge né scrive niente. Sul canale viaggia solo
+> un avviso vuoto ("ricarica"), i dati passano sempre dall'API.
+>
+> Come `VITE_TELEGRAM_BOT`, servono un nuovo deploy dopo averle aggiunte.
+> Senza, l'app funziona come prima (ricontrollo ogni 10 secondi).
+>
+> La CSP in `vercel.json` permette già `wss://drdowugqpjgdptnrvenw.supabase.co`:
+> cambiando progetto Supabase va aggiornata anche lì.
+
 ### Verifica
 
 ```sql

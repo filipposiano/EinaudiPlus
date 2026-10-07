@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Pencil, Plus, Check, UserPlus, WheatOff, StickyNote, X, Ticket, Search, RotateCcw, Settings, Users } from "lucide-react";
 import { EMOJI_TICKET, EMOJI_TICKET_DEFAULT, suggerisciEmoji } from "../emojiTicket";
+import { useAvvisiInTempoReale } from "../../../realtime";
 import { call } from "../../admin-shared/adminApi";
 import { S } from "../../admin-shared/adminStyles";
 import { PIANI, pianoDi, nomePiano, colorePiano } from "../../../piani";
@@ -445,6 +446,7 @@ export function GrigliataAdmin() {
   // null = il menu di base (gli id si conoscono solo dopo il caricamento).
   const [nuovoMenuCamera, setNuovoMenuCamera] = useState<number | null>(null);
   const [nuovaDietaCamera, setNuovaDietaCamera] = useState<Dieta>("classico");
+  const [nuovoGlutineCamera, setNuovoGlutineCamera] = useState(false);
 
   // "Elimina" chiede conferma DENTRO la pagina, non con window.confirm():
   // e' bloccato in diversi contesti (PWA installata, iframe senza
@@ -499,18 +501,24 @@ export function GrigliataAdmin() {
   useEffect(() => { carica(); }, []);
 
   // Il giorno della grigliata i ticket si usano dagli schermi dei residenti,
-  // i pagamenti si dichiarano in qualunque momento: senza un ricontrollo
-  // periodico il pannello resterebbe fermo all'ultima apertura. Stesso
-  // intervallo della scheda residenti (Grigliata.tsx) e di NotificheTab;
-  // si ferma quando la scheda non è visibile. Un errore di rete qui non
-  // mostra nessun messaggio: riprova da solo al giro dopo.
+  // i pagamenti si dichiarano in qualunque momento. v1.9: il pannello lo sa
+  // subito dagli avvisi in tempo reale (vedi realtime.ts) — il canale
+  // dell'admin riceve ogni cambiamento. Un errore di rete qui non mostra
+  // nessun messaggio: riprova da solo al prossimo avviso o giro.
+  const ricaricaSilenziosa = () => {
+    call<Overview>("grigliataOverview").then((r) => setOverview(r)).catch(() => {});
+  };
+  const inTempoReale = useAvvisiInTempoReale([{ topic: "grigliata:admin", jitterMs: 300 }], ricaricaSilenziosa);
+
+  // Rete di sicurezza: ogni 30 secondi con gli avvisi attivi, ogni 10
+  // (come prima) senza. Si ferma quando la scheda non è visibile.
   useEffect(() => {
     const id = setInterval(() => {
-      if (document.hidden) return;
-      call<Overview>("grigliataOverview").then((r) => setOverview(r)).catch(() => {});
-    }, 10_000);
+      if (!document.hidden) ricaricaSilenziosa();
+    }, inTempoReale ? 30_000 : 10_000);
     return () => clearInterval(id);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inTempoReale]);
 
   // Cambiando la data proposta, il titolo suggerito la segue — a meno che
   // non sia già stato scritto a mano: altrimenti bastava toccare la
@@ -717,10 +725,12 @@ export function GrigliataAdmin() {
     try {
       await call("grigliataAggiungiAdesione", {
         evento_id: overview.evento.id, room: nuovaCamera, menu_id: menuCameraEffettivo, dieta: nuovaDietaCamera,
+        senza_glutine: nuovoGlutineCamera,
       });
       setAggiungiCamera(false);
       setNuovaCamera("");
       setNuovaDietaCamera("classico");
+      setNuovoGlutineCamera(false);
       await carica();
       setMsg("Camera aggiunta.");
     } catch (e: any) {
@@ -775,6 +785,15 @@ export function GrigliataAdmin() {
     return d ? `${nomeMenu(a.menu_id)} · ${d}` : nomeMenu(a.menu_id);
   };
   const menuCameraEffettivo = menuEvento.some((m) => m.id === nuovoMenuCamera) ? nuovoMenuCamera : idMenuDefault;
+  // Una camera che ha già risposto: il form parte dalle sue scelte, così
+  // "aggiungerla" di nuovo (per correggerla) non le cancella per sbaglio il
+  // "senza glutine" che aveva dichiarato.
+  const cameraGiaIscritta = partecipanti.find((a) => a.room === nuovaCamera.trim()) ?? null;
+  function scriviCamera(v: string) {
+    setNuovaCamera(v);
+    const gia = partecipanti.find((a) => a.room === v.trim());
+    if (gia) { setNuovoMenuCamera(gia.menu_id); setNuovaDietaCamera(gia.dieta); setNuovoGlutineCamera(gia.senza_glutine); }
+  }
 
   const confermati = partecipanti.filter((a) => a.pagamento_confermato).length;
   // I ticket di tutto l'evento, e a che numero si è arrivati: il contatore
@@ -1359,7 +1378,7 @@ export function GrigliataAdmin() {
               marginBottom: 14, padding: 10, borderRadius: 12, background: "var(--secondary)",
             }}>
               <input style={{ ...S.input, width: "auto", flex: 1, minWidth: 90 }} placeholder="Camera"
-                value={nuovaCamera} onChange={(e) => setNuovaCamera(e.target.value)} />
+                value={nuovaCamera} onChange={(e) => scriviCamera(e.target.value)} />
               <select style={{ ...S.input, width: "auto", maxWidth: "100%" }} value={menuCameraEffettivo ?? ""}
                 onChange={(e) => setNuovoMenuCamera(Number(e.target.value))}>
                 {menuEvento.map((m) => <option key={m.id} value={m.id}>{m.nome}</option>)}
@@ -1370,6 +1389,15 @@ export function GrigliataAdmin() {
                 <option value="vegetariano">{NOME_DIETA.vegetariano}</option>
                 <option value="vegano">{NOME_DIETA.vegano}</option>
               </select>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+                <input type="checkbox" checked={nuovoGlutineCamera} onChange={(e) => setNuovoGlutineCamera(e.target.checked)} />
+                <WheatOff size={13} /> Senza glutine
+              </label>
+              {cameraGiaIscritta && (
+                <p style={{ flexBasis: "100%", fontSize: 11, ...S.sub }}>
+                  La camera {cameraGiaIscritta.room} ha già risposto: le sue scelte vengono aggiornate.
+                </p>
+              )}
               <button onClick={aggiungiAdesione} disabled={busy || !nuovaCamera.trim()} style={{ ...S.btn, opacity: busy || !nuovaCamera.trim() ? 0.5 : 1 }}>
                 {busy ? "In corso…" : "Aggiungi"}
               </button>

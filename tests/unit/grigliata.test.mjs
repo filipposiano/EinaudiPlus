@@ -585,6 +585,17 @@ section("adminAggiungiAdesione()");
   const repoDietaAssente = fakeRepository();
   await adminAggiungiAdesione({ eventoId: "7", room: "214", menuId: 1 }, { grigliataRepository: repoDietaAssente });
   check("dieta assente -> 'classico', come iscriviti()", repoDietaAssente.calls[0].args.dieta === "classico");
+  check("senza glutine assente -> null (resta com'era)", repoDietaAssente.calls[0].args.senzaGlutine === null);
+
+  const repoGlutine = fakeRepository();
+  await adminAggiungiAdesione({ eventoId: "7", room: "214", menuId: 1, senzaGlutine: true }, { grigliataRepository: repoGlutine });
+  check("senza glutine true passa", repoGlutine.calls[0].args.senzaGlutine === true);
+  const repoGlutineNo = fakeRepository();
+  await adminAggiungiAdesione({ eventoId: "7", room: "214", menuId: 1, senzaGlutine: false }, { grigliataRepository: repoGlutineNo });
+  check("senza glutine false passa (lo toglie)", repoGlutineNo.calls[0].args.senzaGlutine === false);
+  const repoGlutineStrano = fakeRepository();
+  await adminAggiungiAdesione({ eventoId: "7", room: "214", menuId: 1, senzaGlutine: "si" }, { grigliataRepository: repoGlutineStrano });
+  check("senza glutine non booleano -> null", repoGlutineStrano.calls[0].args.senzaGlutine === null);
 
   const errId = await throws(() =>
     adminAggiungiAdesione({ eventoId: "x", room: "214", menuId: 1 }, { grigliataRepository: fakeRepository() }));

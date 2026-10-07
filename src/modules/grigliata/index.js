@@ -83,8 +83,8 @@ export async function adminModificaEvento(eventoId, titolo, scadenza, giornoEven
   return _adminModificaEvento({ eventoId, titolo, scadenza, giornoEvento, menu }, deps);
 }
 
-export async function adminAggiungiAdesione(eventoId, room, menuId, dieta) {
-  return _adminAggiungiAdesione({ eventoId, room, menuId, dieta }, deps);
+export async function adminAggiungiAdesione(eventoId, room, menuId, dieta, senzaGlutine) {
+  return _adminAggiungiAdesione({ eventoId, room, menuId, dieta, senzaGlutine }, deps);
 }
 
 export async function adminRimuoviAdesione(adesioneId) {

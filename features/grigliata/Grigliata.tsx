@@ -15,6 +15,7 @@ import { Flame, Loader2, AlertTriangle, Check, ExternalLink, Ticket, ChevronsRig
 import * as api from "../../api";
 import type { Lang } from "../../i18n";
 import { EMOJI_TICKET_DEFAULT } from "./emojiTicket";
+import { useAvvisiInTempoReale } from "../../realtime";
 
 const RED = "var(--primary)", RED_FG = "var(--primary-foreground)";
 const GREEN = "#22c55e";
@@ -546,15 +547,26 @@ export default function GrigliataView({ lang, roomNumber }: { lang: Lang; roomNu
   useEffect(() => { load(); }, [load]);
 
   // Il delegato conferma un pagamento in un momento che il residente non
-  // controlla: senza un ricontrollo periodico, "Pagamento confermato"
-  // comparirebbe solo alla prossima apertura manuale della scheda. Stesso
-  // intervallo di NotificheTab.tsx lato admin — si ferma quando la scheda
-  // non è la visibile (cambio tab, telefono spento in tasca).
+  // controlla. v1.9: lo si sa SUBITO dagli avvisi in tempo reale (vedi
+  // realtime.ts) — solo quelli di QUESTA camera (conferma, ticket) e quelli
+  // dell'evento (menu, orari, chiusura), non i ticket degli altri: il giorno
+  // della grigliata siamo ~90 connessi, e ogni ticket usato non deve far
+  // ricaricare tutti. Il canale di tutti aspetta un po' a caso prima di
+  // ricaricare, così 90 telefoni non chiedono nello stesso istante.
+  const inTempoReale = useAvvisiInTempoReale(
+    camera ? [{ topic: "grigliata:tutti", jitterMs: 4000 }, { topic: `grigliata:camera:${camera}`, jitterMs: 300 }] : [],
+    load,
+    Boolean(camera),
+  );
+
+  // Rete di sicurezza: un ricontrollo periodico — ogni minuto se gli avvisi
+  // arrivano, ogni 10 secondi (come prima) se non sono disponibili. Si ferma
+  // quando la scheda non è visibile (telefono in tasca).
   useEffect(() => {
     if (!camera) return;
-    const id = setInterval(() => { if (!document.hidden) load(); }, 10_000);
+    const id = setInterval(() => { if (!document.hidden) load(); }, inTempoReale ? 60_000 : 10_000);
     return () => clearInterval(id);
-  }, [camera, load]);
+  }, [camera, load, inTempoReale]);
 
   async function salvaAdesione() {
     if (busy || menuEffettivo == null) return;

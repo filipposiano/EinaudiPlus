@@ -9,12 +9,14 @@
 // v1.3: il menu è un id fra quelli dell'evento (lo verifica la SQL). v1.3.1:
 // "vegetariano"/"vegano" tornano un campo a sé, indipendente dal menu — un
 // valore mancante ricade su "classico" (vedi dietaValida in validazione.js).
+// v1.9: "senza glutine" facoltativo — un booleano vero lo imposta, assente
+// (non un booleano) lo lascia com'era (vedi grigliata_admin_aggiungi_adesione).
 
 import { ValidationError, fromRpcError } from "../../../shared/errors/AppError.js";
 import { parseRoomNumber } from "../../../shared/validation/room.js";
 import { idValido, dietaValida } from "../domain/validazione.js";
 
-export async function adminAggiungiAdesione({ eventoId, room, menuId, dieta }, { grigliataRepository }) {
+export async function adminAggiungiAdesione({ eventoId, room, menuId, dieta, senzaGlutine }, { grigliataRepository }) {
   const id = idValido(eventoId);
   if (!id) throw new ValidationError("evento non valido");
 
@@ -27,6 +29,7 @@ export async function adminAggiungiAdesione({ eventoId, room, menuId, dieta }, {
   try {
     return await grigliataRepository.adminAggiungiAdesione({
       eventoId: id, room: parsedRoom, menuId: menu, dieta: dietaValida(dieta),
+      senzaGlutine: typeof senzaGlutine === "boolean" ? senzaGlutine : null,
     });
   } catch (err) {
     throw fromRpcError(err, { exposeToClient: true });

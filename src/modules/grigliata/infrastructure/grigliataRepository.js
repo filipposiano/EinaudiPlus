@@ -81,9 +81,9 @@ export const grigliataRepository = {
   },
 
   /** Admin: aggiunge (o corregge) a mano l'adesione di una camera. */
-  async adminAggiungiAdesione({ eventoId, room, menuId, dieta }) {
+  async adminAggiungiAdesione({ eventoId, room, menuId, dieta, senzaGlutine }) {
     return rpc("grigliata_admin_aggiungi_adesione", {
-      p_evento_id: eventoId, p_room: room, p_menu_id: menuId, p_dieta: dieta,
+      p_evento_id: eventoId, p_room: room, p_menu_id: menuId, p_dieta: dieta, p_senza_glutine: senzaGlutine,
     });
   },
 
