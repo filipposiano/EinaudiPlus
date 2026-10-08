@@ -93,7 +93,11 @@ type Raggruppa = "piano" | "menu";
 type Scheda = "impostazioni" | "partecipanti" | "giorno";
 // v1.7.1: a che punto è il pagamento — "da confermare" (ha dichiarato di aver
 // pagato, il delegato non ha ancora confermato) è la lista su cui lavorare.
-type FiltroPagamento = "tutti" | "da_confermare" | "non_dichiarato" | "confermato";
+// v1.10.2: anche solo confermato / non confermato, a prescindere da cosa ha
+// dichiarato il residente — questi due valgono anche coi pagamenti in app
+// spenti (si conferma comunque, es. contanti), gli altri due no.
+type FiltroPagamento = "tutti" | "confermato" | "non_confermato" | "da_confermare" | "non_dichiarato";
+const FILTRI_SOLO_CON_PAGAMENTI: FiltroPagamento[] = ["da_confermare", "non_dichiarato"];
 
 function haPagamento(a: Adesione, f: FiltroPagamento): boolean {
   switch (f) {
@@ -101,6 +105,7 @@ function haPagamento(a: Adesione, f: FiltroPagamento): boolean {
     case "da_confermare": return a.pagamento_dichiarato && !a.pagamento_confermato;
     case "non_dichiarato": return !a.pagamento_dichiarato && !a.pagamento_confermato;
     case "confermato": return a.pagamento_confermato;
+    case "non_confermato": return !a.pagamento_confermato;
   }
 }
 
@@ -849,9 +854,11 @@ export function GrigliataAdmin() {
   // Menu filtrato che non esiste più (rimosso nel frattempo): come nessun filtro.
   const menuFiltrato = menuEvento.some((m) => m.id === filtroMenu) ? filtroMenu : null;
   const testoCercato = cerca.trim().toLowerCase();
-  // Con i pagamenti spenti la riga del filtro sparisce: un filtro rimasto
-  // acceso da prima non deve nascondere camere senza che si veda perché.
-  const pagamentoFiltrato: FiltroPagamento = pagamentiAttivi ? filtroPagamento : "tutti";
+  // Con i pagamenti spenti spariscono i filtri su cosa ha DICHIARATO il
+  // residente: uno rimasto acceso da prima non deve nascondere camere senza
+  // che si veda perché. Confermato / non confermato restano.
+  const pagamentoFiltrato: FiltroPagamento =
+    !pagamentiAttivi && FILTRI_SOLO_CON_PAGAMENTI.includes(filtroPagamento) ? "tutti" : filtroPagamento;
   /** Tutti i filtri attivi; `o` ne sostituisce uno solo, per contare quante
    *  camere darebbe ciascuna pastiglia di quella riga (vedi quantiCon*). */
   const passaFiltri = (a: Adesione, o: { esigenza?: FiltroEsigenza; menu?: number | null; pagamento?: FiltroPagamento } = {}) => {
@@ -1498,23 +1505,24 @@ export function GrigliataAdmin() {
                 ))}
               </div>
 
-              {pagamentiAttivi && (
-                <div style={{ display: "flex", gap: 6, overflowX: "auto", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 6, overflowX: "auto", alignItems: "center" }}>
                   <span style={{ fontSize: 11, ...S.sub, flexShrink: 0, width: 58 }}>Pagamento</span>
                   {([
                     ["tutti", "Tutti"],
+                    ["confermato", "Confermato"],
+                    ["non_confermato", "Non confermato"],
                     ["da_confermare", "Ha dichiarato, da confermare"],
                     ["non_dichiarato", "Non ha dichiarato"],
-                    ["confermato", "Confermato"],
-                  ] as [FiltroPagamento, string][]).map(([f, label]) => (
+                  ] as [FiltroPagamento, string][])
+                    .filter(([f]) => pagamentiAttivi || !FILTRI_SOLO_CON_PAGAMENTI.includes(f))
+                    .map(([f, label]) => (
                     <Filtro key={f} attivo={pagamentoFiltrato === f} n={quantiConPagamento(f)}
                       onClick={() => setFiltroPagamento(pagamentoFiltrato === f && f !== "tutti" ? "tutti" : f)}>
                       {f === "confermato" && <Check size={12} />}
                       {label}
                     </Filtro>
                   ))}
-                </div>
-              )}
+              </div>
 
               <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
                 <span style={{ fontSize: 11, ...S.sub, flexShrink: 0, width: 58 }}>Raggruppa</span>
