@@ -9,5 +9,9 @@
  */
 export function parseRoomNumber(v) {
   const s = String(v ?? "").trim();
-  return /^[0-9]{1,4}(-?[abAB])?$/.test(s) ? s : null;
+  
+  // ^(?:[1-9]|[1-4][0-9]|50|[1-5](?:0[1-9]|[1-2][0-9]|3[0-6]))(-?[abAB])?$
+  const regex = /^(?:[1-9]|[1-4][0-9]|50|[1-5](?:0[1-9]|[1-2][0-9]|3[0-6]))(-?[abAB])?$/;
+  
+  return regex.test(s) ? s : null;
 }
